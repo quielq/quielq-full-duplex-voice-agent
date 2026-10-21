@@ -40,7 +40,7 @@ def _unsupported(cls, **given):
 
 
 class ScriptedSTTService(SegmentedSTTService):
-    """Returns scripted lines, one per VAD speech segment, cycling when it runs out."""
+    """Returns scripted lines, one per VAD speech segment, repeating the last when it runs out."""
 
     def __init__(self, script: Sequence[str], **kwargs):
         kwargs.setdefault("settings", _unsupported(STTSettings, model="fake-scripted"))
@@ -53,7 +53,7 @@ class ScriptedSTTService(SegmentedSTTService):
         return False
 
     async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame | None, None]:
-        text = self._script[self._i % len(self._script)]
+        text = self._script[min(self._i, len(self._script) - 1)]
         self._i += 1
         yield TranscriptionFrame(text=text, user_id="", timestamp=time_now_iso8601())
 
@@ -89,6 +89,17 @@ def say_duration(seconds: int) -> str:
             words = {1: "one", 2: "two", 3: "three", 5: "five", 10: "ten"}
             return f"{words.get(n, str(n))} {unit}{'' if n == 1 else 's'}"
     return f"{seconds} seconds"
+
+
+# A long reply to interrupt in the barge-in test (about 12 s of speech).
+STORY = (
+    "Once there was a lighthouse keeper named Ana who lived alone on a small rocky island. "
+    "Every evening she climbed the narrow stairs to light the great lamp before sunset. "
+    "One stormy night a fishing boat lost its way and drifted toward the jagged rocks. "
+    "Ana swung the beam across the waves until the captain finally saw the light. "
+    "The boat turned just in time, and the crew waved their lanterns in thanks. "
+    "From then on, the village called her the keeper of the second dawn."
+)
 
 
 def _tool_names(context) -> set[str]:
@@ -142,6 +153,13 @@ class RuleBasedLLMService(LLMService):
                 ]
             )
             return
+        low = (text or "").lower()
+        if "story" in low:
+            await self._stream(STORY)
+            return
+        if low.startswith(("stop", "wait", "cancel", "pause")):
+            await self._stream("Okay, I'll stop there.")
+            return
         await self._stream(f"I heard: {text}." if text else "Sorry, could you repeat that?")
 
     @staticmethod
@@ -164,13 +182,24 @@ class RuleBasedLLMService(LLMService):
 
 
 class ToneTTSService(TTSService):
-    """Quiet 440 Hz tone, about 60 ms per character, so playback length tracks text length."""
+    """Quiet 440 Hz tone, about 60 ms per character, so playback length tracks text length.
 
-    def __init__(self, *, ms_per_char: float = 60.0, **kwargs):
+    With ``word_timestamps=True`` it reports each word's start time the way Cartesia does,
+    so Pipecat releases text in step with playback and can truncate on interruption.
+    """
+
+    def __init__(self, *, ms_per_char: float = 60.0, word_timestamps: bool = False, **kwargs):
         kwargs.setdefault("text_aggregation_mode", TextAggregationMode.SENTENCE)
         kwargs.setdefault("settings", _unsupported(TTSSettings, model="fake-tone"))
+        if word_timestamps:
+            kwargs["push_text_frames"] = False
         super().__init__(**kwargs)
         self._ms_per_char = ms_per_char
+        self._word_timestamps = word_timestamps
+        # Like ElevenLabs and Rime, keep a running offset so sentence-relative word times
+        # line up across the sentences of one reply (context).
+        self._ctx_id: str | None = None
+        self._cumulative_s = 0.0
 
     def can_generate_metrics(self) -> bool:
         return True
@@ -180,6 +209,15 @@ class ToneTTSService(TTSService):
         total = int(sr * len(text) * self._ms_per_char / 1000)
         chunk = sr // 50  # 20 ms frames
         await self.start_ttfb_metrics()
+        # Word times are reported after the first audio chunk, as ElevenLabs' HTTP service does.
+        if context_id != self._ctx_id:
+            self._ctx_id, self._cumulative_s = context_id, 0.0
+        times, pos = [], 0
+        for word in text.split():
+            pos = text.index(word, pos)
+            times.append((word, self._cumulative_s + pos * self._ms_per_char / 1000))
+            pos += len(word)
+        self._cumulative_s += total / sr
         for start in range(0, total, chunk):
             n = min(chunk, total - start)
             samples = (
@@ -188,3 +226,5 @@ class ToneTTSService(TTSService):
             audio = struct.pack(f"<{n}h", *samples)
             await self.stop_ttfb_metrics()
             yield TTSAudioRawFrame(audio=audio, sample_rate=sr, num_channels=1, context_id=context_id)
+            if self._word_timestamps and start == 0:
+                await self.add_word_timestamps(times, context_id)

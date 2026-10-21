@@ -86,6 +86,8 @@ def build_tts(providers_cfg: dict, ledger: CostLedger):
     agg = TextAggregationMode.SENTENCE
     if choice == "fake":
         return ToneTTSService(text_aggregation_mode=agg)
+    if choice == "fake_words":
+        return ToneTTSService(text_aggregation_mode=agg, word_timestamps=True)
     if choice == "deepgram_aura2":
         from pipecat.services.deepgram.tts import DeepgramTTSService
 
@@ -112,4 +114,4 @@ def build_tts(providers_cfg: dict, ledger: CostLedger):
 
 def paid_providers(providers_cfg: dict) -> set[str]:
     """Providers this run would bill, for the per-session cost line."""
-    return {STAGE_PROVIDER[c] for c in providers_cfg["stages"].values() if c != "fake"}
+    return {STAGE_PROVIDER[c] for c in providers_cfg["stages"].values() if not c.startswith("fake")}

@@ -9,7 +9,7 @@
 stages:
   stt: fake   # fake | deepgram_flux
   llm: fake   # fake | groq | anthropic
-  tts: fake   # fake | deepgram_aura2 | cartesia
+  tts: fake   # fake | fake_words (fake with word timestamps) | deepgram_aura2 | cartesia
 
 providers:
   deepgram:
