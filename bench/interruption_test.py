@@ -111,9 +111,10 @@ async def run(
     *,
     barge_text: str = BARGE_IN,
     barge_in: str = "immediate",
+    stt: str = "fake",
 ) -> dict:
     cfg = load_config("mac")
-    cfg.providers["stages"] = {"stt": "fake", "llm": "fake", "tts": tts}
+    cfg.providers["stages"] = {"stt": stt, "llm": "fake", "tts": tts}
     cfg.profile["barge_in"]["mode"] = barge_in
     request = _say(REQUEST, workdir / "request.wav")
     barge = _say(barge_text, workdir / "barge.wav")
@@ -160,10 +161,13 @@ def main() -> None:
     ap.add_argument("--barge-after", type=float, default=2.5)
     ap.add_argument("--barge-text", default=BARGE_IN)
     ap.add_argument("--barge-in", choices=["immediate", "duck"], default="immediate")
+    ap.add_argument("--stt", choices=["fake", "deepgram_flux"], default="fake",
+                    help="deepgram_flux gives interim transcripts (spends about $0.001 a run)")  # fmt: skip
     args = ap.parse_args()
     with tempfile.TemporaryDirectory() as d:
         report = asyncio.run(run(args.tts, args.barge_after, Path(d),
-                                 barge_text=args.barge_text, barge_in=args.barge_in))  # fmt: skip
+                                 barge_text=args.barge_text, barge_in=args.barge_in,
+                                 stt=args.stt))  # fmt: skip
     report["tts"] = args.tts
     print(json.dumps(report, indent=2))
 

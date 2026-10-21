@@ -34,6 +34,15 @@ Stop latency is from the first loud sample of the barge-in to the last voiced ou
 3. **Real interruptions are slow in duck mode (about 1 to 1.3 s to silence)** because the fake STT only produces a transcript after VAD stop. With a streaming STT (Flux interim transcripts) "stop" should be seen mid-word, and the 1.0 s duration cap bounds the worst case. This must be re-measured with Flux before choosing a default. The local closed-vocabulary fast path (review improvement 5) is the other lever.
 4. **The 300 ms stop target holds only in immediate mode** today. The trade-off is explicit: immediate mode is fast but cannot tell "mm-hmm" from "stop".
 
+## Follow-up with live Flux interim transcripts (Oct 21, 2026, $0.01 total)
+
+| Barge-in | Duck after VAD onset | Decision | Stop latency | Bot kept talking |
+| --- | --- | --- | --- | --- |
+| "Stop right there." | 23 ms | allowlist at 597 ms | 879 ms | no |
+| "Mm-hmm." | 7 ms | no transcript, restored at 1478 ms | none | yes |
+
+Flux interims cut the allowlist decision from 961 ms to 597 ms, still well above the 300 ms stop target. Flux returned no transcript at all for "mm-hmm", so the backchannel was handled by the no-transcript fallback (volume restored after about 1.5 s). The test harness then waited 60 s for a reply that correctly never came, streaming silence to Flux; the scenario runner should end on a timeout when no reply is expected.
+
 ## Consequences
 
 Default stays `immediate` until the duck mode is measured with Flux interims. Echo on the Pi will make VAD fire on the bot's own voice; ducking would then attenuate the bot needlessly, so the echo work in Phase 2 comes before turning duck mode on there.
