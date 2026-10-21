@@ -1,0 +1,23 @@
+# Phase 2 profile: Raspberry Pi 5 with a speakerphone. Not exercised yet (Phase 2 waits for a go).
+# Keep keys identical to mac.yaml so the move is a config change.
+
+profile: pi
+
+audio:
+  input_device: null    # set to the speakerphone (or the PipeWire echo-cancel source) name
+  output_device: null
+  in_sample_rate: 16000
+  out_sample_rate: 24000
+
+vad:
+  confidence: 0.7
+  start_secs: 0.08
+  stop_secs: 0.2
+  min_volume: 0.6
+
+turn:
+  smart_turn: true      # timing on one Pi core is still to be measured
+
+paths:
+  logs_dir: logs
+  data_dir: data

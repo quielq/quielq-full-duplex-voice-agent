@@ -1,0 +1,25 @@
+# Phase 1 profile: MacBook Air with headphones.
+# A profile sets audio devices, sample rates, and timing knobs. Nothing else may differ from pi.yaml.
+
+profile: mac
+
+audio:
+  # Devices are chosen by a case-insensitive name substring, never by index.
+  # null means the system default. Run `uv run python -m harness.audio_io` to list names.
+  input_device: null
+  output_device: null
+  in_sample_rate: 16000
+  out_sample_rate: 24000
+
+vad:
+  confidence: 0.7
+  start_secs: 0.08   # Silero default 0.2 declares speech after about 192 ms; target a duck within 100 ms
+  stop_secs: 0.2     # short silence, then Smart Turn decides
+  min_volume: 0.6
+
+turn:
+  smart_turn: true   # LocalSmartTurnAnalyzerV3 as the stop strategy
+
+paths:
+  logs_dir: logs
+  data_dir: data
