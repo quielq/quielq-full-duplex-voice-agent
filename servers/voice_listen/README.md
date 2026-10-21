@@ -1,3 +1,3 @@
-# voice-listen (not built yet)
+# voice-listen
 
-FastMCP server for ASR control. Tools: `start_listening`, `stop_listening`, `set_vocabulary`, `status`. Notifications: `speech_started`, `speech_ended`, `transcript_partial`, `transcript_final`. Audio arrives on a local side channel, not over MCP. Scheduled for step 6 (VoiceMCPBridge) and the voice-server work after Gate 1. See docs/architecture.md, "Voice servers".
+Stub built (`stub_server.py`, step 6): replays a scripted utterance and streams `speech_started`, `transcript_partial`, `transcript_final`, `speech_ended` as voice events while a `listen` call is open. `stop_listening` ends it. No ASR provider yet; audio will move on a local side channel, not over MCP. See ADR-008 for why events ride a long-running call.
