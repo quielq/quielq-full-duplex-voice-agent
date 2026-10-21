@@ -21,8 +21,8 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - Never use TEN VAD (its licence bars competing with Agora). Silero VAD only.
 - Pipecat 1.x APIs only. Never `allow_interruptions`, `interruption_strategies`, `MinWordsInterruptionStrategy`, or `TransportParams(vad_analyzer=...)`; stale arguments are silently ignored. Use `user_turn_strategies` and `LocalSmartTurnAnalyzerV3` for stop. See ADR-003 for the 1.13 replacements (`PipelineWorker`, `WorkerRunner`, `client.tools()` instead of `register_tools`, `settings=` objects).
 - Keep `TextAggregationMode.SENTENCE` for TTS (token aggregation commits unspoken text on interruption).
-- MCP carries control only. Audio flows on a local side channel. Voice tools: `start_listening`, `stop_listening`, `speak`, `stop`, `duck`, `unduck`, `interrupt`, plus notifications like `speech_started` and `played_up_to` (word index and ms offset). Names follow the review.
-- `MCPClient` has no notification hook. Build `VoiceMCPBridge` on the raw MCP SDK `ClientSession` with a message handler. Use `MCPClient` for ordinary tools.
+- MCP carries control only. Audio flows on a local side channel. Voice tools: `listen`, `stop_listening`, `speak`, `stop`, `duck`, `unduck`, `interrupt`. Events (`speech_started`, `played_up_to` with word index and ms offset, ...) are MCP logging notifications on the `voice` logger, sent while `speak` or `listen` is open, because the sessionless MCP protocol drops unrelated notifications (ADR-008).
+- `MCPClient` has no notification hook. `harness/voice_bridge.py` (`VoiceMCPBridge`) uses the raw MCP SDK `ClientSession` with a logging callback. Use `MCPClient` for ordinary tools.
 - Pins move together: `pipecat-ai==1.13.0`, `fastmcp>=4.1,<5`, `mcp>=2,<3` (PR 5624 is merged). Test stdio and streamable HTTP. Do not add the `local-smart-turn` extra (ADR-001).
 - Truncating context to what was heard needs TTS word timestamps: Cartesia, ElevenLabs WebSocket, Rime. Not Deepgram Aura-2 or Flux TTS. Aura-2 for bulk development, Cartesia for truncation tests and final runs.
 - Every MCP tool carries `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. They are hints: the harness enforces policy. Destructive tools default to a mock with a roughly 5 s undo window.
@@ -36,8 +36,8 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 
 ```
 harness/        bot.py (entry point), fakes, providers, MCP clients, event log, cost observer, audio I/O
-servers/        voice_listen/, voice_speak/ (not built yet), tasks/clock/ (built), other tasks (not built)
-bench/          cost_ledger.py, latency_probe.py (skeleton), fdb_adapter.py (stub), task_suite/
+servers/        voice_listen/, voice_speak/ (stubs), tasks/clock/ (built), other tasks (not built)
+bench/          cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices)
 docs/           architecture.md, research.md, prompt.md, decisions/
 ```
@@ -51,6 +51,11 @@ uv run python -m harness.bot                              # live mic (headphones
 uv run python -m harness.audio_io                         # list audio devices by name
 uv run python -m bench.cost_ledger                        # today's spend per provider
 uv run python -m bench.latency_probe logs/events-<id>.jsonl
+uv run python -m bench.interruption_test --tts fake_words [--barge-in duck]   # step 4 and 5
+uv run python -m bench.voice_bridge_probe                 # step 6, MCP hop cost
+ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
-Not built yet (wait for approval): barge-in beyond the step 5 stubs, addressing filters, the full benchmark, task servers other than clock, the model comparison, anything on the Pi.
+Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake.
+
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), addressing filters, the full benchmark, task servers other than clock, real voice servers and the audio side channel, the model comparison, anything on the Pi.
