@@ -104,22 +104,53 @@ def analyse(result, full_text: str, tts: str) -> dict:
     }
 
 
-async def run(tts: str, barge_after_s: float, workdir: Path) -> dict:
+async def run(
+    tts: str,
+    barge_after_s: float,
+    workdir: Path,
+    *,
+    barge_text: str = BARGE_IN,
+    barge_in: str = "immediate",
+) -> dict:
     cfg = load_config("mac")
     cfg.providers["stages"] = {"stt": "fake", "llm": "fake", "tts": tts}
+    cfg.profile["barge_in"]["mode"] = barge_in
     request = _say(REQUEST, workdir / "request.wav")
-    barge = _say(BARGE_IN, workdir / "barge.wav")
+    barge = _say(barge_text, workdir / "barge.wav")
     segments = [Segment(request), Segment(barge, after="bot_speaking", delay_s=barge_after_s)]
     result = await run_bot(
         cfg,
         input_mode="wav",
         segments=segments,
-        stt_script=[REQUEST.lower(), BARGE_IN.lower()],
+        stt_script=[REQUEST.lower(), barge_text.lower()],
         data_dir=str(workdir / "data"),
         handle_sigint=False,
         reply_timeout_s=60,
     )
-    return analyse(result, STORY, tts)
+    report = analyse(result, STORY, tts)
+    report.update(_duck_report(result, report))
+    return report
+
+
+def _duck_report(result, report: dict) -> dict:
+    """Duck timings: speech onset and VAD onset to the first quieter write, and the decision."""
+    ev = _events(result.events_path)
+    barge = next((e for e in ev if e["event"] == "injection_speech_start" and e.get("segment") == 1), None)
+    if not barge:
+        return {}
+    onset_ns = barge["t_ns"] + int(barge.get("onset_offset_s", 0) * 1e9)
+    after = [e for e in ev if e["t_ns"] >= barge["t_ns"]]
+    vad = next((e for e in after if e["event"] == "vad_onset"), None)
+    applied = next((e for e in after if e["event"] == "gain_applied" and e["gain"] < 1), None)
+    decided = next((e for e in after if e["event"] in ("barge_in_interrupt", "unduck")), None)
+    resumed = any(e["event"] == "unduck" for e in after)
+    return {
+        "duck_after_speech_ms": round((applied["write_t_ns"] - onset_ns) / 1e6) if applied else None,
+        "duck_after_vad_ms": round((applied["write_t_ns"] - vad["t_ns"]) / 1e6) if applied and vad else None,
+        "decision": (decided["event"] + ":" + decided.get("reason", "")) if decided else None,
+        "decide_ms": decided.get("decide_ms") if decided else None,
+        "bot_kept_talking": resumed and report.get("stop_ms") is None,
+    }
 
 
 def main() -> None:
@@ -127,9 +158,12 @@ def main() -> None:
     ap.add_argument("--tts", default="fake_words",
                     choices=["fake", "fake_words", "deepgram_aura2", "cartesia"])  # fmt: skip
     ap.add_argument("--barge-after", type=float, default=2.5)
+    ap.add_argument("--barge-text", default=BARGE_IN)
+    ap.add_argument("--barge-in", choices=["immediate", "duck"], default="immediate")
     args = ap.parse_args()
     with tempfile.TemporaryDirectory() as d:
-        report = asyncio.run(run(args.tts, args.barge_after, Path(d)))
+        report = asyncio.run(run(args.tts, args.barge_after, Path(d),
+                                 barge_text=args.barge_text, barge_in=args.barge_in))  # fmt: skip
     report["tts"] = args.tts
     print(json.dumps(report, indent=2))
 
