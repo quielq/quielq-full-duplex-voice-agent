@@ -1,6 +1,7 @@
 # Which implementation each stage uses, and what each provider may spend.
 #
 # Every stage defaults to "fake", which costs nothing and needs no key.
+# Switch per run without editing this file: python -m harness.bot --stages stt=deepgram_flux,llm=groq
 # A real provider runs only when (1) a stage selects it, (2) its key is in .env,
 # and (3) its daily cap is above zero. A cap of zero means every call is refused.
 # Caps are in USD at list price, so free-tier usage still counts against them.
@@ -13,12 +14,12 @@ stages:
 providers:
   deepgram:
     env_key: DEEPGRAM_API_KEY
-    daily_cap_usd: 0.0
+    daily_cap_usd: 0.50   # approved Oct 21, 2026; free credit, list price
     stt_model: flux-general-en
     tts_voice: aura-2-thalia-en
   groq:
     env_key: GROQ_API_KEY
-    daily_cap_usd: 0.0
+    daily_cap_usd: 0.50   # approved Oct 21, 2026; free tier, list price
     model: openai/gpt-oss-20b
   cartesia:
     env_key: CARTESIA_API_KEY

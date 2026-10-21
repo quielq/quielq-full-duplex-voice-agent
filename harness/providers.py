@@ -53,7 +53,7 @@ def build_stt(providers_cfg: dict, ledger: CostLedger, *, script: Sequence[str] 
     raise ValueError(f"unknown stt stage {choice!r}")
 
 
-def build_llm(providers_cfg: dict, ledger: CostLedger):
+def build_llm(providers_cfg: dict, ledger: CostLedger, *, system_instruction: str | None = None):
     choice = providers_cfg["stages"]["llm"]
     if choice == "fake":
         return RuleBasedLLMService()
@@ -63,14 +63,19 @@ def build_llm(providers_cfg: dict, ledger: CostLedger):
         _, p, key = _authorize(choice, providers_cfg, ledger)
         return GroqLLMService(
             api_key=key,
-            settings=GroqLLMService.Settings(model=p["model"], reasoning_effort="low"),
+            settings=GroqLLMService.Settings(
+                model=p["model"], reasoning_effort="low", system_instruction=system_instruction
+            ),
         )
     if choice == "anthropic":
         from pipecat.services.anthropic.llm import AnthropicLLMService
 
         _, p, key = _authorize(choice, providers_cfg, ledger)
         return AnthropicLLMService(
-            api_key=key, settings=AnthropicLLMService.Settings(model=p["model"])
+            api_key=key,
+            settings=AnthropicLLMService.Settings(
+                model=p["model"], system_instruction=system_instruction
+            ),
         )
     raise ValueError(f"unknown llm stage {choice!r}")
 

@@ -16,7 +16,7 @@ vad:
   min_volume: 0.6
 
 turn:
-  smart_turn: true      # timing on one Pi core is still to be measured
+  stop: auto            # auto | smart_turn | flux | speech_timeout; Smart Turn timing on one Pi core still to be measured
 
 paths:
   logs_dir: logs

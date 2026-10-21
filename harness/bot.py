@@ -68,13 +68,34 @@ class BotResult:
     session_usd: float = 0.0
 
 
-def _turn_strategies(cfg: Config) -> UserTurnStrategies:
-    # Pipecat 1.x API: interruptions and turn ends come from user_turn_strategies.
-    # Never allow_interruptions / interruption_strategies / TransportParams(vad_analyzer=...).
-    if cfg.profile["turn"]["smart_turn"]:
+def _turn_strategies(cfg: Config) -> UserTurnStrategies | None:
+    """Turn detection from profile ``turn.stop``: auto | smart_turn | flux | speech_timeout.
+
+    "auto" is flux when the STT is Deepgram Flux and smart_turn otherwise. Flux has no
+    finalize message, so Smart Turn cannot end a Flux turn early, and mixing the two
+    stalled a turn in testing (ADR-005).
+
+    Pipecat 1.x API: interruptions and turn ends come from user_turn_strategies.
+    Never allow_interruptions / interruption_strategies / TransportParams(vad_analyzer=...).
+    "flux" returns None so the aggregator applies the strategies Deepgram Flux
+    recommends (its own start and end of turn); it needs stt=deepgram_flux.
+    """
+    mode = cfg.profile["turn"]["stop"]
+    flux_stt = cfg.providers["stages"]["stt"] == "deepgram_flux"
+    if mode == "auto":
+        mode = "flux" if flux_stt else "smart_turn"
+    elif mode != "flux" and flux_stt:
+        raise ValueError(f"turn.stop={mode} does not work with Deepgram Flux STT; use auto or flux")
+    if mode == "flux":
+        if cfg.providers["stages"]["stt"] != "deepgram_flux":
+            raise ValueError("turn.stop=flux needs stages.stt=deepgram_flux")
+        return None
+    if mode == "smart_turn":
         stop = [TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())]
-    else:
+    elif mode == "speech_timeout":
         stop = [SpeechTimeoutUserTurnStopStrategy()]
+    else:
+        raise ValueError(f"unknown turn.stop {mode!r}")
     return UserTurnStrategies(
         start=[VADUserTurnStartStrategy(), TranscriptionUserTurnStartStrategy()], stop=stop
     )
@@ -123,13 +144,13 @@ async def run_bot(
              stages=cfg.providers["stages"])  # fmt: skip
 
     async with clock_client(mcp_transport, data_dir) as mcp:
-        context = LLMContext(
-            messages=[{"role": "system", "content": SYSTEM_PROMPT}], tools=await mcp.tools()
-        )
+        # The system prompt lives on the LLM service (system messages in LLMContext are
+        # deprecated since Pipecat 1.9).
+        context = LLMContext(tools=await mcp.tools())
         aggregators = LLMContextAggregatorPair(
             context, user_params=LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
         )
-        llm = build_llm(cfg.providers, ledger)
+        llm = build_llm(cfg.providers, ledger, system_instruction=SYSTEM_PROMPT)
         tts = build_tts(cfg.providers, ledger)
 
         audio = cfg.profile["audio"]
@@ -209,12 +230,25 @@ def main() -> None:
     ap.add_argument("--say", default="set a timer for one minute",
                     help="text mode: the request; wav mode with fake STT: what the fake 'hears'")  # fmt: skip
     ap.add_argument("--wav", type=Path)
+    ap.add_argument("--stages", default="",
+                    help="override providers.yaml stages for this run, e.g. stt=deepgram_flux,llm=groq")  # fmt: skip
+    ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "speech_timeout"],
+                    help="override the profile's turn.stop")  # fmt: skip
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
         ap.error("--input wav needs --wav")
 
+    cfg = load_config(args.profile)
+    for item in filter(None, args.stages.split(",")):
+        stage, _, choice = item.partition("=")
+        if stage not in cfg.providers["stages"]:
+            ap.error(f"unknown stage {stage!r}")
+        cfg.providers["stages"][stage] = choice
+    if args.turn_stop:
+        cfg.profile["turn"]["stop"] = args.turn_stop
+
     result = asyncio.run(
-        run_bot(load_config(args.profile), input_mode=args.input, mcp_transport=args.mcp,
+        run_bot(cfg, input_mode=args.input, mcp_transport=args.mcp,
                 say=args.say, wav=args.wav)  # fmt: skip
     )
     print(f"run {result.run_id}")

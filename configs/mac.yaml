@@ -18,7 +18,8 @@ vad:
   min_volume: 0.6
 
 turn:
-  smart_turn: true   # LocalSmartTurnAnalyzerV3 as the stop strategy
+  # auto: Flux end of turn when STT is Deepgram Flux, else Smart Turn v3 (ADR-005)
+  stop: auto         # auto | smart_turn | flux | speech_timeout
 
 paths:
   logs_dir: logs
