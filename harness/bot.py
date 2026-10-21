@@ -47,8 +47,9 @@ from harness.audio_io import local_transport
 from harness.config import Config, load_config
 from harness.costs import CostObserver
 from harness.events import EventLog, TurnEventObserver
-from harness.file_input import WavFileSource
+from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import clock_client
+from harness.null_output import PacedNullOutputTransport
 from harness.providers import build_llm, build_stt, build_tts
 
 SYSTEM_PROMPT = (
@@ -66,6 +67,8 @@ class BotResult:
     spoken_text: str = ""
     tool_calls: list[dict] = field(default_factory=list)
     session_usd: float = 0.0
+    context_messages: list[dict] = field(default_factory=list)
+    output: PacedNullOutputTransport | None = None
 
 
 def _turn_strategies(cfg: Config) -> UserTurnStrategies | None:
@@ -121,6 +124,7 @@ async def run_bot(
     mcp_transport: str = "stdio",
     say: str = "set a timer for one minute",
     wav: Path | None = None,
+    segments: list[Segment] | None = None,
     stt_script: list[str] | None = None,
     data_dir: str | None = None,
     reply_timeout_s: float = 60.0,
@@ -154,14 +158,16 @@ async def run_bot(
         tts = build_tts(cfg.providers, ledger)
 
         audio = cfg.profile["audio"]
+        source = output = None
         if input_mode == "mic":
             transport = local_transport(audio)
             front = [transport.input(), _vad(cfg), build_stt(cfg.providers, ledger)]
             back = [transport.output()]
         elif input_mode == "wav":
-            source = WavFileSource(wav, on_event=log.emit)
+            source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             front = [source, _vad(cfg), build_stt(cfg.providers, ledger, script=stt_script or [say])]
-            back = []
+            output = PacedNullOutputTransport(audio["out_sample_rate"], on_event=log.emit)
+            back = [output]
         elif input_mode == "text":
             front, back = [], []
         else:
@@ -190,6 +196,10 @@ async def run_bot(
                     LLMMessagesAppendFrame(messages=[{"role": "user", "content": say}], run_llm=True)
                 )
             try:
+                if source is not None:
+                    # Answer the last scripted utterance, not an earlier one.
+                    await asyncio.wait_for(source.all_injected.wait(), reply_timeout_s)
+                    turn_obs.reply_done.clear()
                 await asyncio.wait_for(turn_obs.reply_done.wait(), reply_timeout_s)
             except TimeoutError:
                 log.emit("reply_timeout")
@@ -209,6 +219,7 @@ async def run_bot(
                 with contextlib.suppress(asyncio.CancelledError):
                     await finisher
 
+    await cost_obs.flush_tts()
     log.emit("run_end", session_usd=round(cost_obs.session_usd, 6))
     log.close()
     return BotResult(
@@ -219,6 +230,8 @@ async def run_bot(
         spoken_text=" ".join(turn_obs.spoken_text).strip(),
         tool_calls=turn_obs.tool_calls,
         session_usd=cost_obs.session_usd,
+        context_messages=list(context.get_messages()),
+        output=output,
     )
 
 
