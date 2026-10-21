@@ -51,21 +51,21 @@ async def _wait_for_port(port: int, proc: subprocess.Popen, timeout: float = 20.
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         if proc.poll() is not None:
-            raise RuntimeError(f"clock HTTP server exited with code {proc.returncode}")
+            raise RuntimeError(f"MCP HTTP server exited with code {proc.returncode}")
         with contextlib.suppress(OSError):
             _, w = await asyncio.open_connection("127.0.0.1", port)
             w.close()
             return
         await asyncio.sleep(0.1)
-    raise TimeoutError(f"clock HTTP server did not open port {port}")
+    raise TimeoutError(f"MCP HTTP server did not open port {port}")
 
 
 @contextlib.asynccontextmanager
-async def clock_http_client(data_dir: str | None = None) -> AsyncIterator[MCPClient]:
-    """Start the clock server over streamable HTTP on loopback and yield a client for it."""
+async def http_server(module: str, data_dir: str | None = None) -> AsyncIterator[str]:
+    """Start one of our FastMCP servers over streamable HTTP on loopback; yield its URL."""
     port = _free_port()
     proc = subprocess.Popen(
-        [sys.executable, "-m", CLOCK_MODULE, "--transport", "http", "--port", str(port)],
+        [sys.executable, "-m", module, "--transport", "http", "--port", str(port)],
         cwd=REPO_ROOT,
         env=_server_env(data_dir),
         stdout=subprocess.DEVNULL,
@@ -73,13 +73,20 @@ async def clock_http_client(data_dir: str | None = None) -> AsyncIterator[MCPCli
     )
     try:
         await _wait_for_port(port, proc)
-        yield MCPClient(server_params=StreamableHttpParameters(url=f"http://127.0.0.1:{port}/mcp"))
+        yield f"http://127.0.0.1:{port}/mcp"
     finally:
         proc.terminate()
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+@contextlib.asynccontextmanager
+async def clock_http_client(data_dir: str | None = None) -> AsyncIterator[MCPClient]:
+    """Start the clock server over streamable HTTP on loopback and yield a client for it."""
+    async with http_server(CLOCK_MODULE, data_dir) as url:
+        yield MCPClient(server_params=StreamableHttpParameters(url=url))
 
 
 @contextlib.asynccontextmanager
