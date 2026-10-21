@@ -46,6 +46,7 @@ from bench.cost_ledger import CostLedger
 from harness.audio_io import local_transport
 from harness.config import Config, load_config
 from harness.costs import CostObserver
+from harness.ducking import DuckGain, DuckingProcessor
 from harness.events import EventLog, TurnEventObserver
 from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import clock_client
@@ -99,9 +100,33 @@ def _turn_strategies(cfg: Config) -> UserTurnStrategies | None:
         stop = [SpeechTimeoutUserTurnStopStrategy()]
     else:
         raise ValueError(f"unknown turn.stop {mode!r}")
+    # With duck-then-decide the DuckingProcessor interrupts, not the turn start.
+    interrupt = cfg.profile["barge_in"]["mode"] == "immediate"
     return UserTurnStrategies(
-        start=[VADUserTurnStartStrategy(), TranscriptionUserTurnStartStrategy()], stop=stop
+        start=[
+            VADUserTurnStartStrategy(enable_interruptions=interrupt),
+            TranscriptionUserTurnStartStrategy(enable_interruptions=interrupt),
+        ],
+        stop=stop,
     )
+
+
+def _ducking(cfg: Config, log: EventLog) -> tuple[DuckGain | None, list]:
+    b = cfg.profile["barge_in"]
+    if b["mode"] == "immediate":
+        return None, []
+    if b["mode"] != "duck":
+        raise ValueError(f"unknown barge_in.mode {b['mode']!r}")
+    gain = DuckGain(on_event=log.emit)
+    proc = DuckingProcessor(
+        gain,
+        gain=b["duck_gain"],
+        backchannel_max_s=b["backchannel_max_s"],
+        backchannel_max_words=b["backchannel_max_words"],
+        allowlist=b["allowlist"],
+        on_event=log.emit,
+    )
+    return gain, [proc]
 
 
 def _vad(cfg: Config) -> VADProcessor:
@@ -159,14 +184,20 @@ async def run_bot(
 
         audio = cfg.profile["audio"]
         source = output = None
+        duck_gain, duck_procs = _ducking(cfg, log)
+        stt_interrupts = duck_gain is None
         if input_mode == "mic":
-            transport = local_transport(audio)
-            front = [transport.input(), _vad(cfg), build_stt(cfg.providers, ledger)]
+            transport = local_transport(audio, audio_out_filter=duck_gain)
+            stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts)
+            front = [transport.input(), _vad(cfg), stt, *duck_procs]
             back = [transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
-            front = [source, _vad(cfg), build_stt(cfg.providers, ledger, script=stt_script or [say])]
-            output = PacedNullOutputTransport(audio["out_sample_rate"], on_event=log.emit)
+            stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts)
+            front = [source, _vad(cfg), stt, *duck_procs]
+            output = PacedNullOutputTransport(
+                audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
+            )
             back = [output]
         elif input_mode == "text":
             front, back = [], []
@@ -247,6 +278,7 @@ def main() -> None:
                     help="override providers.yaml stages for this run, e.g. stt=deepgram_flux,llm=groq")  # fmt: skip
     ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "speech_timeout"],
                     help="override the profile's turn.stop")  # fmt: skip
+    ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
         ap.error("--input wav needs --wav")
@@ -259,6 +291,8 @@ def main() -> None:
         cfg.providers["stages"][stage] = choice
     if args.turn_stop:
         cfg.profile["turn"]["stop"] = args.turn_stop
+    if args.barge_in:
+        cfg.profile["barge_in"]["mode"] = args.barge_in
 
     result = asyncio.run(
         run_bot(cfg, input_mode=args.input, mcp_transport=args.mcp,

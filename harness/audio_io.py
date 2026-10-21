@@ -34,8 +34,9 @@ def resolve_device(name: str | None, kind: str) -> int | None:
     raise RuntimeError(f"no {kind} audio device matching {name!r}; run python -m harness.audio_io")
 
 
-def local_transport(audio_cfg: dict) -> LocalAudioTransport:
+def local_transport(audio_cfg: dict, audio_out_filter=None) -> LocalAudioTransport:
     params = LocalAudioTransportParams(
+        audio_out_filter=audio_out_filter,
         audio_in_enabled=True,
         audio_out_enabled=True,
         audio_in_sample_rate=audio_cfg["in_sample_rate"],

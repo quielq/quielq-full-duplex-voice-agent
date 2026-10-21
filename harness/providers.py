@@ -37,7 +37,11 @@ def _authorize(choice: str, providers_cfg: dict, ledger: CostLedger) -> tuple[st
     return provider, providers_cfg["providers"][provider], _key(providers_cfg, provider)
 
 
-def build_stt(providers_cfg: dict, ledger: CostLedger, *, script: Sequence[str] = ()):
+def build_stt(
+    providers_cfg: dict, ledger: CostLedger, *, script: Sequence[str] = (), interrupt: bool = True
+):
+    """``interrupt=False`` stops a turn-detecting STT (Flux) from interrupting the bot itself,
+    so the DuckingProcessor can decide instead."""
     choice = providers_cfg["stages"]["stt"]
     if choice == "fake":
         return ScriptedSTTService(script=script or ["set a timer for one minute"])
@@ -48,6 +52,7 @@ def build_stt(providers_cfg: dict, ledger: CostLedger, *, script: Sequence[str] 
         return DeepgramFluxSTTService(
             api_key=key,
             mip_opt_out=True,
+            should_interrupt=interrupt,
             settings=DeepgramFluxSTTService.Settings(model=p["stt_model"]),
         )
     raise ValueError(f"unknown stt stage {choice!r}")

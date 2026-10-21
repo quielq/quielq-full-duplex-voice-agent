@@ -21,6 +21,15 @@ turn:
   # auto: Flux end of turn when STT is Deepgram Flux, else Smart Turn v3 (ADR-005)
   stop: auto         # auto | smart_turn | flux | speech_timeout
 
+barge_in:
+  # immediate: Pipecat default, any speech during playback interrupts at once.
+  # duck: duck-then-decide prototype (harness/ducking.py, ADR-007).
+  mode: immediate
+  duck_gain: 0.3
+  backchannel_max_s: 1.0     # Full-Duplex-Bench v1 backchannel: under 1 s and fewer than 2 words
+  backchannel_max_words: 1
+  allowlist: ["stop", "wait", "no", "cancel", "pause"]   # quoted: bare no is a YAML boolean
+
 paths:
   logs_dir: logs
   data_dir: data

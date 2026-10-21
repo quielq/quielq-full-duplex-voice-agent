@@ -46,8 +46,10 @@ class PlayedChunk:
 
 
 class PacedNullOutputTransport(BaseOutputTransport):
-    def __init__(self, sample_rate: int, on_event=None, **kwargs):
-        params = TransportParams(audio_out_enabled=True, audio_out_sample_rate=sample_rate)
+    def __init__(self, sample_rate: int, on_event=None, audio_out_filter=None, **kwargs):
+        params = TransportParams(
+            audio_out_enabled=True, audio_out_sample_rate=sample_rate, audio_out_filter=audio_out_filter
+        )
         super().__init__(params, **kwargs)
         self._on_event = on_event or (lambda *a, **k: None)
         self._next_t = 0.0
