@@ -1,0 +1,22 @@
+# Secrets: only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Python and tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime output: event logs, cost ledger, tool state
+logs/
+data/
+
+# Never commit recordings of people. Fallback phrases are synthesised, not recorded.
+*.wav
+*.mp3
+*.flac
+!assets/fallback_wavs/*.wav
+
+.DS_Store
