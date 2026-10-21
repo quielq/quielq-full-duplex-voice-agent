@@ -13,7 +13,7 @@ import wave
 from collections.abc import Callable
 from pathlib import Path
 
-from pipecat.frames.frames import Frame, InputAudioRawFrame, StartFrame
+from pipecat.frames.frames import CancelFrame, EndFrame, Frame, InputAudioRawFrame, StartFrame
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 
@@ -40,6 +40,10 @@ class WavFileSource(FrameProcessor):
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
+        if isinstance(frame, (EndFrame, CancelFrame)) and self._task:
+            # Stop feeding audio before the end reaches a streaming STT, or it reconnects and bills.
+            await self.cancel_task(self._task)
+            self._task = None
         await self.push_frame(frame, direction)
         if isinstance(frame, StartFrame) and self._task is None:
             self._task = self.create_task(self._stream())
