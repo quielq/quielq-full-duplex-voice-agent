@@ -1,0 +1,56 @@
+# ME3 voice agent: rules for every session
+
+ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman MEng AI). Phase 1 runs on a MacBook Air with headphones; Phase 2 runs on a Raspberry Pi 5 with a speakerphone. Only VAD, Smart Turn, and audio I/O run locally; ASR, TTS, and the LLM are cloud APIs.
+
+`docs/architecture.md` is the source of truth for design. If an instruction and the review disagree, say so and follow the review unless Quiel says otherwise. Decisions that depart from it go in `docs/decisions/ADR-NNN-title.md` (context, decision, alternatives, consequences, source URL).
+
+## Working rules
+
+1. Plan first and wait for approval before writing code for a new step.
+2. Never make a paid call or create a paid account without asking first. Every provider defaults to a fake; real providers are switched on one at a time in `configs/providers.yaml` after approval.
+3. Keys come from `.env` only. Commit `.env.example`, never `.env`. Never print or log a key. Never commit audio recordings of people.
+4. Verify, do not assume: check versions, flags, and APIs against current docs or the installed package. Record differences from the review in an ADR with the URL.
+5. No em dashes or en dashes in documents, comments, or commit messages. Use commas, colons, or periods.
+6. Small commits, one concern each, with clear messages.
+7. Every provider call goes through `bench/cost_ledger.py` with a hard daily cap per provider. A cap of zero refuses the call.
+8. The repo stays private until the patent decision. Publish nothing (packages, demos, posts).
+9. Report plainly. If a step fails, say what was tried and what happened. Do not retry the same failing command more than twice.
+
+## Hard technical rules
+
+- Never use TEN VAD (its licence bars competing with Agora). Silero VAD only.
+- Pipecat 1.x APIs only. Never `allow_interruptions`, `interruption_strategies`, `MinWordsInterruptionStrategy`, or `TransportParams(vad_analyzer=...)`; stale arguments are silently ignored. Use `user_turn_strategies` and `LocalSmartTurnAnalyzerV3` for stop. See ADR-003 for the 1.13 replacements (`PipelineWorker`, `WorkerRunner`, `client.tools()` instead of `register_tools`, `settings=` objects).
+- Keep `TextAggregationMode.SENTENCE` for TTS (token aggregation commits unspoken text on interruption).
+- MCP carries control only. Audio flows on a local side channel. Voice tools: `start_listening`, `stop_listening`, `speak`, `stop`, `duck`, `unduck`, `interrupt`, plus notifications like `speech_started` and `played_up_to` (word index and ms offset). Names follow the review.
+- `MCPClient` has no notification hook. Build `VoiceMCPBridge` on the raw MCP SDK `ClientSession` with a message handler. Use `MCPClient` for ordinary tools.
+- Pins move together: `pipecat-ai==1.13.0`, `fastmcp>=4.1,<5`, `mcp>=2,<3` (PR 5624 is merged). Test stdio and streamable HTTP. Do not add the `local-smart-turn` extra (ADR-001).
+- Truncating context to what was heard needs TTS word timestamps: Cartesia, ElevenLabs WebSocket, Rime. Not Deepgram Aura-2 or Flux TTS. Aura-2 for bulk development, Cartesia for truncation tests and final runs.
+- Every MCP tool carries `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. They are hints: the harness enforces policy. Destructive tools default to a mock with a roughly 5 s undo window.
+- Tool names must be unique across all servers (Pipecat flattens them), so prefer `list_timers` over `list`.
+- Headline latency comes from audio timestamps. Pipecat metrics frames are attribution only.
+- Python 3.13 on both machines, managed by uv (ADR-002).
+- Duck-then-decide is custom: scale output by about 0.3 on speech onset, decide within about 0.5 s using the allowlist (stop, wait, no, cancel, pause). Duck within 100 ms with Silero `start_secs` of about 0.064 to 0.1.
+- Pipecat has no AEC. Phase 1 uses headphones. Phase 2: hardware-AEC speakerphone, then PipeWire echo-cancel (WebRTC), then an RMS gate.
+
+## Layout and commands
+
+```
+harness/        bot.py (entry point), fakes, providers, MCP clients, event log, cost observer, audio I/O
+servers/        voice_listen/, voice_speak/ (not built yet), tasks/clock/ (built), other tasks (not built)
+bench/          cost_ledger.py, latency_probe.py (skeleton), fdb_adapter.py (stub), task_suite/
+configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices)
+docs/           architecture.md, research.md, prompt.md, decisions/
+```
+
+```
+uv sync                                                   # install
+uv run pytest -q                                          # tests, all fakes, no spend
+uv run python -m harness.bot --input text --mcp stdio     # scripted turn, no audio
+uv run python -m harness.bot --input wav --wav x.wav      # wav through VAD and Smart Turn
+uv run python -m harness.bot                              # live mic (headphones)
+uv run python -m harness.audio_io                         # list audio devices by name
+uv run python -m bench.cost_ledger                        # today's spend per provider
+uv run python -m bench.latency_probe logs/events-<id>.jsonl
+```
+
+Not built yet (wait for approval): barge-in beyond the step 5 stubs, addressing filters, the full benchmark, task servers other than clock, the model comparison, anything on the Pi.
