@@ -57,5 +57,5 @@ class CostObserver(BaseObserver):
             provider = "cartesia" if tts == "cartesia" else "deepgram"
             yield provider, "tts_chars", d.value, d.value * per_char
         elif isinstance(d, STTUsageMetricsData) and stt == "deepgram_flux":
-            minutes = float(d.value) / 60.0
+            minutes = float(d.value.audio_seconds) / 60.0
             yield "deepgram", "stt_minutes", minutes, minutes * p["deepgram_flux_per_min"]
