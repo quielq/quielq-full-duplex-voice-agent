@@ -7,7 +7,7 @@ cases:
     turns: ["send a message to Ana saying I am late"]
     expect:
       tools: [send_message]
-      spoken_re: "sure"
+      spoken_re: "\\?"   # it asks; the wording is the model's
       state: {comms: {count: 0}}
 
   - id: comms_args

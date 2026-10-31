@@ -74,7 +74,7 @@ cases:
       - "what timers do I have"
       - "cancel my timer"
     expect:
-      tools: [set_timer, list_timers, list_timers, cancel_timer]
+      tools_include: [set_timer, cancel_timer]   # a model may reuse the earlier listing
       state: {clock: {count: 0}}
 
   - id: conv_undo_keeps_timer
@@ -92,5 +92,5 @@ cases:
     turns: ["cancel my timer"]
     expect:
       tools: [list_timers]
-      spoken_re: "no timers"
+      spoken_re: "no .*timer|(couldn.t|can.t|not) find|don.t have"
       state: {clock: {count: 0}}

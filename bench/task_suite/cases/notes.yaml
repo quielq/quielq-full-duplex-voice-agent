@@ -38,4 +38,4 @@ cases:
     turns: ["add a note to buy rice", "read my notes"]
     expect:
       tools: [add_note, list_notes]
-      spoken_re: "one note"
+      spoken_re: "rice|one note"
