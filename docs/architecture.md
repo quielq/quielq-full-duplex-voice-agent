@@ -136,6 +136,10 @@ The reference range comes from an outside source, the DeepLearning.AI voice agen
 | **Duck** | n/a | **within 100 ms of VAD onset** | A single 32 ms window would fire on echo, so the duck waits for a short confirmation |
 | **Stop latency** | n/a | **p50 under 300 ms, flush under 50 ms** | For reference, GPT-4o Realtime measured 0.23 s in v1.5 |
 
+### Waiting phrase (approved, ADR-009)
+
+Tool turns need a second LLM call, and the budget above has no line for it. A short local clip ("One sec") from the pre-synthesised phrase cache plays when a tool call starts, or when no reply audio has started about 600 ms after end of turn (a hypothesis to tune). It plays once per turn at most, stops on interruption, never enters the LLM context, and never plays for `stay_silent` or in IDLE. It shortens the silence but does not count toward the targets: the log records `filler_audio_out` separately, and the headline stays first answer audio.
+
 ## MCP servers and tool contracts
 
 Two voice servers give the harness its ears and mouth, and seven task servers cover the ten ME2 commands plus delegation. All are written with FastMCP (the Python SDK in Prof's Agents deck) and run on the Pi, so the spec's "you build and run your MCP servers" is met, while the models behind ASR and TTS are commercial APIs.
@@ -176,6 +180,10 @@ Audio frames travel on a local side channel between the audio device, VAD, and t
 - **Annotate every tool** with the MCP hints `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. The spec treats them as hints that clients should not trust from untrusted servers, so the harness enforces the policy, not the server.
 - **Destructive tools default to mocks** and go through a harness-enforced undo window of about 5 s (a spoken "cancel" stops the call before it commits).
 - **Expect session expiry.** FastMCP 4.1 expires HTTP sessions after 30 minutes idle by default, so clients must reconnect.
+
+### Tool policy (approved, ADR-009)
+
+The rules above are enforced by `harness/tool_policy.py`, between `MCPClient` and the LLM. Defaults come from the MCP hints and `configs/tool_policy.yaml` can override them: read-only and non-destructive tools run at once, destructive tools wait out the 5 s undo window, destructive open-world tools also need a spoken yes, and tools with missing hints need a spoken yes. Each tool has a `permission` (`auto`, `confirm`, `disabled`), `undo_s`, and `timeout_s`. Disabled tools are removed from the schema. The microphone is never blocked during a tool; only the commit step is protected once the undo window ends. Spoken "cancel" must work in both barge-in modes.
 
 ## No wake word: deciding when it is being addressed
 
@@ -247,6 +255,10 @@ Speech-to-speech APIs are a separate baseline, not a candidate for the main path
 ### Decision rule (proposed)
 
 Pick the cheapest model that meets all four bars (with Groq gpt-oss-20b as the starting point if it clears them): p50 time to first token at or under 350 ms and p95 at or under 700 ms from the Pi; tool-call success at or above 95% on the 40 turns; correct `stay_silent` on at least 90% of non-addressed utterances; and stable behavior across the five repeats. If none meets the bars, fall back to the best on tool-call success and add a prompt-level fix. These bars are our hypotheses and the team should adjust them after the first run.
+
+### Test layers (approved, ADR-009)
+
+The 40 turns and 20 non-addressed utterances run through `bench/task_runner.py` from cases in `bench/task_suite/cases/`. There are four layers: next reply, tool call (arguments and final mock state), scripted conversation, and audio timing. Repeats report a pass rate against the decision rule above, and failures go into fixed buckets (`wrong_tool`, `missed_tool`, `bad_args`, `wrong_state`, `spoke_when_silent`, `timeout`, `provider_error`) assigned by plain code. The first run compares Groq gpt-oss-20b and 120b on accuracy from the laptop, and timing repeats from the Pi. Other candidates need their purchases approved first.
 
 ## Cost and budget
 
@@ -537,6 +549,21 @@ Pipecat's docs now confirm `MCPClient` and `register_tools`, so the gate tests t
 6. **Benchmark runs and freeze (Nov 3 to 5).** Final runs on the Pi with the Full-Duplex-Bench adapter and our task suite, freeze on Nov 5, then two days of rehearsal that include one unseen complex task such as building a website.
 
 This leaves little slack, because the Pi port overlaps the barge-in work. If we fall behind, the cuts in order are: acoustic echo tests, the Respond or Resume judge (score by hand), the mocked `comms` server, and last, the multi-time-of-day repeat runs.
+
+### Replan, Oct 31 (approved, replaces the dates above)
+
+The last commit is from Oct 21, so the Oct 29 work has not landed and the chart above is out of date. This order counts back from the Nov 5 freeze and the Nov 7 deadline, which Quiel confirmed on Oct 31. It includes the three ADR-009 additions.
+
+| Date | Work | Depends on |
+| --- | --- | --- |
+| Nov 1 | Spike the tool policy wrapper, then build it on `clock`. Start `bench/task_runner.py` with clock cases. | None |
+| Nov 2 | `notes`, `thermostat`, and `comms` mocks with test cases. Phrase cache and waiting phrase. | Policy, runner |
+| Nov 3 | Groq 20b versus 120b comparison on the laptop. Flux end-of-turn tuning. `stay_silent` and ACTIVE/IDLE. | Mocks, cases |
+| Nov 3 to 4 | Pi port: setup, speakerphone, echo, timing repeats. | Stable loop |
+| Nov 4 to 5 | `music`, `lights`, `knowledge`, `delegate` as time allows. Benchmark runs. | Pi |
+| Nov 5 | Feature freeze. | |
+
+This is tight. The real voice servers and audio side channel have no slot, so the demo would keep audio directly in Pipecat, with the bridge shown through the stub probe. That is a scope decision for Quiel, and it must be checked against the assignment spec first.
 
 ## Risks, open decisions, and sources
 

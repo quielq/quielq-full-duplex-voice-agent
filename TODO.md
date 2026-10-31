@@ -1,14 +1,17 @@
 # ME3 to-do list
 
-Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Oct 21, 2026.
+Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Oct 31, 2026.
 
-Status as of Oct 21: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). Steps 5 and 6 done. Step 4 done except the Cartesia arm. Spend today: Deepgram $0.085, Groq $0.0004.
+Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). Steps 5 and 6 done. Step 4 done except the Cartesia arm. No commits since Oct 21, so the build plan was redrawn (see "Replan, Oct 31" in `docs/architecture.md`).
 
 ## Waiting on Quiel
 
+- [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
+- [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first)
 - [ ] Buy Cartesia Pro ($5), approve a cartesia cap (suggested $1.00/day), and pick a default English voice
 - [ ] Try the live mic with headphones: `uv run python -m harness.bot --stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2`
-- [ ] Confirm the deadline (Nov 7?) in Google Classroom and Thursday's command list
+- [x] Confirm the deadline: Nov 7 holds (Oct 31)
+- [ ] Check Thursday's command list in Google Classroom
 - [ ] Decide the patent and privacy question before Nov 7 (repo stays private until then)
 - [ ] Later purchases: Anthropic ($5) and OpenRouter ($5) for the model comparison; Spotify developer app (free) for `music`
 
@@ -21,6 +24,30 @@ Status as of Oct 21: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
   - [ ] CPU and temperature logging
   - [ ] Smart Turn timing on one Pi core
   - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
+
+## ADR-009 additions (approved)
+
+Tool policy (Nov 1):
+
+- [ ] Spike wrapping `MCPClient` handlers (no documented hook in Pipecat 1.13)
+- [ ] `harness/tool_policy.py` and `configs/tool_policy.yaml`: defaults from MCP hints, `permission`, `undo_s`, `timeout_s`, disabled tools removed from the schema
+- [ ] Spoken confirmation and 5 s undo, with "cancel" working in both barge-in modes
+- [ ] Startup check for duplicate tool names; log every policy decision
+- [ ] Protect only the commit step, never block the mic
+
+Test layers (Nov 1 onward):
+
+- [ ] `bench/task_runner.py` and `bench/task_suite/cases/`: next reply, tool call, conversation, audio timing
+- [ ] `--repeat`, pass rates, fixed failure buckets, cost per successful task
+- [ ] Clock cases first, then one set per new server
+- [ ] Separate ledger price for `gpt-oss-120b`
+
+Waiting phrase (Nov 2):
+
+- [ ] Phrase cache, shared with the network-loss phrases and the spending-cap notice
+- [ ] Triggers: tool call start, or no reply audio after `filler.after_ms`; off by default in `mac.yaml` and `pi.yaml`
+- [ ] Once per turn, interruptible, kept out of the LLM context, never for `stay_silent` or in IDLE
+- [ ] `filler_audio_out` event and a `latency_probe` stage; log how often it plays
 
 ## Latency (about 2.8 s now, target p50 under 1.0 s)
 
@@ -55,7 +82,6 @@ Status as of Oct 21: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 - [ ] `comms` mock
 - [ ] `knowledge` (search provider not chosen)
 - [ ] `delegate` (onit in a per-task sandbox, with a token cap)
-- [ ] Harness tool policy: destructive tools default to a mock with a 5 s undo window, spoken confirmation for calls and messages, a timeout per tool
 
 ## No-wake-word addressing
 
@@ -67,7 +93,7 @@ Status as of Oct 21: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 
 ## Model comparison and benchmark
 
-- [ ] 40 tool-calling turns plus 20 non-addressed utterances across the shortlist, 5 repeats each, against the decision rule
+- [ ] 40 tool-calling turns plus 20 non-addressed utterances, 5 repeats each, against the decision rule: Groq 20b and 120b first through `bench/task_runner.py`, other candidates after purchases are approved
 - [ ] Full-Duplex-Bench adapter (v1/v1.5, then v3)
 - [ ] Our own task suite and team-recorded clips (including self-corrections)
 - [ ] Acoustic stop-latency measurement
