@@ -342,6 +342,7 @@ def main() -> None:
     ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "speech_timeout"],
                     help="override the profile's turn.stop")  # fmt: skip
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
+    ap.add_argument("--echo-cancel", action="store_true", help="WebRTC AEC, for live runs on speakers")
     ap.add_argument("--servers", default="", help=f"task servers, default clock: {','.join(TASK_SERVERS)}")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
@@ -357,6 +358,8 @@ def main() -> None:
         cfg.profile["turn"]["stop"] = args.turn_stop
     if args.barge_in:
         cfg.profile["barge_in"]["mode"] = args.barge_in
+    if args.echo_cancel:
+        cfg.profile["audio"]["echo_cancel"] = True
 
     names = list(filter(None, args.servers.split(",")))
     if unknown := set(names) - set(TASK_SERVERS):

@@ -60,14 +60,27 @@ def check_echo_risk(output_name: str, *, allow_speakers: bool) -> None:
     if is_builtin_speaker(output_name) and not allow_speakers:
         raise EchoRisk(
             f"output is {output_name!r}: the mic would hear the agent and it would interrupt "
-            "itself. Use headphones, or set audio.allow_speakers for a deliberate echo test."
+            "itself. Use headphones, or --echo-cancel, or audio.allow_speakers for an echo test."
         )
 
 
 def local_transport(audio_cfg: dict, audio_out_filter=None) -> LocalAudioTransport:
     output_index = resolve_device(audio_cfg.get("output_device"), "output")
-    check_echo_risk(output_device_name(output_index), allow_speakers=audio_cfg["allow_speakers"])
+    echo_cancel = audio_cfg["echo_cancel"]
+    check_echo_risk(
+        output_device_name(output_index), allow_speakers=audio_cfg["allow_speakers"] or echo_cancel
+    )
+    audio_in_filter = None
+    if echo_cancel:
+        from harness.echo_cancel import EchoCanceller
+
+        canceller = EchoCanceller(
+            audio_cfg["in_sample_rate"], audio_cfg["out_sample_rate"], audio_cfg["echo_delay_ms"]
+        )
+        audio_in_filter = canceller.capture_filter()
+        audio_out_filter = canceller.reference_filter(audio_out_filter)
     params = LocalAudioTransportParams(
+        audio_in_filter=audio_in_filter,
         audio_out_filter=audio_out_filter,
         audio_in_enabled=True,
         audio_out_enabled=True,

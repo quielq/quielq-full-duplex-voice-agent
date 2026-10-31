@@ -7,6 +7,8 @@ audio:
   input_device: null    # set to the speakerphone (or the PipeWire echo-cancel source) name
   output_device: null
   allow_speakers: false   # only built-in laptop speakers are refused; a speakerphone passes
+  echo_cancel: false      # WebRTC AEC in the harness (ADR-013); off when hardware or PipeWire cancels
+  echo_delay_ms: 50       # hint to WebRTC; not measured on the Pi
   in_sample_rate: 16000
   out_sample_rate: 24000
 

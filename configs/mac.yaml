@@ -9,6 +9,8 @@ audio:
   input_device: null
   output_device: null
   allow_speakers: false   # true lets a live run use built-in speakers, for deliberate echo tests
+  echo_cancel: false      # WebRTC AEC in the harness (ADR-013); also permits built-in speakers
+  echo_delay_ms: 50       # hint to WebRTC; bench/echo_probe.py sweeps it (0 to 150 ms passed)
   in_sample_rate: 16000
   out_sample_rate: 24000
 
