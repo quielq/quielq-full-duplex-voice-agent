@@ -132,7 +132,7 @@ async def test_undo_word_stops_a_held_action(policy, monkeypatch):
     _replace_params(monkeypatch)
     inner, params = Calls(), fake_params()
     await policy.handle(ToolRule("t", "auto", 0.05, 1.0), inner, params)
-    assert params.sent[0]["status"] == "pending"
+    assert params.sent[0]["status"] == "waiting_for_undo"
     verdict = policy.on_transcript("cancel", final=False)  # interim is enough
     assert verdict.decision == "undone"
     await asyncio.sleep(0.1)
@@ -288,7 +288,7 @@ async def test_cancel_timer_runs_after_the_window(cfg, tmp_path, transport):
     done = [e["decision"] for e in policy_events(r) if e["tool"] == "cancel_timer"]
     assert done[-2:] == ["hold_undo", "committed"]
     tool_messages = [m for m in r.context_messages if m.get("role") == "tool"]
-    assert '"done"' in tool_messages[-1]["content"]  # the LLM sees what happened, not "pending"
+    assert '"done"' in tool_messages[-1]["content"]  # the LLM sees what happened, not the hold
 
 
 async def test_cancel_in_the_window_keeps_the_timer(cfg, tmp_path):

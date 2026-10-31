@@ -4,7 +4,7 @@ Pipecat 1.13 has no policy hook, so ``ToolPolicy.tools`` rebuilds each FunctionS
 ``PolicyHandler`` around the handler ``MCPClient.tools()`` attached. Hints come from the
 MCP session, because MCPClient drops them when it converts schemas.
 
-Held actions never keep a tool call open. The handler answers the LLM at once ("pending" or
+Held actions never keep a tool call open. The handler answers the LLM at once ("waiting_for_undo" or
 "needs_confirmation"), so the mic and the reply are free, and the policy owns the wait. The
 outcome then replaces that tool message in the context, so the LLM sees one current truth
 with no new message role and no async-tool text in the system prompt.
@@ -249,7 +249,7 @@ class ToolPolicy:
         else:
             action.task = self._spawn(self._undo_window(action))
             result = {
-                "status": "pending",
+                "status": "waiting_for_undo",
                 "runs_in_seconds": rule.undo_s,
                 "note": "Not done yet. Tell the user in one short sentence that it happens in "
                 f"{rule.undo_s:g} seconds unless they say cancel. Do not call this tool again.",

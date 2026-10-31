@@ -241,7 +241,7 @@ class RuleBasedLLMService(LLMService):
         result = _decode(content)
         if isinstance(result, str):
             return "Done."
-        if isinstance(result, dict) and result.get("status") == "pending":
+        if isinstance(result, dict) and result.get("status") == "waiting_for_undo":
             return f"Okay, that happens in {result['runs_in_seconds']:g} seconds unless you say cancel."
         if isinstance(result, dict) and result.get("status") == "needs_confirmation":
             return "Are you sure?"

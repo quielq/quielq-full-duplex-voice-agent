@@ -16,14 +16,14 @@ What the installed package does (pipecat-ai 1.13.0):
 | Arm | Design | Result |
 | --- | --- | --- |
 | A | Pipecat async tool (`cancel_on_interruption=False`), open for the whole wait | Commits and survives the interruption. Adds a `developer` role message per update and about 100 tokens of `ASYNC TOOLS` text to every request. |
-| B | Handler returns "pending" at once, harness owns the wait, outcome replaces the tool message | Commits and survives the interruption. Plain tool result, no new role, system prompt unchanged. |
+| B | Handler returns `waiting_for_undo` at once, harness owns the wait, outcome replaces the tool message | Commits and survives the interruption. Plain tool result, no new role, system prompt unchanged. |
 | S | Ordinary sync call with the MCP call shielded | The write finishes after the interruption, but the context says `CANCELLED`, which is false. |
 
 ## Decision
 
 * Use arm B for held actions, and arm S for ordinary writes, with the real result written over the `CANCELLED`.
 * `harness/tool_policy.py` applies the wrapper. The policy enforces `timeout_s` itself, around the tool call only.
-* The LLM never decides whether a held action runs. It gets `pending` or `needs_confirmation` and is told not to call again. Only a transcript moves a held action, through `ToolPolicy.on_transcript`.
+* The LLM never decides whether a held action runs. It gets `waiting_for_undo` or `needs_confirmation` and is told not to call again. Only a transcript moves a held action, through `ToolPolicy.on_transcript`.
 * `PolicyGate` sits before the `DuckingProcessor`, because that drops short finals as backchannels and `immediate` mode has no listener at all. Stopping acts on interim text. A yes needs a final transcript of at most `yes_max_words`, so "okay, but what time is it" approves nothing. Any other final reply to a confirmation counts as no.
 * An answer of up to `answer_max_words` is consumed and answered with a fixed phrase, so "cancel" costs no LLM call. A longer one acts on the hold and also reaches the LLM.
 * `llm.register_function(None, policy.deny_unknown)` catches a model that calls a removed or invented tool, so those denials are logged and reach no server.
@@ -44,7 +44,8 @@ What the installed package does (pipecat-ai 1.13.0):
 * The tool message in the context changes after the LLM has seen it. This is deliberate: the LLM always sees the current truth.
 * The undo window starts when the tool returns, so the bot's own sentence uses part of the 5 s.
 * "cancel my other timer" during a window also undoes the held action. That is the safe direction.
-* Not verified live: `pending` handling by a real LLM (Groq), a timeout on a real slow MCP call (tested with a stand-in handler), and Flux interim transcripts through `PolicyGate`.
+* The status is not called `pending`, because a successful `set_timer` already returns `status: pending` for a timer that is counting down. The runner caught this.
+* Not verified live: `waiting_for_undo` handling by a real LLM (Groq), a timeout on a real slow MCP call (tested with a stand-in handler), and Flux interim transcripts through `PolicyGate`.
 
 ## Sources
 
