@@ -16,6 +16,7 @@ from typing import Any
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    ErrorFrame,
     FunctionCallInProgressFrame,
     FunctionCallResultFrame,
     InterruptionFrame,
@@ -143,3 +144,5 @@ class TurnEventObserver(BaseObserver):
             log.emit("audio_silent")
         elif isinstance(frame, InterruptionFrame):
             log.emit("interruption")
+        elif isinstance(frame, ErrorFrame):
+            log.emit("pipeline_error", error=frame.error)
