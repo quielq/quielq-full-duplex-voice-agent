@@ -1,6 +1,6 @@
 # ADR-015: Aura-2 delivery falls below real time, try Cartesia live
 
-Date: Oct 31, 2026. Status: built and off by default. Cartesia has not yet run in the live bot.
+Date: Oct 31, 2026. Status: built and off by default. One live Cartesia run was smooth on speakers.
 
 ## Context
 
@@ -46,6 +46,18 @@ Cartesia does not use the fresh socket workaround from ADR-012. Its audio carrie
 
 If the live run is smooth, `CLAUDE.md` needs changing, because it names Aura-2 for bulk development. A later ADR will record that.
 
+## Live result
+
+Run `20261031-175305-d80a7c`, Cartesia, Flux, Groq, `--echo-cancel`. Quiel heard no choppiness.
+
+* Median output gap was 45 ms, against 354 ms on Aura-2 in run `20261031-163553-f4c9dd`. Longer gaps were between replies.
+* Backlog reached about 6.9 s, so audio was waiting to play, not the reverse. The longest write was 58 ms.
+* First audio took about 0.30 to 0.44 s from `tts_request`.
+* Mic level during replies was -34.8 dB, showing the bot was audible to the mic, and -59.4 dB after cancelling. All seven transcripts were the user's words.
+* A live interruption stopped playback 12 ms after Flux reported the turn and 447 ms after Silero's onset. The context kept only "Once upon a time, a curious rabbit named Milo", and the next reply played with no old audio.
+
+This is one run of about 60 s. The run summary's `spoken` line carried on past the interruption, while the LLM context did not. That line was not investigated.
+
 ## Alternatives
 
 * **Larger playback buffer:** at 0.43x a 6 s reply needs about 3.4 s of buffer before it starts.
@@ -56,7 +68,7 @@ If the live run is smooth, `CLAUDE.md` needs changing, because it names Aura-2 f
 
 * Cartesia is priced higher per character in `configs/providers.yaml`: $0.00005 against $0.00003. That price was not rechecked for this ADR.
 * Cartesia sends audio in fast bursts, so `backlog_ms` in `audio_hop` will be large during a reply. This is expected.
-* Barge-in stale audio is covered by a fake socket test only. Live interruption needs checking.
+* Stale audio after barge-in has one live pass, in the run above.
 * ADR-014's 16 kHz setting for Aura-2 has no proven benefit and is unchanged.
 
 ## Sources
