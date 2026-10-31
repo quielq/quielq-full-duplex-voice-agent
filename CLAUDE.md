@@ -25,7 +25,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - `MCPClient` has no notification hook. `harness/voice_bridge.py` (`VoiceMCPBridge`) uses the raw MCP SDK `ClientSession` with a logging callback. Use `MCPClient` for ordinary tools.
 - Pins move together: `pipecat-ai==1.13.0`, `fastmcp>=4.1,<5`, `mcp>=2,<3` (PR 5624 is merged). Test stdio and streamable HTTP. Do not add the `local-smart-turn` extra (ADR-001).
 - Truncating context to what was heard needs TTS word timestamps: Cartesia, ElevenLabs WebSocket, Rime. Not Deepgram Aura-2 or Flux TTS. Aura-2 for bulk development, Cartesia for truncation tests and final runs.
-- Every MCP tool carries `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. They are hints: the harness enforces policy. Destructive tools default to a mock with a roughly 5 s undo window.
+- Every MCP tool carries `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. They are hints: the harness enforces policy. Destructive tools default to a mock with a roughly 5 s undo window. `harness/tool_policy.py` enforces this (ADR-011): a tool result of `waiting_for_undo` or `needs_confirmation` means it has not run, and only a transcript can release it.
 - Tool names must be unique across all servers (Pipecat flattens them), so prefer `list_timers` over `list`.
 - Headline latency comes from audio timestamps. Pipecat metrics frames are attribution only.
 - Python 3.13 on both machines, managed by uv (ADR-002).
@@ -35,10 +35,10 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 ## Layout and commands
 
 ```
-harness/        bot.py (entry point), fakes, providers, MCP clients, event log, cost observer, audio I/O
-servers/        voice_listen/, voice_speak/ (stubs), tasks/clock/ (built), other tasks (not built)
-bench/          cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, fdb_adapter.py (stub)
-configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices)
+harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, waiting phrase, event log, cost observer, audio I/O
+servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms (built), other tasks (not built)
+bench/          cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
+configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
 docs/           architecture.md, research.md, prompt.md, decisions/
 ```
 
@@ -53,9 +53,10 @@ uv run python -m bench.cost_ledger                        # today's spend per pr
 uv run python -m bench.latency_probe logs/events-<id>.jsonl
 uv run python -m bench.interruption_test --tts fake_words [--barge-in duck]   # step 4 and 5
 uv run python -m bench.voice_bridge_probe                 # step 6, MCP hop cost
+uv run python -m bench.task_runner --repeat 5             # task suite on fakes, no spend
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
-Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake.
+Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts `clock` only unless `--servers clock,notes,thermostat,comms` says otherwise. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), addressing filters, the full benchmark, task servers other than clock, real voice servers and the audio side channel, the model comparison, anything on the Pi.
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), addressing filters, the full benchmark, task servers other than clock, notes, thermostat, and comms, real voice servers and the audio side channel, the model comparison, anything on the Pi. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.

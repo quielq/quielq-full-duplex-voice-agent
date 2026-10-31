@@ -1,6 +1,6 @@
 # ADR-009: Waiting phrase, layered task tests, and per-tool policy
 
-Date: Oct 31, 2026. Status: accepted by Quiel on Oct 31, 2026. No code is written yet.
+Date: Oct 31, 2026. Status: accepted by Quiel on Oct 31, 2026. Built on fakes: the policy (see ADR-011), the runner without its audio layer, and the waiting phrase.
 
 ## Context
 

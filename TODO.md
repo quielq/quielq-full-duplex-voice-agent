@@ -29,25 +29,29 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 
 Tool policy (Nov 1):
 
-- [ ] Spike wrapping `MCPClient` handlers (no documented hook in Pipecat 1.13)
-- [ ] `harness/tool_policy.py` and `configs/tool_policy.yaml`: defaults from MCP hints, `permission`, `undo_s`, `timeout_s`, disabled tools removed from the schema
-- [ ] Spoken confirmation and 5 s undo, with "cancel" working in both barge-in modes
-- [ ] Startup check for duplicate tool names; log every policy decision
-- [ ] Protect only the commit step, never block the mic
+- [x] Spike wrapping `MCPClient` handlers (no documented hook in Pipecat 1.13) (ADR-011, 2b0d52b)
+- [x] `harness/tool_policy.py` and `configs/tool_policy.yaml`: defaults from MCP hints, `permission`, `undo_s`, `timeout_s`, disabled tools removed from the schema (2b0d52b)
+- [x] Spoken confirmation and 5 s undo, with "cancel" working in both barge-in modes (679207a; fake STT, not yet with Flux interim transcripts)
+- [x] Startup check for duplicate tool names; log every policy decision (2b0d52b, 679207a)
+- [x] Protect only the commit step, never block the mic (2b0d52b)
+- [ ] Check `waiting_for_undo` and `needs_confirmation` handling on a real LLM (run `bench/task_runner.py` on Groq, needs a go)
 
 Test layers (Nov 1 onward):
 
-- [ ] `bench/task_runner.py` and `bench/task_suite/cases/`: next reply, tool call, conversation, audio timing
-- [ ] `--repeat`, pass rates, fixed failure buckets, cost per successful task
-- [ ] Clock cases first, then one set per new server
+- [x] `bench/task_runner.py` and `bench/task_suite/cases/`: next reply, tool call, conversation (ab86a0b)
+- [ ] Audio timing layer: extend `bench/interruption_test.py`
+- [ ] `stay_silent` cases: `classify` has the `spoke_when_silent` bucket, but no case can use it until the tool exists
+- [x] `--repeat`, pass rates, fixed failure buckets, cost per successful task (ab86a0b)
+- [x] Clock cases first, then one set per new server (ab86a0b, bc171bd)
 - [ ] Separate ledger price for `gpt-oss-120b`
 
 Waiting phrase (Nov 2):
 
-- [ ] Phrase cache, shared with the network-loss phrases and the spending-cap notice
-- [ ] Triggers: tool call start, or no reply audio after `filler.after_ms`; off by default in `mac.yaml` and `pi.yaml`
-- [ ] Once per turn, interruptible, kept out of the LLM context, never for `stay_silent` or in IDLE
-- [ ] `filler_audio_out` event and a `latency_probe` stage; log how often it plays
+- [x] Phrase cache, shared with the network-loss phrases and the spending-cap notice (`harness/phrase_cache.py`)
+- [ ] Generate the real clips (paid TTS call, needs a go); a placeholder tone plays until then
+- [x] Triggers: tool call start, or no reply audio after `filler.after_ms`; off by default in `mac.yaml` and `pi.yaml` (e2f977b)
+- [x] Once per turn, interruptible, kept out of the LLM context, never for `stay_silent` or in IDLE (e2f977b; the IDLE and `stay_silent` hooks wait for those features)
+- [x] `filler_audio_out` event and a `latency_probe` stage; log how often it plays (e2f977b; reply audio after a clip is an estimate)
 
 ## Latency (about 2.8 s now, target p50 under 1.0 s)
 
@@ -77,9 +81,9 @@ Waiting phrase (Nov 2):
 
 - [ ] `music` (Spotify, demo only)
 - [ ] `lights` (check whether the Xiaomi bulb can be controlled locally)
-- [ ] `notes` (SQLite)
-- [ ] `thermostat` mock
-- [ ] `comms` mock
+- [x] `notes` (SQLite) (bc171bd)
+- [x] `thermostat` mock (bc171bd)
+- [x] `comms` mock (bc171bd)
 - [ ] `knowledge` (search provider not chosen)
 - [ ] `delegate` (onit in a per-task sandbox, with a token cap)
 
