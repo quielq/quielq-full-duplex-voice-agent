@@ -100,6 +100,7 @@ def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None):
         return FreshSocketDeepgramTTSService(
             on_event=on_event,
             api_key=key,
+            sample_rate=p["tts_sample_rate"],
             mip_opt_out=True,
             settings=FreshSocketDeepgramTTSService.Settings(voice=p["tts_voice"]),
             text_aggregation_mode=agg,

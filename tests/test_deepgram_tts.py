@@ -3,7 +3,10 @@
 import asyncio
 import json
 
+from bench.cost_ledger import CostLedger
+from harness.config import load_config
 from harness.deepgram_tts import FreshSocketDeepgramTTSService
+from harness.providers import build_tts
 from pipecat.services.deepgram.tts import DeepgramTTSService
 
 CLEARED = json.dumps({"type": "Cleared", "sequence_id": 0})
@@ -144,3 +147,12 @@ async def test_interrupting_a_waiting_reply_keeps_the_reopen_running():
     await asyncio.gather(waiting, return_exceptions=True)
     await asyncio.sleep(0.01)
     assert connects == [1] and service._websocket is not None
+
+
+def test_aura_is_requested_at_the_configured_rate(tmp_path, monkeypatch):
+    # 24 kHz arrived at 0.43x real time from the Philippines, and the output resamples (ADR-014).
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "test")
+    providers = load_config("mac").providers
+    providers["stages"] = {**providers["stages"], "tts": "deepgram_aura2"}
+    ledger = CostLedger(tmp_path / "l.jsonl", {"deepgram": 1.0})
+    assert build_tts(providers, ledger)._init_sample_rate == 16000

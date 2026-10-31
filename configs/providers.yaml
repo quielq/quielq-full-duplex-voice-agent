@@ -17,6 +17,7 @@ providers:
     daily_cap_usd: 0.50   # approved Oct 21, 2026; free credit, list price
     stt_model: flux-general-en
     tts_voice: aura-2-thalia-en
+    tts_sample_rate: 16000   # 24000 arrives slower than real time on this link (ADR-014)
   groq:
     env_key: GROQ_API_KEY
     daily_cap_usd: 0.50   # approved Oct 21, 2026; free tier, list price
