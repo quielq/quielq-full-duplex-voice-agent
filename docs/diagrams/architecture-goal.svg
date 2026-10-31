@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1400" width="1500" height="1400" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#455A64"/>
+    </marker>
+    <style>
+      .t { font-size: 15px; font-weight: 700; fill: #212121; }
+      .s { font-size: 12.5px; fill: #424242; }
+      .k { font-size: 12px; fill: #616161; font-style: italic; }
+      .h { font-size: 16px; font-weight: 700; }
+      .n { font-size: 14px; fill: #212121; }
+      .nb { font-size: 14px; font-weight: 700; fill: #212121; }
+      .local { fill: #E8F5E9; stroke: #2E7D32; stroke-width: 1.8; }
+      .cloud { fill: #E3F2FD; stroke: #1565C0; stroke-width: 1.8; }
+      .ours { fill: #FFF3E0; stroke: #E65100; stroke-width: 1.8; }
+      .pc { fill: #F3E5F5; stroke: #6A1B9A; stroke-width: 1.8; }
+      .todo { stroke-dasharray: 6 4; }
+      .ln { stroke: #455A64; stroke-width: 2; fill: none; }
+      .au { stroke: #2E7D32; stroke-width: 4; fill: none; }
+    </style>
+  </defs>
+  <rect width="1500" height="1400" fill="#FFFFFF"/>
+
+  <text x="40" y="44" font-size="26" font-weight="700" fill="#212121">ME3 goal architecture</text>
+  <text x="40" y="70" font-size="14" fill="#616161">End state from docs/architecture.md. Phase 2 on a Raspberry Pi 5 with a speakerphone; the same code runs on the Mac in Phase 1. Solid border = exists today, dashed = still to build.</text>
+
+  <!-- Pi container -->
+  <rect x="40" y="100" width="1060" height="900" rx="14" fill="#FBFDFB" stroke="#2E7D32" stroke-width="2"/>
+  <text x="60" y="126" class="h" fill="#2E7D32">Raspberry Pi 5 (everything local runs here)</text>
+
+  <!-- Row A: audio plane -->
+  <rect x="70" y="145" width="180" height="85" rx="10" class="local todo"/>
+  <text x="85" y="170" class="t">Speakerphone</text>
+  <text x="85" y="190" class="s">hardware echo cancel;</text>
+  <text x="85" y="208" class="s">PipeWire WebRTC AEC</text>
+  <text x="85" y="224" class="s">as the fallback</text>
+
+  <rect x="290" y="145" width="180" height="85" rx="10" class="local"/>
+  <text x="305" y="170" class="t">AudioIO adapter</text>
+  <text x="305" y="190" class="s">device names from</text>
+  <text x="305" y="208" class="s">--profile mac or pi</text>
+
+  <rect x="510" y="145" width="210" height="85" rx="10" class="local todo"/>
+  <text x="525" y="170" class="t">Loudness gate</text>
+  <text x="525" y="190" class="s">keeps 300 to 500 ms of</text>
+  <text x="525" y="208" class="s">pre-roll so no word is lost;</text>
+  <text x="525" y="224" class="s">quiet room = no ASR spend</text>
+
+  <rect x="760" y="145" width="310" height="85" rx="10" class="local"/>
+  <text x="775" y="170" class="t">Silero VAD + Smart Turn v3</text>
+  <text x="775" y="190" class="s">speech onset within about 100 ms</text>
+  <text x="775" y="208" class="s">(triggers the duck), end-of-turn</text>
+  <text x="775" y="224" class="s">model on one Pi core</text>
+
+  <path d="M250,187 L288,187" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <path d="M470,187 L508,187" class="ln" marker-end="url(#arr)"/>
+  <path d="M720,187 L758,187" class="ln" marker-end="url(#arr)"/>
+
+  <!-- Side channel bar -->
+  <rect x="290" y="258" width="780" height="30" rx="6" fill="#C8E6C9" stroke="#2E7D32" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="305" y="278" font-size="13" font-weight="700" fill="#1B5E20">Audio side channel (Unix socket or shared memory): audio frames never travel over MCP</text>
+  <path d="M380,230 L380,258" class="au"/>
+
+  <!-- Row B: fast path + voice servers -->
+  <rect x="70" y="310" width="290" height="115" rx="10" class="ours todo"/>
+  <text x="85" y="335" class="t">Local fast path</text>
+  <text x="85" y="356" class="s">"stop", "pause", "volume up" handled</text>
+  <text x="85" y="374" class="s">on the device with no ASR or LLM:</text>
+  <text x="85" y="392" class="s">zero cost, very low latency, and</text>
+  <text x="85" y="410" class="s">the offline fallback</text>
+
+  <rect x="760" y="305" width="310" height="58" rx="10" class="ours todo"/>
+  <text x="775" y="328" class="t">voice-listen MCP server</text>
+  <text x="775" y="348" class="s">holds the ASR stream; pushes transcripts</text>
+
+  <rect x="760" y="372" width="310" height="58" rx="10" class="ours todo"/>
+  <text x="775" y="395" class="t">voice-speak MCP server</text>
+  <text x="775" y="415" class="s">holds TTS; playback buffer: duck, flush</text>
+
+  <path d="M915,288 L915,303" class="au"/>
+  <path d="M740,288 L740,401 L760,401" class="au"/>
+  <text x="560" y="345" class="k">audio in to ASR,</text>
+  <text x="560" y="361" class="k">speech out to speaker</text>
+
+  <!-- Row C: harness -->
+  <rect x="70" y="470" width="1000" height="200" rx="12" fill="#FAF5FC" stroke="#6A1B9A" stroke-width="2"/>
+  <text x="90" y="496" class="h" fill="#6A1B9A">Pipecat 1.x harness (harness/bot.py): decides, never touches raw audio</text>
+
+  <rect x="90" y="512" width="300" height="66" rx="9" class="pc"/>
+  <text x="104" y="535" class="t">Turn detection</text>
+  <text x="104" y="555" class="s">Smart Turn or Flux end of turn,</text>
+  <text x="104" y="571" class="s">A/B tested on our recordings</text>
+
+  <rect x="415" y="512" width="300" height="66" rx="9" class="ours todo"/>
+  <text x="429" y="535" class="t">Addressing filter (no wake word)</text>
+  <text x="429" y="555" class="s">ACTIVE/IDLE states, stay_silent tool</text>
+  <text x="429" y="571" class="s">when speech is not for the agent</text>
+
+  <rect x="740" y="512" width="310" height="66" rx="9" class="ours"/>
+  <text x="754" y="535" class="t">VoiceMCPBridge</text>
+  <text x="754" y="555" class="s">commands to voice servers, events back</text>
+  <text x="754" y="571" class="s">(speech_started, played_up_to)</text>
+
+  <rect x="90" y="590" width="300" height="66" rx="9" class="ours"/>
+  <text x="104" y="613" class="t">Barge-in: duck then decide</text>
+  <text x="104" y="633" class="s">duck to 0.3, stop under 300 ms, keep</text>
+  <text x="104" y="649" class="s">only the words actually heard in context</text>
+
+  <rect x="415" y="590" width="300" height="66" rx="9" class="pc todo"/>
+  <text x="429" y="613" class="t">LLM switcher</text>
+  <text x="429" y="633" class="s">escalate for hard tool chains, fail</text>
+  <text x="429" y="649" class="s">over when a provider is slow or down</text>
+
+  <rect x="740" y="590" width="310" height="66" rx="9" class="ours todo"/>
+  <text x="754" y="613" class="t">Tool policy</text>
+  <text x="754" y="633" class="s">enforces MCP hints, spoken confirmation,</text>
+  <text x="754" y="649" class="s">5 s undo on destructive tools, timeouts</text>
+
+  <path d="M895,512 L895,432" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="905" y="460" class="k">MCP: control + events</text>
+  <path d="M1040,230 L1040,242 L1088,242 L1088,488 L1072,488" class="ln" marker-end="url(#arr)"/>
+  <text x="1010" y="252" class="k" font-size="11">VAD events</text>
+
+  <!-- Row D: task servers -->
+  <rect x="70" y="715" width="1000" height="180" rx="12" fill="#FFFBF5" stroke="#E65100" stroke-width="2"/>
+  <text x="90" y="741" class="h" fill="#E65100">Task MCP servers (FastMCP, stdio): seven servers cover the ten ME2 commands plus delegation</text>
+  <path d="M570,670 L570,713" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="580" y="697" class="k">MCPClient tools</text>
+
+  <rect x="90" y="755" width="230" height="58" rx="9" class="ours todo"/><text x="104" y="779" class="t">music</text><text x="104" y="799" class="s">Spotify Web API, demo only</text>
+  <rect x="335" y="755" width="230" height="58" rx="9" class="ours todo"/><text x="349" y="779" class="t">lights</text><text x="349" y="799" class="s">Xiaomi bulb (driver spike)</text>
+  <rect x="580" y="755" width="230" height="58" rx="9" class="ours"/><text x="594" y="779" class="t">clock</text><text x="594" y="799" class="s">timers, alarms (built)</text>
+  <rect x="825" y="755" width="230" height="58" rx="9" class="ours todo"/><text x="839" y="779" class="t">thermostat</text><text x="839" y="799" class="s">realistic mock with state</text>
+  <rect x="90" y="823" width="230" height="58" rx="9" class="ours todo"/><text x="104" y="847" class="t">notes</text><text x="104" y="867" class="s">reminders, lists (SQLite)</text>
+  <rect x="335" y="823" width="230" height="58" rx="9" class="ours todo"/><text x="349" y="847" class="t">comms</text><text x="349" y="867" class="s">call, message (mock first)</text>
+  <rect x="580" y="823" width="230" height="58" rx="9" class="ours todo"/><text x="594" y="847" class="t">knowledge</text><text x="594" y="867" class="s">web search, fetch page</text>
+  <rect x="825" y="823" width="230" height="58" rx="9" class="ours todo"/><text x="839" y="847" class="t">delegate</text><text x="839" y="867" class="s">long task returns a job id</text>
+
+  <!-- Row E: ops -->
+  <rect x="70" y="915" width="1000" height="70" rx="12" class="ours todo"/>
+  <text x="90" y="941" class="t">Running unattended</text>
+  <text x="90" y="963" class="s">systemd restart and watchdog, auto-start on boot, reconnect with backoff, pre-recorded phrases when the network drops,</text>
+  <text x="90" y="979" class="s">mute switch with indicator, event log and cost ledger caps on every run (the last two exist today)</text>
+
+  <!-- Cloud column -->
+  <rect x="1130" y="100" width="340" height="900" rx="14" fill="#F4F9FE" stroke="#1565C0" stroke-width="2"/>
+  <text x="1150" y="126" class="h" fill="#1565C0">Cloud</text>
+
+  <rect x="1150" y="300" width="300" height="62" rx="10" class="cloud"/>
+  <text x="1165" y="324" class="t">Streaming ASR</text>
+  <text x="1165" y="344" class="s">Deepgram Flux; Nova-3 to compare</text>
+  <rect x="1150" y="370" width="300" height="62" rx="10" class="cloud todo"/>
+  <text x="1165" y="394" class="t">Streaming TTS</text>
+  <text x="1165" y="414" class="s">Cartesia Sonic; Aura-2 as fallback</text>
+  <path d="M1070,334 L1148,331" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <path d="M1070,401 L1148,401" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
+
+  <rect x="1150" y="480" width="300" height="150" rx="10" class="cloud todo"/>
+  <text x="1165" y="504" class="t">LLM APIs</text>
+  <text x="1165" y="526" class="s">Groq gpt-oss-20b: fast default</text>
+  <text x="1165" y="546" class="s">Groq gpt-oss-120b: multi-step tools</text>
+  <text x="1165" y="566" class="s">Claude Haiku 5.5: reliability fallback</text>
+  <text x="1165" y="590" class="k">final pick: cheapest model that clears</text>
+  <text x="1165" y="608" class="k">the bars in the model comparison</text>
+  <path d="M1070,623 L1100,623 L1100,555 L1148,555" class="ln" marker-end="url(#arr)"/>
+
+  <rect x="1150" y="740" width="300" height="62" rx="10" class="cloud todo"/>
+  <text x="1165" y="764" class="t">Outside services</text>
+  <text x="1165" y="784" class="s">search API, Spotify, bulb control</text>
+  <rect x="1150" y="815" width="300" height="78" rx="10" class="cloud todo"/>
+  <text x="1165" y="839" class="t">Background worker: onit</text>
+  <text x="1165" y="859" class="s">per-task sandbox, token cap,</text>
+  <text x="1165" y="877" class="s">streamable HTTP, gpt-oss-120b</text>
+  <path d="M1070,771 L1148,771" class="ln" marker-end="url(#arr)"/>
+  <path d="M1055,852 L1148,852" class="ln" marker-end="url(#arr)"/>
+
+  <!-- Notes -->
+  <text x="40" y="1045" font-size="18" font-weight="700" fill="#212121">What changes from today</text>
+  <text x="40" y="1075" class="nb">1. Audio leaves the pipeline.</text>
+  <text x="330" y="1075" class="n">Speech moves on a local side channel to two voice MCP servers that own the ASR and TTS connections (ADR-008).</text>
+  <text x="40" y="1101" class="nb">2. The harness only decides.</text>
+  <text x="330" y="1101" class="n">Pipecat decides when you finished, whether you were talking to it, when to duck or stop, which LLM to use, and which tools may run.</text>
+  <text x="40" y="1127" class="nb">3. Providers swap freely.</text>
+  <text x="330" y="1127" class="n">Because ASR and TTS sit behind MCP and the LLM behind a switcher, a provider changes without touching the loop.</text>
+  <text x="40" y="1153" class="nb">4. Full command set.</text>
+  <text x="330" y="1153" class="n">Seven task servers cover the ME2 commands. Slow work returns a job id; delegate hands the long task to onit so the agent keeps listening.</text>
+  <text x="40" y="1179" class="nb">5. No wake word.</text>
+  <text x="330" y="1179" class="n">The loudness gate, ACTIVE/IDLE states and stay_silent decide if speech is meant for the agent, which also controls cost.</text>
+  <text x="40" y="1205" class="nb">6. Phase 2 hardware.</text>
+  <text x="330" y="1205" class="n">Same code on a Pi 5 with a speakerphone; echo cancellation replaces the headphones.</text>
+  <text x="40" y="1231" class="nb">7. Targets.</text>
+  <text x="330" y="1231" class="n">Reply p50 under 1.0 s and p95 under 1.5 s, duck within 100 ms, stop p50 under 300 ms, about $20 total development spend.</text>
+  <text x="40" y="1257" class="nb">8. Proven by benchmark.</text>
+  <text x="330" y="1257" class="n">Full-Duplex-Bench adapter, our own task suite and recordings, acoustic latency and cost per successful task.</text>
+
+  <!-- Legend -->
+  <g transform="translate(40,1300)">
+    <rect x="0" y="0" width="22" height="16" rx="4" class="local"/><text x="30" y="13" class="s">runs on the device (audio)</text>
+    <rect x="230" y="0" width="22" height="16" rx="4" class="pc"/><text x="260" y="13" class="s">Pipecat component</text>
+    <rect x="420" y="0" width="22" height="16" rx="4" class="ours"/><text x="450" y="13" class="s">our own code</text>
+    <rect x="570" y="0" width="22" height="16" rx="4" class="cloud"/><text x="600" y="13" class="s">cloud API</text>
+    <rect x="700" y="0" width="22" height="16" rx="4" fill="#FFFFFF" stroke="#455A64" stroke-width="1.8"/><text x="730" y="13" class="s">exists today</text>
+    <rect x="850" y="0" width="22" height="16" rx="4" fill="#FFFFFF" stroke="#455A64" stroke-width="1.8" stroke-dasharray="5 3"/><text x="880" y="13" class="s">still to build</text>
+    <path d="M1010,8 L1050,8" class="au"/><text x="1060" y="13" class="s">audio path</text>
+    <path d="M1160,8 L1200,8" class="ln" marker-end="url(#arr)"/><text x="1210" y="13" class="s">control or data</text>
+  </g>
+</svg>
