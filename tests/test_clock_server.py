@@ -23,14 +23,14 @@ async def test_timer_roundtrip_and_persistence(tmp_path):
     async with Client(mcp) as c:
         t = (await c.call_tool("set_timer", {"duration_seconds": 60})).structured_content
         assert t["remaining_seconds"] == 60 and t["status"] == "pending"
-        listed = (await c.call_tool("list_timers", {})).structured_content["result"]
+        listed = (await c.call_tool("list_timers", {})).structured_content["timers"]
         assert [x["id"] for x in listed] == [t["id"]]
     # State is on disk, so a restart keeps it.
     assert t["id"] in json.loads((tmp_path / "clock.json").read_text())
     async with Client(mcp) as c:
         r = (await c.call_tool("cancel_timer", {"timer_id": t["id"]})).structured_content
         assert r["cancelled"] is True
-        assert (await c.call_tool("list_timers", {})).structured_content["result"] == []
+        assert (await c.call_tool("list_timers", {})).structured_content["timers"] == []
 
 
 async def test_alarm_rejects_bad_time():

@@ -101,11 +101,13 @@ def set_alarm(
 @mcp.tool(
     annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 )
-def list_timers() -> list[dict]:
+def list_timers() -> dict:
     """List pending timers and alarms, soonest first."""
+    # A dict, not a bare list: an empty list reaches MCPClient as no content, which it reports
+    # to the LLM as a failed call.
     now = time.time()
     items = sorted(_load().values(), key=lambda i: i["fires_at"])
-    return [_view(i, now) for i in items if i["fires_at"] > now]
+    return {"timers": [_view(i, now) for i in items if i["fires_at"] > now]}
 
 
 @mcp.tool(

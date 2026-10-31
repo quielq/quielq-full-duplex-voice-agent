@@ -102,6 +102,37 @@ STORY = (
 )
 
 
+_CANCEL_RE = re.compile(r"\bcancel\b.*\b(timer|alarm)\b")
+_ALARM_RE = re.compile(r"alarm for (\d\d:\d\d)")
+
+
+def _text_of(message: dict) -> str:
+    content = message.get("content")
+    if isinstance(content, list):  # content parts
+        return " ".join(p.get("text", "") for p in content if isinstance(p, dict))
+    return content or ""
+
+
+def _decode(content):
+    """MCP tool results reach the context as a JSON-encoded string of JSON text,
+    so decode until it stops being a string."""
+    result = content
+    try:
+        for _ in range(3):
+            if not isinstance(result, str):
+                break
+            result = json.loads(result)
+    except json.JSONDecodeError:
+        return content
+    return result
+
+
+def _timers_in(result) -> list | None:
+    """The listing from list_timers, or None if this result is not one."""
+    timers = result.get("timers") if isinstance(result, dict) else None
+    return timers if isinstance(timers, list) else None
+
+
 def _tool_names(context) -> set[str]:
     tools = getattr(context, "tools", None)
     standard = getattr(tools, "standard_tools", None) or []
@@ -134,12 +165,14 @@ class RuleBasedLLMService(LLMService):
         role = last.get("role")
 
         if role == "tool":
-            await self._stream(self._confirm(last.get("content")))
+            if not await self._follow_up(context, last.get("content")):
+                await self._stream(self._confirm(last.get("content")))
             return
 
-        text = last.get("content") if role == "user" else ""
-        if isinstance(text, list):  # content parts
-            text = " ".join(p.get("text", "") for p in text if isinstance(p, dict))
+        text = _text_of(last) if role == "user" else ""
+        low = (text or "").lower()
+        if await self._tool_rule(context, low):
+            return
         seconds = parse_timer_request(text or "")
         if seconds is not None and "set_timer" in _tool_names(context):
             await self.run_function_calls(
@@ -153,7 +186,6 @@ class RuleBasedLLMService(LLMService):
                 ]
             )
             return
-        low = (text or "").lower()
         if "story" in low:
             await self._stream(STORY)
             return
@@ -162,18 +194,59 @@ class RuleBasedLLMService(LLMService):
             return
         await self._stream(f"I heard: {text}." if text else "Sorry, could you repeat that?")
 
+    async def _call(self, context, name: str, arguments: dict) -> None:
+        await self.run_function_calls(
+            [
+                FunctionCallFromLLM(
+                    function_name=name,
+                    tool_call_id=f"call_{uuid.uuid4().hex[:12]}",
+                    arguments=arguments,
+                    context=context,
+                )
+            ]
+        )
+
+    async def _tool_rule(self, context, low: str) -> bool:
+        """Requests for the clock's other tools. Returns True when a tool was called."""
+        tools = _tool_names(context)
+        if _CANCEL_RE.search(low) and "list_timers" in tools:
+            await self._call(context, "list_timers", {})  # the id comes from the listing
+            return True
+        if "list_timers" in tools and re.search(r"\b(what|which|list)\b.*\b(timers|alarms)\b", low):
+            await self._call(context, "list_timers", {})
+            return True
+        m = _ALARM_RE.search(low)
+        if m and "set_alarm" in tools:
+            await self._call(context, "set_alarm", {"time_hhmm": m.group(1), "label": ""})
+            return True
+        return False
+
+    async def _follow_up(self, context, content) -> bool:
+        """After a listing: cancel the soonest timer if that was the request, else report."""
+        timers = _timers_in(_decode(content))
+        if timers is None:
+            return False
+        user = next(m for m in reversed(context.get_messages()) if m.get("role") == "user")
+        wants_cancel = _CANCEL_RE.search((_text_of(user) or "").lower())
+        if not wants_cancel or "cancel_timer" not in _tool_names(context):
+            await self._stream(f"You have {len(timers)} timers." if len(timers) != 1 else "You have one timer.")
+        elif timers:
+            await self._call(context, "cancel_timer", {"timer_id": timers[0]["id"]})
+        else:
+            await self._stream("You have no timers to cancel.")
+        return True
+
     @staticmethod
     def _confirm(content) -> str:
-        # MCP tool results reach the context as a JSON-encoded string of JSON text,
-        # so decode until it stops being a string.
-        result = content
-        try:
-            for _ in range(3):
-                if not isinstance(result, str):
-                    break
-                result = json.loads(result)
-        except json.JSONDecodeError:
+        result = _decode(content)
+        if isinstance(result, str):
             return "Done."
+        if isinstance(result, dict) and result.get("status") == "pending":
+            return f"Okay, that happens in {result['runs_in_seconds']:g} seconds unless you say cancel."
+        if isinstance(result, dict) and result.get("status") == "needs_confirmation":
+            return "Are you sure?"
+        if isinstance(result, dict) and result.get("status") == "denied":
+            return "Sorry, I can't do that."
         if isinstance(result, dict) and "remaining_seconds" in result:
             return f"Done. Timer set for {say_duration(int(result['remaining_seconds']))}."
         if isinstance(result, dict) and result.get("error"):
