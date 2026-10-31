@@ -30,7 +30,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - Headline latency comes from audio timestamps. Pipecat metrics frames are attribution only.
 - Python 3.13 on both machines, managed by uv (ADR-002).
 - Duck-then-decide is custom: scale output by about 0.3 on speech onset, decide within about 0.5 s using the allowlist (stop, wait, no, cancel, pause). Duck within 100 ms with Silero `start_secs` of about 0.064 to 0.1.
-- Pipecat has no AEC. Phase 1 uses headphones. Phase 2: hardware-AEC speakerphone, then PipeWire echo-cancel (WebRTC), then an RMS gate.
+- Pipecat has no AEC. Phase 1 uses headphones. Phase 2: hardware-AEC speakerphone, then PipeWire echo-cancel (WebRTC), then an RMS gate. `--echo-cancel` adds WebRTC AEC in the harness for speaker tests (ADR-013).
 
 ## Layout and commands
 
@@ -58,5 +58,7 @@ ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends 
 ```
 
 Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts `clock` only unless `--servers clock,notes,thermostat,comms` says otherwise. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
+
+Live mic runs refuse the built-in speakers unless `--echo-cancel` is set (WebRTC AEC, ADR-013). `uv run python -m bench.echo_probe [--talker]` measures it with no cloud calls and reads aloud through the speakers.
 
 Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), addressing filters, the full benchmark, task servers other than clock, notes, thermostat, and comms, real voice servers and the audio side channel, the model comparison, anything on the Pi. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.

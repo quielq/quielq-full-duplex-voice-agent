@@ -27,6 +27,7 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
   - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
 
 - [ ] Exercise the ADR-012 socket replacement against live Deepgram (fake-tested only)
+- [ ] Live speaker test with `--echo-cancel`: no self-interruption, then a real barge-in, and check the first-speech blip and barge-in delay (ADR-013)
 
 ## ADR-009 additions (approved)
 
