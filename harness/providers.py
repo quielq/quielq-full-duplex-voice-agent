@@ -85,7 +85,7 @@ def build_llm(providers_cfg: dict, ledger: CostLedger, *, system_instruction: st
     raise ValueError(f"unknown llm stage {choice!r}")
 
 
-def build_tts(providers_cfg: dict, ledger: CostLedger):
+def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None):
     choice = providers_cfg["stages"]["tts"]
     # SENTENCE aggregation always: token aggregation commits unspoken text on interruption.
     agg = TextAggregationMode.SENTENCE
@@ -94,13 +94,14 @@ def build_tts(providers_cfg: dict, ledger: CostLedger):
     if choice == "fake_words":
         return ToneTTSService(text_aggregation_mode=agg, word_timestamps=True)
     if choice == "deepgram_aura2":
-        from pipecat.services.deepgram.tts import DeepgramTTSService
+        from harness.deepgram_tts import ClearAwareDeepgramTTSService
 
         _, p, key = _authorize(choice, providers_cfg, ledger)
-        return DeepgramTTSService(
+        return ClearAwareDeepgramTTSService(
+            on_event=on_event,
             api_key=key,
             mip_opt_out=True,
-            settings=DeepgramTTSService.Settings(voice=p["tts_voice"]),
+            settings=ClearAwareDeepgramTTSService.Settings(voice=p["tts_voice"]),
             text_aggregation_mode=agg,
         )
     if choice == "cartesia":

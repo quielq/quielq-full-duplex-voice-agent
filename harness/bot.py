@@ -213,7 +213,7 @@ async def run_bot(
             context, user_params=LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
         )
         llm = build_llm(cfg.providers, ledger, system_instruction=SYSTEM_PROMPT)
-        tts = build_tts(cfg.providers, ledger)
+        tts = build_tts(cfg.providers, ledger, on_event=log.emit)
         llm.register_function(None, policy.deny_unknown)  # disabled or invented tools stop here
 
         audio = cfg.profile["audio"]
