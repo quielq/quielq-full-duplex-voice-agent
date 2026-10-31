@@ -27,7 +27,8 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
   - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
 
 - [ ] Exercise the ADR-012 socket replacement against live Deepgram (fake-tested only)
-- [ ] Find the speaker output stalls in live runs: 2 s of speech took 8 s (ADR-013)
+- [x] Choppy Aura-2 speech: 24 kHz arrived at 0.43x real time, now 16 kHz, awaiting a live listen (ADR-014)
+- [ ] Check Cartesia delivery from the Philippines before relying on it for final runs (ADR-014)
 - [ ] Handle LLM tool-call validation errors: Groq rejected `set_timer` with 0 seconds and the bot stayed silent, with no spoken fallback
 - [ ] Give the agent a real clock: it stated a wrong time (3:17 for 3:35 p.m.) with no tool call
 - [ ] Live speaker test with `--echo-cancel`: no self-interruption, then a real barge-in, and check the first-speech blip and barge-in delay (ADR-013)

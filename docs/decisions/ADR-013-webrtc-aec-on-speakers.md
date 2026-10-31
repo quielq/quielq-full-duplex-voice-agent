@@ -54,6 +54,8 @@ Live run `20261031-153429-ccce0b`: all five transcripts were the user's own word
 
 The canceller is not the cause: it takes 0.18 ms per 20 ms block. Pipecat's fallback log for an empty output queue never fired during gaps of over 1 s, while mic audio stayed steady, so the likely stall is in PortAudio's blocking write. Two further transport runs, with Silero and audio in 100 ms pieces, played at stretch 1.0 (write median 38 to 39 ms, maximum 304 ms). The cause is not known. A `PaMacCore` error -50 at shutdown appeared in both runs known to stall and in neither of those two clean runs. Discord was using about 35% CPU on the machine. `echo_window` now includes `max_output_gap_ms`.
 
+The stall was later traced to network delivery, not the speaker write. See ADR-014.
+
 ## Alternatives
 
 * **macOS voice processing I/O:** not reachable from PyAudio, and it would not carry to the Pi.
