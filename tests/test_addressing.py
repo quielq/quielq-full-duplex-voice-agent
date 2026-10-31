@@ -215,3 +215,30 @@ def test_prompt_mentions_stay_silent_only_when_on():
 def test_addressing_cases_pass_on_fakes(tmp_path, case):
     result = asyncio.run(run_case(cfg_for(tmp_path), case))
     assert result.passed, f"{result.bucket}: {result.detail}"
+
+
+def wav_run(tmp_path, script, *, gate):
+    from bench.interruption_test import _say
+    from harness.file_input import Segment
+
+    cfg = cfg_for(tmp_path)
+    cfg.profile["addressing"] |= {"enabled": True}
+    cfg.profile["addressing"]["gate"]["enabled"] = gate
+    clip = _say("Set a timer for ninety seconds.", tmp_path / "clip.wav")
+    return asyncio.run(
+        run_bot(cfg, input_mode="wav", segments=[Segment(clip)], stt_script=script,
+                data_dir=str(tmp_path / "data"), reply_timeout_s=8, handle_sigint=False,
+                servers={"clock": TASK_SERVERS["clock"]})  # fmt: skip
+    )
+
+
+@pytest.mark.parametrize("gate", [False, True])
+def test_real_vad_path_answers_a_request(tmp_path, gate):
+    result = wav_run(tmp_path, ["set a timer for 90 seconds"], gate=gate)
+    assert [c["name"] for c in result.tool_calls] == ["set_timer"], event_names(result)
+
+
+def test_real_vad_path_drops_a_fragment_before_the_llm(tmp_path):
+    result = wav_run(tmp_path, ["yeah right"], gate=False)
+    names = event_names(result)
+    assert "addressing_drop" in names and "llm_request" not in names

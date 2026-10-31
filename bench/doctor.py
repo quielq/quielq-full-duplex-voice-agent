@@ -233,7 +233,7 @@ def check_rules(cfg: Config) -> Iterator[tuple]:
             continue
         if KEY_SHAPES.search(text):
             keys.append(rel)  # the file, never the match
-        if rel.endswith((".md", ".py", ".yaml")) and re.search("[–—]", text):
+        if rel.endswith((".md", ".py", ".yaml")) and re.search("[\u2013\u2014]", text):
             dashes.append(rel)
         if rel.endswith(".py") and rel != this_file and not rel.startswith("tests/"):
             hits += [f"{rel}: {why}" for why in banned_uses(text)]

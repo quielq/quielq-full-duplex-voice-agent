@@ -21,6 +21,12 @@ Date: Oct 31, 2026. Status: built on fakes and synthetic audio. Not yet run with
 * The review places the gate on the Pi only. The code is the same on both profiles, since profiles may differ only in devices and timing.
 * The gate's `reseat_ms` (15 s) is new: a test showed that a steady noise above the margin would otherwise hold the gate open forever.
 
+## Empty turn recovery
+
+Pipecat 1.13 defaults `LLMUserAggregatorParams.empty_user_turn` to a recovery that adds a developer message and runs the LLM when a turn ends with no transcript. A dropped utterance leaves exactly that, so the bot would say "Sorry, could you repeat that?" to a side conversation. A test through real VAD caught this; text mode cannot. Addressing sets it to `None`.
+
+With addressing off the default stays. It also fires on noise: in the Oct 31 live logs, two turns with no transcript still called the LLM (`20261031-152235-130263` turn 4, `20261031-153429-ccce0b` turn 1). Whether to turn it off everywhere is a decision for Quiel: off means a misheard user gets silence, on means noise can spend money and speak.
+
 ## Alternatives
 
 * **`stay_silent` as an MCP server tool:** adds a process and a hop to do nothing, and the policy wrapper would have to learn about `run_llm=False`.
@@ -37,4 +43,4 @@ Date: Oct 31, 2026. Status: built on fakes and synthetic audio. Not yet run with
 ## Sources
 
 * `docs/architecture.md`, "No wake word: deciding when it is being addressed"
-* Installed source: `pipecat/frames/frames.py` (`FunctionCallResultProperties.run_llm`), `pipecat/adapters/schemas/function_schema.py`
+* Installed source: `pipecat/processors/aggregators/llm_response_universal.py` (`_maybe_recover_empty_user_turn`), `pipecat/frames/frames.py` (`FunctionCallResultProperties.run_llm`), `pipecat/adapters/schemas/function_schema.py`

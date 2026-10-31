@@ -262,9 +262,12 @@ async def run_bot(
         if addressing:
             tools.standard_tools.append(addressing.tool(on_silent))
         context = LLMContext(tools=tools)
-        aggregators = LLMContextAggregatorPair(
-            context, user_params=LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
-        )
+        user_params = LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
+        if addressing:
+            # Pipecat's default asks the LLM to request a repeat after an empty turn, which is
+            # exactly what a dropped utterance leaves behind (ADR-016).
+            user_params.empty_user_turn = None
+        aggregators = LLMContextAggregatorPair(context, user_params=user_params)
         prompt = f"{SYSTEM_PROMPT} {ADDRESSING_PROMPT}" if addressing else SYSTEM_PROMPT
         llm = build_llm(cfg.providers, ledger, system_instruction=prompt)
         hops = AudioHops(log.emit)

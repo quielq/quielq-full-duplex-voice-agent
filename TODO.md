@@ -8,6 +8,7 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 
 ## Waiting on Quiel
 
+- [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
 - [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first)
 - [ ] Buy Cartesia Pro ($5), approve a cartesia cap (suggested $1.00/day), and pick a default English voice
