@@ -38,6 +38,7 @@ from pipecat.audio.vad.vad_analyzer import VADParams, VADState
 from pipecat.frames.frames import TTSAudioRawFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
+from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.workers.runner import WorkerRunner
 
 IN_RATE = 16000
@@ -210,6 +211,15 @@ async def evaluate_talker(
     }
 
 
+class _WriteProxy:
+    def __init__(self, stream, write):
+        self._stream = stream
+        self.write = write
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
 class RecordingCanceller(EchoCanceller):
     """Keeps what the live path saw, so the same audio can be replayed offline."""
 
@@ -235,10 +245,13 @@ class RecordingCanceller(EchoCanceller):
         return out
 
 
-async def play_through_transport(far: bytes, audio_cfg: dict, seconds: float, canceller) -> None:
-    """Real LocalAudioTransport, as the bot uses it, playing ``far`` as TTS audio."""
+async def play_through_transport(far: bytes, audio_cfg: dict, seconds: float, canceller, vad_cfg) -> dict:
+    """Real transport and Silero as in the bot, with audio arriving in pieces like Deepgram's."""
     transport = local_transport(audio_cfg, canceller=canceller)
-    pipeline = Pipeline([transport.input(), transport.output()])
+    params = VADParams(**{k: vad_cfg[k] for k in ("confidence", "start_secs", "stop_secs", "min_volume")})
+    vad = VADProcessor(vad_analyzer=SileroVADAnalyzer(params=params))
+    output = transport.output()
+    pipeline = Pipeline([transport.input(), vad, output])
     worker = PipelineWorker(
         pipeline,
         params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE),
@@ -246,24 +259,51 @@ async def play_through_transport(far: bytes, audio_cfg: dict, seconds: float, ca
     )
     runner = WorkerRunner(handle_sigint=False)
     await runner.add_workers(worker)
+    writes: list[tuple[float, float]] = []
 
     async def script():
         await asyncio.sleep(1.0)
-        await worker.queue_frame(TTSAudioRawFrame(far, OUT_RATE, 1))
-        await asyncio.sleep(seconds + TAIL_S)
+        stream, original = output._out_stream, output._out_stream.write
+
+        def timed_write(audio):
+            start = time.monotonic()
+            original(audio)
+            writes.append((start, time.monotonic() - start))
+
+        stream_proxy = _WriteProxy(stream, timed_write)
+        output._out_stream = stream_proxy
+        piece = OUT_RATE * 2 // 10
+        for start in range(0, len(far), piece):
+            await worker.queue_frame(TTSAudioRawFrame(far[start : start + piece], OUT_RATE, 1))
+            await asyncio.sleep(0.05)
+        while writes and time.monotonic() - writes[-1][0] < 1.0:
+            await asyncio.sleep(0.1)
+        await asyncio.sleep(TAIL_S)
         await worker.cancel()
 
     await asyncio.gather(runner.run(), script())
+    durations = np.array([d for _, d in writes]) * 1000
+    wall = writes[-1][0] + writes[-1][1] - writes[0][0]
+    return {
+        "audio_s": round(seconds, 2),
+        "playback_wall_s": round(wall, 2),
+        "stretch": round(wall / seconds, 2),
+        "write_ms_median": round(float(np.median(durations)), 1),
+        "write_ms_max": round(float(durations.max()), 1),
+        "writes_over_100ms": int((durations > 100).sum()),
+    }
 
 
 async def evaluate_transport(far: bytes, cfg, delay_ms: int, in_name: str, out_name: str) -> dict:
     audio_cfg = {**cfg.profile["audio"], "echo_cancel": True, "echo_delay_ms": delay_ms,
                  "input_device": in_name, "output_device": out_name}  # fmt: skip
     canceller = RecordingCanceller(IN_RATE, OUT_RATE, delay_ms)
-    await play_through_transport(far, audio_cfg, len(far) / 2 / OUT_RATE, canceller)
+    vad_cfg = cfg.profile["vad"]
+    output_stats = await play_through_transport(
+        far, audio_cfg, len(far) / 2 / OUT_RATE, canceller, vad_cfg
+    )
     raw, live = bytes(canceller.raw), bytes(canceller.cancelled)
     used = bytes(canceller.used_reference)
-    vad_cfg = cfg.profile["vad"]
     raw_onsets, raw_speech = await speech_onsets(raw, vad_cfg)
     live_onsets, live_speech = await speech_onsets(live, vad_cfg)
     replay = cancel(raw, used, delay_ms)
@@ -275,6 +315,7 @@ async def evaluate_transport(far: bytes, cfg, delay_ms: int, in_name: str, out_n
         for i in range(0, min(len(used), len(raw), len(live)) - step + 1, step)
     ]  # fmt: skip
     return {
+        "output": output_stats,
         "timeline": timeline,
         "delay_ms": delay_ms,
         "mic_db": rms_db(raw),

@@ -88,3 +88,27 @@ def test_reports_levels_and_underruns_once_a_second():
     name, fields = events[0]
     assert name == "echo_window"
     assert fields["underruns"] == 100 and fields["far_db"] < -90 < fields["near_db"]
+
+
+def test_near_level_is_measured_before_cancelling():
+    events = []
+    canceller = EchoCanceller(
+        RATE, RATE, 50, on_event=lambda name, **fields: events.append(fields)
+    )
+    far = _noise(4)
+    _run(canceller, far, _echo(far))
+    assert events[-1]["out_db"] < events[-1]["near_db"] - 6
+
+
+def test_output_gap_is_reported_but_a_quiet_bot_is_not():
+    events = []
+    canceller = EchoCanceller(
+        RATE, RATE, 50, on_event=lambda name, **fields: events.append(fields)
+    )
+    canceller.add_reference(bytes(320))
+    canceller._last_reference -= 1.2
+    canceller.add_reference(bytes(320))
+    canceller._last_reference -= 60
+    canceller.add_reference(bytes(320))
+    canceller.process(bytes(32000))
+    assert events[0]["max_output_gap_ms"] == 1200

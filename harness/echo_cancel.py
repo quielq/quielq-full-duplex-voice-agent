@@ -8,6 +8,7 @@ takes 10 ms of it. That keeps the reference ahead of the echo, as WebRTC needs.
 
 from __future__ import annotations
 
+import time
 from collections import deque
 
 import numpy as np
@@ -18,6 +19,7 @@ from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.frames.frames import FilterControlFrame
 
 MAX_REFERENCE_S = 1  # older reference can no longer match anything the mic hears
+MAX_SPEECH_GAP_S = 5
 REPORT_FRAMES = 100  # one echo_window event per second, levels only, never audio
 
 
@@ -35,10 +37,16 @@ class EchoCanceller:
         self._reference_pending = bytearray()
         self._capture_pending = bytearray()
         self._on_event = on_event
+        self._last_reference = 0.0
         self._reset_window()
 
     def add_reference(self, audio: bytes) -> None:
         """Queue audio about to play, at the output rate."""
+        now = time.monotonic()
+        gap = now - self._last_reference
+        self._last_reference = now
+        if gap < MAX_SPEECH_GAP_S:  # longer is just the bot being quiet
+            self._max_gap_s = max(self._max_gap_s, gap)
         if self._resampler:
             samples = np.frombuffer(audio, dtype=np.int16)
             audio = self._resampler.resample_chunk(samples).tobytes()
@@ -52,22 +60,23 @@ class EchoCanceller:
         self._capture_pending += audio
         out = bytearray()
         while len(self._capture_pending) >= self._size:
-            near = self._capture_pending[: self._size]
+            near = bytes(self._capture_pending[: self._size])
             del self._capture_pending[: self._size]
             far = self._next_reference()
-            capture = rtc.AudioFrame(near, self._rate, 1, self._samples)
+            capture = rtc.AudioFrame(bytearray(near), self._rate, 1, self._samples)
             self._apm.process_reverse_stream(rtc.AudioFrame(far, self._rate, 1, self._samples))
             self._apm.set_stream_delay_ms(self._delay_ms)
             self._apm.process_stream(capture)
             cancelled = bytes(capture.data)
             out += cancelled
-            self._measure(bytes(near), far, cancelled)
+            self._measure(near, far, cancelled)
         return bytes(out)
 
     def _reset_window(self) -> None:
         self._frames = 0
         self._underruns = 0
         self._max_queue = 0
+        self._max_gap_s = 0.0
         self._energy = {"near": 0.0, "far": 0.0, "out": 0.0}
 
     def _measure(self, near: bytes, far: bytes, out: bytes) -> None:
@@ -83,7 +92,11 @@ class EchoCanceller:
                 for name, energy in self._energy.items()
             }
             self._on_event(
-                "echo_window", underruns=self._underruns, max_queue=self._max_queue, **levels
+                "echo_window",
+                underruns=self._underruns,
+                max_queue=self._max_queue,
+                max_output_gap_ms=round(self._max_gap_s * 1000),
+                **levels,
             )
             self._reset_window()
 
