@@ -75,6 +75,21 @@ def _add(kind: str, fires_at: float, label: str) -> dict:
 WRITE = {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}
 
 
+@mcp.tool(
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}
+)
+def get_time() -> dict:
+    """Get the current local date and time. Always use this for the time or date; never guess."""
+    now = datetime.now().astimezone()
+    return {
+        "iso": now.isoformat(timespec="seconds"),
+        "time": now.strftime("%H:%M"),
+        "spoken_time": now.strftime("%I:%M %p").lstrip("0"),
+        "weekday": now.strftime("%A"),
+        "date": now.strftime("%B %d, %Y"),
+    }
+
+
 @mcp.tool(annotations=WRITE)
 def set_timer(
     duration_seconds: Annotated[int, Field(gt=0, le=86400, description="Timer length in seconds")],

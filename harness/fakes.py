@@ -218,6 +218,9 @@ class RuleBasedLLMService(LLMService):
         if "list_timers" in tools and re.search(r"\b(what|which|list)\b.*\b(timers|alarms)\b", low):
             await self._call(context, "list_timers", {})
             return True
+        if "get_time" in tools and re.search(r"\bwhat(.s| is)? (the )?(time|date|day)\b|\bwhat day\b", low):
+            await self._call(context, "get_time", {})
+            return True
         m = _ALARM_RE.search(low)
         if m and "set_alarm" in tools:
             await self._call(context, "set_alarm", {"time_hhmm": m.group(1), "label": ""})
@@ -276,6 +279,8 @@ class RuleBasedLLMService(LLMService):
             return "Are you sure?"
         if isinstance(result, dict) and result.get("status") == "denied":
             return "Sorry, I can't do that."
+        if isinstance(result, dict) and "spoken_time" in result:
+            return f"It's {result['spoken_time']} on {result['weekday']}, {result['date']}."
         if isinstance(result, dict) and "target_c" in result:
             return f"The thermostat is set to {result['target_c']:g} degrees."
         if isinstance(result, dict) and "remaining_seconds" in result:

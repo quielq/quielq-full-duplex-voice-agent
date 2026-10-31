@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import pytest
 from fastmcp import Client
@@ -45,3 +46,14 @@ async def test_tool_calls_are_logged(tmp_path):
     lines = (tmp_path / "tool_calls.jsonl").read_text().splitlines()
     rec = json.loads(lines[-1])
     assert rec["tool"] == "set_timer" and rec["ok"] and rec["duration_ms"] >= 0
+
+
+async def test_get_time_reports_now():
+    before = datetime.now().astimezone()
+    async with Client(mcp) as c:
+        t = (await c.call_tool("get_time", {})).structured_content
+    now = datetime.fromisoformat(t["iso"])
+    assert abs((now - before).total_seconds()) < 5
+    assert now.tzinfo is not None
+    assert t["time"] == now.strftime("%H:%M")
+    assert t["weekday"] == now.strftime("%A")

@@ -356,3 +356,13 @@ async def test_spoken_cancel_works_in_both_barge_in_modes(cfg, tmp_path, audio, 
     assert "abc12345" in timers(data), r.policy_decisions
     assert any(e["decision"] == "undone" for e in policy_events(r))
     assert sum(1 for m in r.context_messages if m.get("role") == "user") == 1  # "cancel" cost no LLM call
+
+
+async def test_get_time_runs_at_once_and_the_reply_uses_the_tool(cfg, tmp_path):
+    r = await _text(cfg, tmp_path, ["what time is it"])
+    assert [c["name"] for c in r.tool_calls] == ["get_time"]
+    told = json.loads(r.tool_calls[0]["result"])
+    assert told["spoken_time"] in r.spoken_text  # from the tool, not a guess
+    assert cfg.tool_policy["tools"].get("get_time") is None
+    rule = next(e for e in policy_events(r) if e["tool"] == "get_time" and e["decision"] == "registered")
+    assert (rule["permission"], rule["undo_s"]) == ("auto", 0.0)

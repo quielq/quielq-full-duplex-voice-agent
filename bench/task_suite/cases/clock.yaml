@@ -24,6 +24,20 @@ cases:
     turns: ["what timers do I have"]
     expect: {tools: [list_timers]}
 
+  - id: next_time
+    layer: next_reply
+    turns: ["what time is it"]
+    expect:
+      tools: [get_time]
+      spoken_re: "\\d"
+
+  - id: next_day
+    layer: next_reply
+    turns: ["what day is it"]
+    expect:
+      tools: [get_time]
+      spoken_re: "(mon|tues|wednes|thurs|fri|satur|sun)day|\\d"
+
   - id: next_no_tool
     layer: next_reply
     turns: ["hello there"]
