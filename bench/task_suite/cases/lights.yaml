@@ -1,0 +1,30 @@
+# Lights task cases. See clock.yaml for the format.
+server: lights
+cases:
+  - id: lights_next_list
+    layer: next_reply
+    turns: ["which lights are on"]
+    expect: {tools: [list_lights]}
+
+  - id: lights_args_on
+    layer: tool_call
+    turns: ["turn on the kitchen light"]
+    expect:
+      tools_include: [set_light]
+      args: {set_light: {is_on: true, room: {re: "(?i)kitchen"}}}
+      state: {lights: {has: [{room: kitchen, is_on: true}]}}
+
+  - id: lights_args_dim
+    layer: tool_call
+    turns: ["dim the bedroom light to 20 percent"]
+    expect:
+      tools_include: [set_light]
+      args: {set_light: {brightness: 20}}
+      state: {lights: {has: [{room: bedroom, brightness: 20}]}}
+
+  - id: lights_conv_on_then_off
+    layer: conversation
+    turns: ["turn on the kitchen light", "turn off the kitchen light"]
+    expect:
+      tools_include: [set_light]
+      state: {lights: {has: [{room: kitchen, is_on: false}]}}

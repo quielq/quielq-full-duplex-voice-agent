@@ -196,12 +196,32 @@ def read_comms(data_dir: Path) -> list[dict]:
     return list(json.loads(path.read_text()).values()) if path.exists() else []
 
 
+def seed_lights(data_dir: Path, items: list[dict]) -> None:
+    (data_dir / "lights.json").write_text(json.dumps({i["room"]: i for i in items}))
+
+
+def read_lights(data_dir: Path) -> list[dict]:
+    path = data_dir / "lights.json"
+    return list(json.loads(path.read_text()).values()) if path.exists() else []
+
+
+def seed_music(data_dir: Path, items: list[dict]) -> None:
+    (data_dir / "music.json").write_text(json.dumps(items[0]))
+
+
+def read_music(data_dir: Path) -> list[dict]:
+    path = data_dir / "music.json"
+    return [json.loads(path.read_text())] if path.exists() else []
+
+
 # Each server's state, in the plain form cases compare against.
 STATE: dict[str, Any] = {
     "clock": (seed_clock, read_clock),
     "notes": (seed_notes, read_notes),
     "thermostat": (seed_thermostat, read_thermostat),
     "comms": (seed_comms, read_comms),
+    "lights": (seed_lights, read_lights),
+    "music": (seed_music, read_music),
 }
 
 

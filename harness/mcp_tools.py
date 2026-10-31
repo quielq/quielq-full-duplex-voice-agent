@@ -27,6 +27,8 @@ TASK_SERVERS = {
     "notes": "servers.tasks.notes.server",
     "thermostat": "servers.tasks.thermostat.server",
     "comms": "servers.tasks.comms.server",
+    "lights": "servers.tasks.lights.server",
+    "music": "servers.tasks.music.server",
 }
 
 

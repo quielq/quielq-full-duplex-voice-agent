@@ -107,6 +107,10 @@ _ALARM_RE = re.compile(r"alarm for (\d\d:\d\d)")
 _NOTE_RE = re.compile(r"add a note (?:to |that )?(.+)")
 _THERMOSTAT_RE = re.compile(r"set the thermostat to (\d+)")
 _MESSAGE_RE = re.compile(r"send a message to (\w+) saying (.+)")
+_LIGHT_RE = re.compile(r"turn (on|off) the (bedroom|kitchen|living room) light")
+_DIM_RE = re.compile(r"dim the (bedroom|kitchen|living room) light to (\d+)")
+_PLAY_RE = re.compile(r"\bplay (?:some )?(.+)")
+_VOLUME_RE = re.compile(r"set the volume to (\d+)")
 _SIDE_TALK_RE = re.compile(r"\b(pass (me )?the|did you see|can you believe|your mom|my boss|lunch)\b")
 
 
@@ -246,6 +250,34 @@ class RuleBasedLLMService(LLMService):
         m = _MESSAGE_RE.search(low)
         if m and "send_message" in tools:
             await self._call(context, "send_message", {"to": m.group(1), "body": m.group(2)})
+            return True
+        return await self._media_rule(context, low, tools)
+
+    async def _media_rule(self, context, low: str, tools: set[str]) -> bool:
+        if "list_lights" in tools and "which lights" in low:
+            await self._call(context, "list_lights", {})
+            return True
+        m = _LIGHT_RE.search(low)
+        if m and "set_light" in tools:
+            await self._call(context, "set_light", {"room": m.group(2), "is_on": m.group(1) == "on"})
+            return True
+        m = _DIM_RE.search(low)
+        if m and "set_light" in tools:
+            await self._call(context, "set_light", {"room": m.group(1), "is_on": True, "brightness": int(m.group(2))})
+            return True
+        m = _VOLUME_RE.search(low)
+        if m and "set_volume" in tools:
+            await self._call(context, "set_volume", {"level": int(m.group(1))})
+            return True
+        if "stop_music" in tools and "stop the music" in low:
+            await self._call(context, "stop_music", {})
+            return True
+        if "get_now_playing" in tools and re.search(r"what(.s| is)? (song|music)|what song", low):
+            await self._call(context, "get_now_playing", {})
+            return True
+        m = _PLAY_RE.search(low)
+        if m and "play_music" in tools:
+            await self._call(context, "play_music", {"query": m.group(1)})
             return True
         return False
 

@@ -35,9 +35,9 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 ## Layout and commands
 
 ```
-harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, waiting phrase, event log, cost observer, audio I/O
-servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms (built), other tasks (not built)
-bench/          cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
+harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O
+servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes), other tasks (not built)
+bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
 docs/           architecture.md, research.md, prompt.md, decisions/
 ```
@@ -49,6 +49,9 @@ uv run python -m harness.bot --input text --mcp stdio     # scripted turn, no au
 uv run python -m harness.bot --input wav --wav x.wav      # wav through VAD and Smart Turn
 uv run python -m harness.bot                              # live mic (headphones)
 uv run python -m harness.audio_io                         # list audio devices by name
+uv run python -m bench.doctor [--quick] [--offline]       # health check, no spend; run this first when anything is wrong
+uv run python -m bench.run_report [--live] [<run id>]     # timeline and anomalies for one run
+uv run python -m bench.run_report --list 20               # one line per recent run
 uv run python -m bench.cost_ledger                        # today's spend per provider
 uv run python -m bench.latency_probe logs/events-<id>.jsonl
 uv run python -m bench.interruption_test --tts fake_words [--barge-in duck]   # step 4 and 5
@@ -57,8 +60,10 @@ uv run python -m bench.task_runner --repeat 5             # task suite on fakes,
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
-Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts all four task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
+Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts all six task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
 
 Live mic runs refuse the built-in speakers unless `--echo-cancel` is set (WebRTC AEC, ADR-013). `uv run python -m bench.echo_probe [--talker]` measures it with no cloud calls and reads aloud through the speakers.
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), addressing filters, the full benchmark, task servers other than clock, notes, thermostat, and comms, real voice servers and the audio side channel, the model comparison, anything on the Pi. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.
+Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by default and has only run on fakes (ADR-016). Mute: `kill -USR1 <pid>` in mic mode.
+
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `knowledge` and `delegate`, real voice servers and the audio side channel, the model comparison, anything on the Pi. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.

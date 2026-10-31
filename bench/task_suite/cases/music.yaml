@@ -1,0 +1,30 @@
+# Music task cases. See clock.yaml for the format.
+server: music
+cases:
+  - id: music_next_status
+    layer: next_reply
+    turns: ["what song is playing"]
+    expect: {tools: [get_now_playing]}
+
+  - id: music_args_play
+    layer: tool_call
+    turns: ["play some jazz"]
+    expect:
+      tools: [play_music]
+      args: {play_music: {query: {re: "(?i)jazz"}}}
+      state: {music: {has: [{playing: true}]}}
+
+  - id: music_args_volume
+    layer: tool_call
+    turns: ["set the volume to 30"]
+    expect:
+      tools: [set_volume]
+      args: {set_volume: {level: 30}}
+      state: {music: {has: [{volume: 30}]}}
+
+  - id: music_conv_play_then_stop
+    layer: conversation
+    turns: ["play some jazz", "stop the music"]
+    expect:
+      tools: [play_music, stop_music]
+      state: {music: {has: [{playing: false}]}}
