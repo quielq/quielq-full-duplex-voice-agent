@@ -11,6 +11,7 @@
 #   state:         per server, count and/or has (items that must exist)
 #   spoken_re:     pattern the spoken reply must match
 #   silent:        true if the agent must say nothing
+# addressing: true turns the no-wake-word filters on, so stay_silent is on offer.
 
 server: clock
 cases:

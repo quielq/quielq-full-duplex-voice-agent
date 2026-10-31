@@ -36,6 +36,23 @@ filler:
   after_ms: 600      # hypothesis to tune: no reply audio this long after end of turn
   phrase: one_sec    # from harness/phrase_cache.py
 
+addressing:
+  # No wake word (harness/addressing.py, ADR-016). Off until tuned on real rooms.
+  enabled: false
+  idle_after_s: 30           # ACTIVE lasts this long after the agent spoke or was spoken to
+  idle_min_words: 3          # IDLE: shorter fragments are dropped unless they carry a name
+  names: []                  # a cue, not a wake word; none chosen yet
+  command_verbs: ["set", "add", "list", "send", "cancel", "delete", "read", "turn", "play", "pause",
+                  "stop", "start", "remind", "tell", "show", "check", "dim", "skip", "find", "search"]
+  require_wake_after_idle: false   # fallback for a noisy room: IDLE then needs a wake phrase
+  wake_phrases: ["hey assistant"]
+  gate:
+    enabled: false           # level gate; only tested on synthetic audio so far
+    margin_db: 12            # speech must sit this far above the measured noise floor
+    open_ms: 100
+    close_ms: 1500           # long enough for STT to see the silence that ends a turn
+    pre_roll_ms: 400
+
 recovery:
   # Fixed text, no LLM call (harness/recovery.py). The cap notice is skipped if TTS is the capped provider.
   llm_error_phrase: "Sorry, I had trouble with that. Could you say it again?"

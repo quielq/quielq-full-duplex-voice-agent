@@ -1,0 +1,47 @@
+# No-wake-word cases (ADR-016). See clock.yaml for the format. The agent starts IDLE.
+# Dropped utterances never reach the LLM; side talk reaches it and stay_silent ends the turn.
+server: clock
+cases:
+  - id: addr_side_talk_stays_silent
+    layer: next_reply
+    addressing: true
+    turns: ["could you pass me the salt"]
+    expect: {tools: [stay_silent], silent: true}
+
+  - id: addr_side_talk_about_a_person
+    layer: next_reply
+    addressing: true
+    turns: ["did you see what my boss said at lunch"]
+    expect: {tools: [stay_silent], silent: true}
+
+  - id: addr_fragment_dropped_in_idle
+    layer: next_reply
+    addressing: true
+    turns: ["yeah right"]
+    expect: {tools: [], silent: true}
+
+  - id: addr_statement_dropped_in_idle
+    layer: next_reply
+    addressing: true
+    turns: ["I think it might rain later today"]
+    expect: {tools: [], silent: true}
+
+  - id: addr_request_passes_in_idle
+    layer: tool_call
+    addressing: true
+    turns: ["set a timer for 90 seconds"]
+    expect:
+      tools_include: [set_timer]
+      args: {set_timer: {duration_seconds: 90}}
+
+  - id: addr_active_keeps_listening
+    layer: conversation
+    addressing: true
+    turns: ["set a timer for 90 seconds", "what timers do I have"]
+    expect: {tools_include: [set_timer, list_timers], spoken_re: "timer"}
+
+  - id: addr_short_follow_up_in_active
+    layer: conversation
+    addressing: true
+    turns: ["what time is it", "thanks a lot"]
+    expect: {tools: [get_time], spoken_re: "thanks"}

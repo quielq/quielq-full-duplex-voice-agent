@@ -107,6 +107,7 @@ _ALARM_RE = re.compile(r"alarm for (\d\d:\d\d)")
 _NOTE_RE = re.compile(r"add a note (?:to |that )?(.+)")
 _THERMOSTAT_RE = re.compile(r"set the thermostat to (\d+)")
 _MESSAGE_RE = re.compile(r"send a message to (\w+) saying (.+)")
+_SIDE_TALK_RE = re.compile(r"\b(pass (me )?the|did you see|can you believe|your mom|my boss|lunch)\b")
 
 
 def _text_of(message: dict) -> str:
@@ -212,6 +213,9 @@ class RuleBasedLLMService(LLMService):
     async def _tool_rule(self, context, low: str) -> bool:
         """Requests for the clock's other tools. Returns True when a tool was called."""
         tools = _tool_names(context)
+        if "stay_silent" in tools and _SIDE_TALK_RE.search(low):
+            await self._call(context, "stay_silent", {"reason": "side conversation"})
+            return True
         if _CANCEL_RE.search(low) and "list_timers" in tools:
             await self._call(context, "list_timers", {})  # the id comes from the listing
             return True

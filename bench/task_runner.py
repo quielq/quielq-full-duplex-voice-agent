@@ -53,6 +53,7 @@ class Case:
     expect: dict[str, Any]
     seed: dict[str, list[dict]] = field(default_factory=dict)
     undo_s: float | None = None
+    addressing: bool = False
 
 
 @dataclass
@@ -225,6 +226,7 @@ async def run_case(
     for rule in (cfg.tool_policy["tools"] or {}).values():
         if "undo_s" in rule:
             rule["undo_s"] = undo_s
+    cfg.profile["addressing"]["enabled"] = case.addressing
     silent = case.expect.get("silent", False)
     servers = TASK_SERVERS if all_servers else {case.server: TASK_SERVERS[case.server]}
     t0 = time.monotonic()

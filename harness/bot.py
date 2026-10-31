@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import signal
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,6 +45,14 @@ from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
 from bench.cost_ledger import CostLedger
+from harness.addressing import (
+    ADDRESSING_PROMPT,
+    Addressing,
+    AddressingFilter,
+    ConversationState,
+    LevelGate,
+    MicGate,
+)
 from harness.audio_hops import AudioHops, trace_writes
 from harness.audio_io import EchoRisk, local_transport
 from harness.config import Config, load_config
@@ -140,7 +149,24 @@ def _ducking(cfg: Config, log: EventLog) -> tuple[DuckGain | None, list]:
     return gain, [proc]
 
 
-def _filler(cfg: Config, log: EventLog) -> FillerProcessor | None:
+def _addressing(cfg: Config, log: EventLog) -> Addressing | None:
+    a = cfg.profile["addressing"]
+    if not a["enabled"]:
+        return None
+    return Addressing(a, ConversationState(a["idle_after_s"], on_event=log.emit), on_event=log.emit)
+
+
+def _mic_gate(cfg: Config, log: EventLog, addressing: Addressing | None) -> MicGate:
+    g = cfg.profile["addressing"]["gate"]
+    level = None
+    if addressing and g["enabled"]:
+        level = LevelGate(margin_db=g["margin_db"], open_ms=g["open_ms"], close_ms=g["close_ms"])
+    is_active = (lambda: addressing.state.active) if addressing else (lambda: True)
+    return MicGate(level, is_active, pre_roll_ms=g["pre_roll_ms"],
+                   sample_rate=cfg.profile["audio"]["in_sample_rate"], on_event=log.emit)  # fmt: skip
+
+
+def _filler(cfg: Config, log: EventLog, addressing: Addressing | None = None) -> FillerProcessor | None:
     f = cfg.profile["filler"]
     if not f["enabled"]:
         return None
@@ -149,7 +175,8 @@ def _filler(cfg: Config, log: EventLog) -> FillerProcessor | None:
     if not real:
         logger.warning(f"no clip for {f['phrase']}: the waiting phrase is a placeholder tone")
     log.emit("filler_clip", phrase=f["phrase"], real=real)
-    return FillerProcessor(clip, rate, after_ms=f["after_ms"], on_event=log.emit)
+    is_active = (lambda: addressing.state.active) if addressing else (lambda: True)
+    return FillerProcessor(clip, rate, after_ms=f["after_ms"], on_event=log.emit, is_active=is_active)
 
 
 def _vad(cfg: Config) -> VADProcessor:
@@ -219,14 +246,26 @@ async def run_bot(
 
     policy = ToolPolicy(cfg.tool_policy, on_event=log.emit)
 
+    addressing = _addressing(cfg, log)
+    stayed_silent = False
+
+    def on_silent() -> None:
+        nonlocal stayed_silent
+        stayed_silent = True
+        turn_obs.reply_done.set()
+
     async with task_clients(mcp_transport, data_dir, servers) as clients:
         # The system prompt lives on the LLM service (system messages in LLMContext are
         # deprecated since Pipecat 1.9).
-        context = LLMContext(tools=await policy.tools(clients))
+        tools = await policy.tools(clients)
+        if addressing:
+            tools.standard_tools.append(addressing.tool(on_silent))
+        context = LLMContext(tools=tools)
         aggregators = LLMContextAggregatorPair(
             context, user_params=LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
         )
-        llm = build_llm(cfg.providers, ledger, system_instruction=SYSTEM_PROMPT)
+        prompt = f"{SYSTEM_PROMPT} {ADDRESSING_PROMPT}" if addressing else SYSTEM_PROMPT
+        llm = build_llm(cfg.providers, ledger, system_instruction=prompt)
         hops = AudioHops(log.emit)
         tts = build_tts(cfg.providers, ledger, on_event=log.emit, hops=hops)
         llm.register_function(None, policy.deny_unknown)  # disabled or invented tools stop here
@@ -236,19 +275,21 @@ async def run_bot(
         duck_gain, duck_procs = _ducking(cfg, log)
         stt_interrupts = duck_gain is None
         gate = PolicyGate(policy, on_spoken=turn_obs.reply_done.set)
-        filler = _filler(cfg, log)
+        address_procs = [AddressingFilter(addressing)] if addressing else []
+        mic_gate = _mic_gate(cfg, log, addressing)
+        filler = _filler(cfg, log, addressing)
         filler_procs = [filler] if filler else []
         turn_obs.filler = filler
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain, on_event=log.emit)
             trace_writes(transport.output(), hops)
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts)
-            front = [transport.input(), _vad(cfg), stt, gate, *duck_procs]
+            front = [transport.input(), mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
             back = [*filler_procs, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts)
-            front = [source, _vad(cfg), stt, gate, *duck_procs]
+            front = [source, mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
             )
@@ -291,11 +332,16 @@ async def run_bot(
                 if len(text.split()) <= policy.answer_max_words:
                     return
                 turn_obs.reply_done.clear()
+            if addressing and not addressing.admit(text):
+                return
+            nonlocal stayed_silent
+            stayed_silent = False
             await worker.queue_frame(
                 LLMMessagesAppendFrame(messages=[{"role": "user", "content": text}], run_llm=True)
             )
             await asyncio.wait_for(turn_obs.reply_done.wait(), reply_timeout_s)
-            await _assistant_committed(context)
+            if not stayed_silent:
+                await _assistant_committed(context)
 
         async def finish_after_reply() -> None:
             try:
@@ -316,6 +362,14 @@ async def run_bot(
                 log.emit("reply_timeout")
                 logger.error(f"no reply within {reply_timeout_s}s")
             await worker.stop_when_done()
+
+        if input_mode == "mic":
+            # The mute switch: `kill -USR1 <pid>` now, a button on the Pi later.
+            def toggle_mute() -> None:
+                muted = mic_gate.toggle_mute()
+                logger.warning("MIC MUTED" if muted else "mic live")
+
+            asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, toggle_mute)
 
         runner = WorkerRunner(handle_sigint=handle_sigint)
         await runner.add_workers(worker)
