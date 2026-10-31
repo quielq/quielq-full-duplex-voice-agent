@@ -141,8 +141,8 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, TTSTextFrame):
             self.spoken_text.append(frame.text)
         elif isinstance(frame, BotStartedSpeakingFrame):
-            playing_filler = self.filler is not None and self.filler.playing
-            log.emit("filler_audio_out" if playing_filler else "first_audio_out")
+            is_filler = self.filler is not None and self.filler.claim_bot_start()
+            log.emit("filler_audio_out" if is_filler else "first_audio_out")
         elif isinstance(frame, BotStoppedSpeakingFrame):
             log.emit("audio_silent")
         elif isinstance(frame, InterruptionFrame):

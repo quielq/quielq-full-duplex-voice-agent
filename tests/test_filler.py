@@ -8,6 +8,7 @@ import subprocess
 import pytest
 
 from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
     FunctionCallInProgressFrame,
     InterruptionFrame,
     UserStoppedSpeakingFrame,
@@ -124,3 +125,29 @@ async def test_stay_silent_never_triggers():
 
     assert await _triggers([call("stay_silent"), SleepFrame(0.05)]) == []
     assert await _triggers([call("set_timer"), SleepFrame(0.05)]) == ["tool_call"]
+
+
+async def test_late_bot_start_still_belongs_to_the_clip():
+    # Under load audio can start after the clip's own length has passed. A wall-clock check
+    # then logged the filler as first_audio_out, polluting the latency headline.
+    proc = FillerProcessor(b"\0\0" * 240, 24000)  # 10 ms clip
+    assert proc.claim_bot_start() is False  # no clip, so a bot start is the reply's
+    call = FunctionCallInProgressFrame(function_name="set_timer", tool_call_id="c", arguments={})
+    claimed = []
+
+    async def later():
+        await asyncio.sleep(0.2)  # well past the clip's length
+        claimed.extend([proc.claim_bot_start(), proc.claim_bot_start()])
+
+    task = asyncio.create_task(later())
+    await run_test(proc, frames_to_send=[call, SleepFrame(0.3)], expected_down_frames=None)
+    await task
+    assert claimed == [True, False]
+
+
+async def test_no_claim_when_the_bot_is_already_speaking():
+    proc = FillerProcessor(b"\0\0" * 240, 24000)
+    call = FunctionCallInProgressFrame(function_name="set_timer", tool_call_id="c", arguments={})
+    await run_test(proc, frames_to_send=[BotStartedSpeakingFrame(), call, SleepFrame(0.05)],
+                   expected_down_frames=None)  # fmt: skip
+    assert proc.claim_bot_start() is False
