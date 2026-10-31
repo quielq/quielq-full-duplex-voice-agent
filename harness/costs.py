@@ -33,6 +33,7 @@ class CostObserver(BaseObserver):
         self._ledger = ledger
         self._prices = providers_cfg["prices"]
         self._stages = providers_cfg["stages"]
+        self._models = providers_cfg["providers"]
         self._run_id = run_id
         self._on_cap_reached = on_cap_reached
         self._seen: set[int] = set()
@@ -80,8 +81,9 @@ class CostObserver(BaseObserver):
         llm, stt = self._stages["llm"], self._stages["stt"]
         if isinstance(d, LLMUsageMetricsData) and llm in ("groq", "anthropic"):
             u = d.value
-            yield llm, "llm_input_tokens", u.prompt_tokens, u.prompt_tokens * p[llm]["input_per_token"]
-            yield llm, "llm_output_tokens", u.completion_tokens, u.completion_tokens * p[llm]["output_per_token"]
+            rate = p[llm].get("by_model", {}).get(self._models[llm].get("model"), p[llm])
+            yield llm, "llm_input_tokens", u.prompt_tokens, u.prompt_tokens * rate["input_per_token"]
+            yield llm, "llm_output_tokens", u.completion_tokens, u.completion_tokens * rate["output_per_token"]
         elif isinstance(d, STTUsageMetricsData) and stt == "deepgram_flux":
             minutes = float(d.value.audio_seconds) / 60.0
             yield "deepgram", "stt_minutes", minutes, minutes * p["deepgram_flux_per_min"]

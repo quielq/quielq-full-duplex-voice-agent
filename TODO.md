@@ -2,6 +2,8 @@
 
 Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Oct 31, 2026.
 
+Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
+
 Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). Steps 5 and 6 done. Step 4 done except the Cartesia arm. No commits since Oct 21, so the build plan was redrawn (see "Replan, Oct 31" in `docs/architecture.md`).
 
 ## Waiting on Quiel
@@ -29,8 +31,8 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 - [ ] Exercise the ADR-012 socket replacement against live Deepgram (fake-tested only)
 - [ ] Choppy Aura-2 speech: delivery swings between 2.25x and 0.43x real time, not caused by sample rate (ADR-014)
 - [ ] Check Cartesia delivery from the Philippines before relying on it for final runs (ADR-014)
-- [ ] Handle LLM tool-call validation errors: Groq rejected `set_timer` with 0 seconds and the bot stayed silent, with no spoken fallback
-- [ ] Give the agent a real clock: it stated a wrong time (3:17 for 3:35 p.m.) with no tool call
+- [x] Spoken fallback on LLM errors such as Groq rejecting `set_timer` with 0 seconds (`harness/recovery.py`, fake-tested)
+- [x] Give the agent a real clock (`get_time`, daaf377)
 - [ ] Live speaker test with `--echo-cancel`: no self-interruption, then a real barge-in, and check the first-speech blip and barge-in delay (ADR-013)
 
 ## ADR-009 additions (approved)
@@ -48,10 +50,10 @@ Test layers (Nov 1 onward):
 
 - [x] `bench/task_runner.py` and `bench/task_suite/cases/`: next reply, tool call, conversation (ab86a0b)
 - [ ] Audio timing layer: extend `bench/interruption_test.py`
-- [ ] `stay_silent` cases: `classify` has the `spoke_when_silent` bucket, but no case can use it until the tool exists
+- [x] `stay_silent` cases (`addressing.yaml`)
 - [x] `--repeat`, pass rates, fixed failure buckets, cost per successful task (ab86a0b)
 - [x] Clock cases first, then one set per new server (ab86a0b, bc171bd)
-- [ ] Separate ledger price for `gpt-oss-120b`
+- [x] Separate ledger price for `gpt-oss-120b` (from trackers; recheck on console.groq.com/pricing before the comparison)
 
 Waiting phrase (Nov 2):
 
@@ -73,7 +75,7 @@ Waiting phrase (Nov 2):
 - [ ] Replace the 100 ms history-ordering workaround: let the aggregator own the turn start (`ExternalUserTurnStartStrategy`) (ADR-007)
 - [ ] Get duck-mode stop under 300 ms (about 600 ms with Flux now): local stop-word spotter, or act on Flux partial transcripts sooner
 - [ ] Choose the default between `immediate` and `duck`, after the Flux and Pi echo measurements
-- [ ] Test-runner fix: end on a timeout when no reply is expected (it waits 60 s and streams silence to Flux)
+- [x] Test-runner fix: a backchannel run now waits 15 s, not 60 s
 - [ ] Resume policy after an interruption: resume, summarize the unplayed part, or drop it (review improvement 4)
 
 ## Voice servers (stubs today)
@@ -87,8 +89,10 @@ Waiting phrase (Nov 2):
 
 ## Task servers (only `clock` exists)
 
-- [ ] `music` (Spotify, demo only)
-- [ ] `lights` (check whether the Xiaomi bulb can be controlled locally)
+- [x] `music` mock
+- [ ] `music` real backend (Spotify, demo only)
+- [x] `lights` mock
+- [ ] `lights` real backend (check whether the Xiaomi bulb can be controlled locally)
 - [x] `notes` (SQLite) (bc171bd)
 - [x] `thermostat` mock (bc171bd)
 - [x] `comms` mock (bc171bd)
@@ -97,11 +101,14 @@ Waiting phrase (Nov 2):
 
 ## No-wake-word addressing
 
-- [ ] Loudness gate with 300 to 500 ms of saved pre-roll audio
-- [ ] ACTIVE/IDLE conversation states
-- [ ] `stay_silent` tool
-- [ ] `require_wake_after_idle` fallback switch
-- [ ] Mute switch with an indicator, plus the privacy baseline (no stored audio, notice to the room, opt-outs, consent record)
+- [x] Loudness gate with 400 ms of pre-roll, off by default, synthetic audio only (ADR-016)
+- [ ] Check Flux with gaps in the audio before enabling the gate with it (ADR-016)
+- [ ] Run `bench/task_suite/cases/addressing.yaml` on Groq, then tune the IDLE word rules on a recorded room
+- [x] ACTIVE/IDLE conversation states (ADR-016)
+- [x] `stay_silent` tool (ADR-016)
+- [x] `require_wake_after_idle` fallback switch (ADR-016)
+- [x] Mute switch in software (`kill -USR1`, log line); a hardware button and light wait for the Pi
+- [ ] Privacy baseline (no stored audio, notice to the room, opt-outs, consent record)
 
 ## Model comparison and benchmark
 
@@ -116,8 +123,9 @@ Waiting phrase (Nov 2):
 - [ ] Network-loss detection with pre-synthesised fallback phrases
 - [ ] Provider failover per stage, reconnect with backoff, health log
 - [ ] systemd services with restart on failure, auto-start on boot, a watchdog
-- [ ] Spoken notice when the daily cap is hit (today it just stops)
-- [ ] Alert at $10 total spend
+- [x] Spoken notice when the daily cap is hit, skipped when TTS is the capped provider
+- [x] Alert at $10 total spend (doctor warning)
+- [x] Doctor and run report (`bench/doctor.py`, `bench/run_report.py`)
 
 ## Housekeeping
 

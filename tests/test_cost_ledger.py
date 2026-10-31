@@ -35,3 +35,31 @@ def test_spend_is_per_day_and_per_provider(tmp_path):
     day[0] = date(2026, 10, 22)
     assert ledger.spent_today("groq") == 0.0
     assert ledger.remaining("deepgram") == pytest.approx(1.0)
+
+
+def test_spent_total_spans_days_and_providers(tmp_path):
+    day = [date(2026, 10, 21)]
+    ledger = CostLedger(tmp_path / "l.jsonl", {"groq": 1.0}, today=lambda: day[0])
+    ledger.record("groq", "x", 1, 0.25)
+    day[0] = date(2026, 10, 22)
+    ledger.record("deepgram", "x", 1, 0.5)
+    assert ledger.spent_total() == 0.75
+
+
+def _llm_usd(tmp_path, model):
+    from pipecat.metrics.metrics import LLMTokenUsage, LLMUsageMetricsData
+
+    from harness.config import load_config
+    from harness.costs import CostObserver
+
+    providers = load_config("mac").providers
+    providers["stages"] = {"stt": "fake", "llm": "groq", "tts": "fake"}
+    providers["providers"]["groq"]["model"] = model
+    obs = CostObserver(CostLedger(tmp_path / "l.jsonl", {}), providers, "r")
+    usage = LLMTokenUsage(prompt_tokens=1_000_000, completion_tokens=1_000_000, total_tokens=2_000_000)
+    return sum(row[3] for row in obs._price(LLMUsageMetricsData(processor="p", value=usage)))
+
+
+def test_groq_is_priced_by_model(tmp_path):
+    assert _llm_usd(tmp_path, "openai/gpt-oss-20b") == pytest.approx(0.375)
+    assert _llm_usd(tmp_path, "openai/gpt-oss-120b") == pytest.approx(0.75)

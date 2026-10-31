@@ -45,6 +45,7 @@ STATUS_MARK = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL", "skip": "skip"}
 SLOW_TLS_MS = 1000
 HANDSHAKES = 5
 SPEND_WARN_FRACTION = 0.8
+TOTAL_SPEND_ALERT_USD = 10.0
 
 PROVIDER_HOSTS = {
     "deepgram": "api.deepgram.com",
@@ -291,6 +292,11 @@ def check_spend(cfg: Config) -> Iterator[tuple]:
         yield _fail("ledger", f"{bad} unreadable lines, so caps cannot be trusted", f"repair {path.name}")
         return
     ledger = CostLedger.from_providers_config(cfg.providers, path)
+    total = ledger.spent_total()
+    if total >= TOTAL_SPEND_ALERT_USD:
+        yield _warn("all time", f"${total:.2f} at list price, past the ${TOTAL_SPEND_ALERT_USD:.0f} alert")
+    else:
+        yield _ok("all time", f"${total:.2f} at list price")
     for name in cfg.providers["providers"]:
         cap, spent = ledger.cap(name), ledger.spent_today(name)
         detail = f"${spent:.4f} of ${cap:.2f} today"

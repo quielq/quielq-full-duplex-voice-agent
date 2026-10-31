@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,6 +32,7 @@ from harness.fakes import STORY
 from harness.file_input import Segment
 
 REQUEST = "Tell me a story about a lighthouse keeper."
+BACKCHANNEL_WAIT_S = 15
 BARGE_IN = "Stop right there."  # no internal pause, so VAD sees one utterance
 
 
@@ -104,6 +106,12 @@ def analyse(result, full_text: str, tts: str) -> dict:
     }
 
 
+def _no_reply_expected(cfg, text: str, barge_in: str) -> bool:
+    b = cfg.profile["barge_in"]
+    words = re.findall(r"[a-z'-]+", text.lower())
+    return barge_in == "duck" and len(words) <= b["backchannel_max_words"] and not set(words) & set(b["allowlist"])
+
+
 async def run(
     tts: str,
     barge_after_s: float,
@@ -127,6 +135,8 @@ async def run(
         data_dir=str(workdir / "data"),
         handle_sigint=False,
         reply_timeout_s=60,
+        # A backchannel gets no new reply, and a live run streams billed silence while it waits.
+        last_reply_timeout_s=BACKCHANNEL_WAIT_S if _no_reply_expected(cfg, barge_text, barge_in) else None,
     )
     report = analyse(result, STORY, tts)
     report.update(_duck_report(result, report))

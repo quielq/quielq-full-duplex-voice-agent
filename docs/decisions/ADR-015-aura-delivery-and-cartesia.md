@@ -26,6 +26,18 @@ First audio took 0.27 to 0.34 s on Aura-2 and 0.15 to 0.20 s on Cartesia.
 
 The Mac and the Wi-Fi link carried Cartesia at full speed between the slow Aura-2 rounds, so they are not the general limit. This does not separate Deepgram's service from the network route to it. Cartesia's route is not known and may differ.
 
+## Later evidence on the route
+
+`bench.doctor` times TLS handshakes with no key and no spend. Five samples each, Oct 31, 2026, about 16:53:
+
+| Host | Median | Worst |
+|---|---|---|
+| `api.deepgram.com` | 542 ms | 567 ms |
+| `api.groq.com` | 115 ms | 142 ms |
+| `api.cartesia.ai` | 26 ms | 40 ms |
+
+An earlier single sample to Deepgram took 1555 ms. This shows that Cartesia terminates far closer to this network than Deepgram does, which leans toward the route over Deepgram's service. It is one time of day, and a handshake says nothing about sustained throughput, so it does not settle the question.
+
 ## Decision
 
 `deepgram_aura2` stays the configured choice until a live Cartesia run is judged by ear. The `cartesia` stage now reports hop timing through a shared `HopTimedTTS` mixin and requests 24 kHz, matching the output. Cartesia has a $0.10 daily cap and the public Skylar voice.

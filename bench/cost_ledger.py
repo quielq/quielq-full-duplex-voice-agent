@@ -66,6 +66,13 @@ class CostLedger:
                     total += e["usd"]
         return total
 
+    def spent_total(self) -> float:
+        """All providers, all days: the figure the $20 budget and the $10 alert watch."""
+        if not self._path.exists():
+            return 0.0
+        with open(self._path) as f:
+            return sum(json.loads(line)["usd"] for line in f)
+
     def remaining(self, provider: str) -> float:
         return max(0.0, self.cap(provider) - self.spent_today(provider))
 
@@ -107,3 +114,4 @@ if __name__ == "__main__":
     print(f"Spend on {datetime.now().date()} (USD, list price):")
     for name in cfg.providers["providers"]:
         print(f"  {name:<11} spent {ledger.spent_today(name):8.4f}  cap {ledger.cap(name):6.2f}")
+    print(f"  all time    spent {ledger.spent_total():8.4f}")

@@ -214,6 +214,7 @@ async def run_bot(
     stt_script: list[str] | None = None,
     data_dir: str | None = None,
     reply_timeout_s: float = 60.0,
+    last_reply_timeout_s: float | None = None,
     handle_sigint: bool = True,
     servers: dict[str, str] | None = None,
 ) -> BotResult:
@@ -356,7 +357,7 @@ async def run_bot(
                     # Answer the last scripted utterance, not an earlier one.
                     await asyncio.wait_for(source.all_injected.wait(), reply_timeout_s)
                     turn_obs.reply_done.clear()
-                    await asyncio.wait_for(turn_obs.reply_done.wait(), reply_timeout_s)
+                    await asyncio.wait_for(turn_obs.reply_done.wait(), last_reply_timeout_s or reply_timeout_s)
                 await policy.settled()
             except TimeoutError:
                 log.emit("reply_timeout")
