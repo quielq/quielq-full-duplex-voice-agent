@@ -225,7 +225,7 @@ async def run_bot(
         filler_procs = [filler] if filler else []
         turn_obs.filler = filler
         if input_mode == "mic":
-            transport = local_transport(audio, audio_out_filter=duck_gain)
+            transport = local_transport(audio, audio_out_filter=duck_gain, on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts)
             front = [transport.input(), _vad(cfg), stt, gate, *duck_procs]
             back = [*filler_procs, transport.output()]

@@ -18,10 +18,11 @@ from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.frames.frames import FilterControlFrame
 
 MAX_REFERENCE_S = 1  # older reference can no longer match anything the mic hears
+REPORT_FRAMES = 100  # one echo_window event per second, levels only, never audio
 
 
 class EchoCanceller:
-    def __init__(self, in_rate: int, out_rate: int, delay_ms: int):
+    def __init__(self, in_rate: int, out_rate: int, delay_ms: int, on_event=None):
         self._apm = rtc.AudioProcessingModule(echo_cancellation=True)
         self._rate = in_rate
         self._delay_ms = delay_ms
@@ -33,6 +34,8 @@ class EchoCanceller:
         self._reference: deque[bytes] = deque(maxlen=MAX_REFERENCE_S * 100)
         self._reference_pending = bytearray()
         self._capture_pending = bytearray()
+        self._on_event = on_event
+        self._reset_window()
 
     def add_reference(self, audio: bytes) -> None:
         """Queue audio about to play, at the output rate."""
@@ -51,13 +54,45 @@ class EchoCanceller:
         while len(self._capture_pending) >= self._size:
             near = self._capture_pending[: self._size]
             del self._capture_pending[: self._size]
-            far = self._reference.popleft() if self._reference else bytes(self._size)
+            far = self._next_reference()
             capture = rtc.AudioFrame(near, self._rate, 1, self._samples)
             self._apm.process_reverse_stream(rtc.AudioFrame(far, self._rate, 1, self._samples))
             self._apm.set_stream_delay_ms(self._delay_ms)
             self._apm.process_stream(capture)
-            out += bytes(capture.data)
+            cancelled = bytes(capture.data)
+            out += cancelled
+            self._measure(bytes(near), far, cancelled)
         return bytes(out)
+
+    def _reset_window(self) -> None:
+        self._frames = 0
+        self._underruns = 0
+        self._max_queue = 0
+        self._energy = {"near": 0.0, "far": 0.0, "out": 0.0}
+
+    def _measure(self, near: bytes, far: bytes, out: bytes) -> None:
+        if not self._on_event:
+            return
+        self._frames += 1
+        for name, audio in (("near", near), ("far", far), ("out", out)):
+            self._energy[name] += float(np.sum(np.frombuffer(audio, dtype=np.int16).astype(np.float64) ** 2))
+        if self._frames == REPORT_FRAMES:
+            samples = REPORT_FRAMES * self._samples
+            levels = {
+                f"{name}_db": round(10 * np.log10(max(energy / samples, 1e-3) / 32768**2), 1)
+                for name, energy in self._energy.items()
+            }
+            self._on_event(
+                "echo_window", underruns=self._underruns, max_queue=self._max_queue, **levels
+            )
+            self._reset_window()
+
+    def _next_reference(self) -> bytes:
+        self._max_queue = max(self._max_queue, len(self._reference))
+        if self._reference:
+            return self._reference.popleft()
+        self._underruns += 1
+        return bytes(self._size)
 
     def reference_filter(self, inner: BaseAudioFilter | None = None) -> BaseAudioFilter:
         """Output filter. ``inner`` runs first, so the reference includes any ducking."""

@@ -75,3 +75,16 @@ async def test_reference_includes_the_ducking_gain():
     played = await tap.filter(audio)
     assert np.frombuffer(played, dtype=np.int16)[0] == 500
     assert canceller._reference[0] == played
+
+
+def test_reports_levels_and_underruns_once_a_second():
+    events = []
+    canceller = EchoCanceller(
+        RATE, RATE, 50, on_event=lambda name, **fields: events.append((name, fields))
+    )
+    canceller.process(_noise(0.5).tobytes())
+    assert events == []
+    canceller.process(_noise(0.5).tobytes())
+    name, fields = events[0]
+    assert name == "echo_window"
+    assert fields["underruns"] == 100 and fields["far_db"] < -90 < fields["near_db"]

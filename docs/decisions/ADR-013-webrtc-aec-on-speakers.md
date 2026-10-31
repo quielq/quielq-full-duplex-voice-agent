@@ -1,6 +1,6 @@
 # ADR-013: WebRTC echo cancellation in the harness for speaker runs
 
-Date: Oct 31, 2026. Status: built and off by default. Not yet tested in a live conversation.
+Date: Oct 31, 2026. Status: built and off by default. Live echo is reduced but not solved.
 
 ## Context
 
@@ -38,6 +38,17 @@ Talker run (`--talker`, hint 50 ms): a second voice played from the same speaker
 * One false onset, at 0.61 s, the same startup transient.
 
 Only total cancelled speech time was recorded for that run: 0.74 s.
+
+Live run `20261031-152235-130263`, Aura-2, Flux, `--echo-cancel`: much less echo than without it, but the agent still heard itself. "Sorry.", "do that." and "A blondly light housekeeper" match its own words, and Silero fired during replies. This is the live result to beat.
+
+Transport runs (`--transport`, say speech through the real `LocalAudioTransport`, no VAD or STT in the pipeline):
+
+| Run | Reference underruns | Silero onsets, raw to live | Level after cancelling |
+|---|---|---|---|
+| 1 | 1387 | 3 to 1, at 14.02 s, then 12.9 s of speech | -24.7 dB overall |
+| 2 | 190 | 8 to 0 | about -57 dB after the first seconds, -35.9 dB overall |
+
+Replaying run 1's raw mic and used reference offline gave the same result as live, so the canceller was following its input. Why run 1 lost about 14 s of reference is not known. It may be a stall in the output path, and speech in the room cannot be ruled out. The failure is intermittent and may be what the live run hit. Live runs now log an `echo_window` event each second (levels, underruns and queue depth, never audio) to show this.
 
 ## Alternatives
 

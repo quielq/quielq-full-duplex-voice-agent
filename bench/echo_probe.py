@@ -7,6 +7,7 @@ faces identical audio. No cloud calls, and audio stays in memory (never saved).
 
     uv run python -m bench.echo_probe            # bot voice only
     uv run python -m bench.echo_probe --talker   # plus a second voice over it
+    uv run python -m bench.echo_probe --transport   # through the real Pipecat transport
 
 PASS: Silero fires on the raw mic and not on the cancelled mic. With --talker it must
 also fire on each talker and nowhere else. The talker comes from the same speakers, so
@@ -28,11 +29,16 @@ from pathlib import Path
 import numpy as np
 import soxr
 
-from harness.audio_io import resolve_device
+from harness.audio_io import local_transport, resolve_device
 from harness.config import load_config
+from harness.echo_cancel import EchoCanceller
 from harness.fakes import STORY
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams, VADState
+from pipecat.frames.frames import TTSAudioRawFrame
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.worker import PipelineParams, PipelineWorker
+from pipecat.workers.runner import WorkerRunner
 
 IN_RATE = 16000
 OUT_RATE = 24000
@@ -119,8 +125,6 @@ def measure_lag_ms(far: bytes, near: bytes) -> int:
 
 def cancel(near: bytes, far: bytes, delay_ms: int) -> bytes:
     """Through the live EchoCanceller, in the transport's chunk sizes."""
-    from harness.echo_cancel import EchoCanceller
-
     canceller = EchoCanceller(IN_RATE, IN_RATE, delay_ms)
     reference_chunk, capture_chunk = FRAME * 8, FRAME * 4  # 40 ms out, 20 ms in
     out = []
@@ -206,6 +210,85 @@ async def evaluate_talker(
     }
 
 
+class RecordingCanceller(EchoCanceller):
+    """Keeps what the live path saw, so the same audio can be replayed offline."""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.raw = bytearray()
+        self.cancelled = bytearray()
+        self.used_reference = bytearray()
+        self.underruns = 0
+        self.max_queue = 0
+
+    def _next_reference(self) -> bytes:
+        self.max_queue = max(self.max_queue, len(self._reference))
+        self.underruns += not self._reference
+        frame = super()._next_reference()
+        self.used_reference += frame
+        return frame
+
+    def process(self, audio: bytes) -> bytes:
+        self.raw += audio
+        out = super().process(audio)
+        self.cancelled += out
+        return out
+
+
+async def play_through_transport(far: bytes, audio_cfg: dict, seconds: float, canceller) -> None:
+    """Real LocalAudioTransport, as the bot uses it, playing ``far`` as TTS audio."""
+    transport = local_transport(audio_cfg, canceller=canceller)
+    pipeline = Pipeline([transport.input(), transport.output()])
+    worker = PipelineWorker(
+        pipeline,
+        params=PipelineParams(audio_in_sample_rate=IN_RATE, audio_out_sample_rate=OUT_RATE),
+        idle_timeout_secs=None,
+    )
+    runner = WorkerRunner(handle_sigint=False)
+    await runner.add_workers(worker)
+
+    async def script():
+        await asyncio.sleep(1.0)
+        await worker.queue_frame(TTSAudioRawFrame(far, OUT_RATE, 1))
+        await asyncio.sleep(seconds + TAIL_S)
+        await worker.cancel()
+
+    await asyncio.gather(runner.run(), script())
+
+
+async def evaluate_transport(far: bytes, cfg, delay_ms: int, in_name: str, out_name: str) -> dict:
+    audio_cfg = {**cfg.profile["audio"], "echo_cancel": True, "echo_delay_ms": delay_ms,
+                 "input_device": in_name, "output_device": out_name}  # fmt: skip
+    canceller = RecordingCanceller(IN_RATE, OUT_RATE, delay_ms)
+    await play_through_transport(far, audio_cfg, len(far) / 2 / OUT_RATE, canceller)
+    raw, live = bytes(canceller.raw), bytes(canceller.cancelled)
+    used = bytes(canceller.used_reference)
+    vad_cfg = cfg.profile["vad"]
+    raw_onsets, raw_speech = await speech_onsets(raw, vad_cfg)
+    live_onsets, live_speech = await speech_onsets(live, vad_cfg)
+    replay = cancel(raw, used, delay_ms)
+    replay_onsets, replay_speech = await speech_onsets(replay, vad_cfg)
+    step = IN_RATE * 2 * 2  # bytes in 2 s
+    timeline = [
+        {"t_s": i // (IN_RATE * 2), "reference": rms_db(used[i : i + step]),
+         "raw": rms_db(raw[i : i + step]), "live": rms_db(live[i : i + step])}
+        for i in range(0, min(len(used), len(raw), len(live)) - step + 1, step)
+    ]  # fmt: skip
+    return {
+        "timeline": timeline,
+        "delay_ms": delay_ms,
+        "mic_db": rms_db(raw),
+        "reference_lag_ms": measure_lag_ms(used, raw),
+        "underruns": canceller.underruns,
+        "max_queue_frames": canceller.max_queue,
+        "raw": {"onsets": raw_onsets, "speech_s": raw_speech},
+        "live": {"db": rms_db(live), "onsets": live_onsets, "speech_s": live_speech},
+        "replay_same_reference": {
+            "db": rms_db(replay), "onsets": replay_onsets, "speech_s": replay_speech,
+        },
+    }  # fmt: skip
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", default="mac")
@@ -213,10 +296,17 @@ def main() -> None:
     ap.add_argument("--output-device", default="MacBook Air Speakers")
     ap.add_argument("--talker", action="store_true", help="add a voice the canceller must keep")
     ap.add_argument("--delay-ms", type=int, default=50, help="delay hint for --talker")
+    ap.add_argument("--transport", action="store_true", help="through the real Pipecat transport")
     args = ap.parse_args()
     cfg = load_config(args.profile)
     vad_cfg = cfg.profile["vad"]
     far = synthesize(STORY)
+    if args.transport:
+        report = asyncio.run(
+            evaluate_transport(far, cfg, args.delay_ms, args.input_device, args.output_device)
+        )
+        print(json.dumps(report, indent=2))
+        return
     played, windows = mix_talker(far, synthesize(BARGE_TEXT, "-v", BARGE_VOICE)) if args.talker else (far, [])
     near = play_and_record(
         played, resolve_device(args.input_device, "input"), resolve_device(args.output_device, "output")

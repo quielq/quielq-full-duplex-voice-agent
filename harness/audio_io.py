@@ -64,7 +64,10 @@ def check_echo_risk(output_name: str, *, allow_speakers: bool) -> None:
         )
 
 
-def local_transport(audio_cfg: dict, audio_out_filter=None) -> LocalAudioTransport:
+def local_transport(
+    audio_cfg: dict, audio_out_filter=None, canceller=None, on_event=None
+) -> LocalAudioTransport:
+    """``canceller`` replaces the default EchoCanceller when ``echo_cancel`` is on."""
     output_index = resolve_device(audio_cfg.get("output_device"), "output")
     echo_cancel = audio_cfg["echo_cancel"]
     check_echo_risk(
@@ -74,8 +77,11 @@ def local_transport(audio_cfg: dict, audio_out_filter=None) -> LocalAudioTranspo
     if echo_cancel:
         from harness.echo_cancel import EchoCanceller
 
-        canceller = EchoCanceller(
-            audio_cfg["in_sample_rate"], audio_cfg["out_sample_rate"], audio_cfg["echo_delay_ms"]
+        canceller = canceller or EchoCanceller(
+            audio_cfg["in_sample_rate"],
+            audio_cfg["out_sample_rate"],
+            audio_cfg["echo_delay_ms"],
+            on_event=on_event,
         )
         audio_in_filter = canceller.capture_filter()
         audio_out_filter = canceller.reference_filter(audio_out_filter)
