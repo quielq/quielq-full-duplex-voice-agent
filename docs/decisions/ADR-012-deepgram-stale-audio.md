@@ -1,6 +1,6 @@
 # ADR-012: Discard stale Aura-2 audio after an interruption
 
-Date: Oct 31, 2026. Status: implemented. The socket replacement path is tested with fakes only.
+Date: Oct 31, 2026. Status: implemented, tested with fakes only.
 
 ## Context
 
@@ -19,32 +19,29 @@ Two live runs of `bench.interruption_test --tts deepgram_aura2` measured this, e
 
 In the second row, audio arrived 143 ms after `tts_request` rather than 287 ms and played for 16.83 s, so it was the old story. Clear was ignored or badly delayed in one run of two. That is too few runs to give a rate.
 
+A live speaker run (`20261031-152235-130263`) then interrupted the agent three times. Deepgram sent 9 and 27 stale chunks, up to 1.77 s after `Clear`, and no `Cleared` arrived in any of the three. That makes four unanswered `Clear` messages of five.
+
 ## Decision
 
-`harness/deepgram_tts.py` adds `ClearAwareDeepgramTTSService`:
+`harness/deepgram_tts.py` adds `FreshSocketDeepgramTTSService`. On interruption it stops reading the socket at once, closes it in the background, and opens a new one. The next reply waits only for that connection if it is not ready yet. No old audio can arrive, because nothing is listening to the old stream.
 
-* After sending `Clear`, it discards audio and `Flushed` until `Cleared` arrives.
-* `run_tts` holds the next reply until `Cleared`, for at most `CLEAR_TIMEOUT_S` (0.5 s) from the `Clear`.
-* On timeout it closes the socket and lets `run_tts` reconnect. It never starts accepting audio on an uncleared socket, because the 1.0 s version did that and played the old story.
-* It closes only the socket, not `_disconnect()`, which would also close the context of the reply about to speak.
-* The event log records `tts_clear_sent` and `tts_cleared` (`clear_ms`, `stale_chunks`, `last_stale_ms`, `timed_out`).
+The event log records `tts_socket_reopened` (`reopen_ms`).
 
-The filter wraps `_get_websocket()` so that `_receive_messages` is not copied from Pipecat. This relies on upstream reading messages with `async for` over that call.
+The first version discarded audio until `Cleared`, with a timeout that then replaced the socket. It was dropped: it depended on a reply Deepgram rarely sent, and waiting for the close handshake and a reconnect held replies back by 2.6 to 3.8 s in that live run.
 
 ## Alternatives
 
-* **`DeepgramHttpTTSService`:** each request has its own context, so the race cannot happen. It changes the transport and likely the latency, which breaks comparison with earlier runs. Not measured. This is the fallback if reconnects prove too frequent.
-* **Reconnect on every interruption:** simple, but it adds connection time to every barge-in.
-* **Accept audio after the timeout:** tried first, and it played the old reply.
+* **`DeepgramHttpTTSService`:** each request has its own context, so the race cannot happen. It changes the transport and likely the latency, which breaks comparison with earlier runs. Not measured.
+* **Wait for `Cleared`:** tried, see above.
+* **Accept audio after a timeout:** tried, and it played the old story for 16.83 s.
 * **Cartesia only:** planned for truncation tests and final runs, but Aura-2 stays the bulk development voice.
 
 ## Consequences
 
-* Replies after an interruption can wait up to 0.5 s for `Cleared`. When the socket is replaced, reconnection adds more. That cost is not measured.
-* The new reply is only held if it is ready before `Cleared`. In the good run it was not.
+* A reply starting less than one connection time after an interruption waits for it. Connections took about 0.9 to 1.2 s live, and the next reply usually comes at least that long after the interruption, but `reopen_ms` must confirm this.
+* Each interruption opens a new connection. Check that Deepgram does not rate-limit this during long runs.
 * `tests/test_deepgram_tts.py` asserts the bug on stock `DeepgramTTSService`. If that test fails after a Pipecat bump, check whether this workaround can go.
-* `_drop_socket` has not run against live Deepgram.
-* `CLEAR_TIMEOUT_S` rests on one measurement. Review it using `tts_cleared` events from later runs.
+* This has not yet run against live Deepgram.
 
 ## Sources
 

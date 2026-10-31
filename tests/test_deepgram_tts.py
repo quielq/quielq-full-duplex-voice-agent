@@ -2,12 +2,8 @@
 
 import asyncio
 import json
-import time
 
-import pytest
-
-from harness import deepgram_tts
-from harness.deepgram_tts import ClearAwareDeepgramTTSService
+from harness.deepgram_tts import FreshSocketDeepgramTTSService
 from pipecat.services.deepgram.tts import DeepgramTTSService
 
 CLEARED = json.dumps({"type": "Cleared", "sequence_id": 0})
@@ -17,13 +13,17 @@ FLUSHED = json.dumps({"type": "Flushed", "sequence_id": 0})
 class FakeSocket:
     """Yields scripted messages. A callable item is awaited instead, to change state mid-stream."""
 
-    def __init__(self, script):
+    def __init__(self, script=()):
         self.script = script
         self.sent = []
         self.state = None
+        self.closed = False
 
     async def send(self, message):
         self.sent.append(message)
+
+    async def close(self):
+        self.closed = True
 
     async def __aiter__(self):
         for item in self.script:
@@ -33,8 +33,9 @@ class FakeSocket:
                 yield item
 
 
-async def replay(service, script):
-    """Run ``script`` and return (context, audio) for each chunk that would play, plus stops."""
+async def replay_upstream(script):
+    """Stock service: (context, audio) for each chunk that would play, plus ended contexts."""
+    service = DeepgramTTSService(api_key="test")
     played, stops = [], []
     context = {"id": "old"}
 
@@ -55,62 +56,26 @@ async def replay(service, script):
     async def next_reply():
         context["id"] = "new"
 
-    resolved = [
-        {"interrupt": interrupt, "next_reply": next_reply}.get(item, item)
-        if isinstance(item, str)
-        else item
-        for item in script
-    ]
-    service._websocket = FakeSocket(resolved)
+    steps = {"interrupt": interrupt, "next_reply": next_reply}
+    service._websocket = FakeSocket([steps[i] if i in steps else i for i in script])
     await service._receive_messages()
-    return [p for p in played if p[1] is not None], stops, service._websocket.sent
+    return [p for p in played if p[1] is not None], stops
 
 
-SCRIPT = [b"before", "interrupt", b"dropped", "next_reply", b"stale", FLUSHED, CLEARED, b"fresh"]
-
-
-async def test_upstream_plays_old_audio_in_the_new_context():
-    # Documents the bug; if this fails after a Pipecat bump, the workaround may be removable.
-    played, stops, _ = await replay(DeepgramTTSService(api_key="test"), SCRIPT)
-    assert ("new", b"stale") in played
-    assert "new" in stops  # the stale Flushed ended the new reply's context
-
-
-async def test_audio_before_cleared_is_discarded():
-    events = []
-    service = ClearAwareDeepgramTTSService(
-        api_key="test", on_event=lambda name, **f: events.append((name, f))
+def _service(events=None):
+    service = FreshSocketDeepgramTTSService(
+        api_key="test", on_event=lambda name, **f: (events if events is not None else []).append(name)
     )
-    played, stops, sent = await replay(service, SCRIPT)
-    assert played == [("old", b"before"), ("new", b"fresh")]
-    assert stops == []
-    assert json.loads(sent[0]) == {"type": "Clear"}
-    assert [name for name, _ in events] == ["tts_clear_sent", "tts_cleared"]
-    assert events[1][1]["stale_chunks"] == 2 and events[1][1]["timed_out"] is False
-
-
-async def test_two_interruptions_wait_for_both_cleared_replies():
-    service = ClearAwareDeepgramTTSService(api_key="test")
-    script = ["interrupt", "interrupt", "next_reply", CLEARED, b"stale", CLEARED, b"fresh"]
-    played, _, sent = await replay(service, script)
-    assert len(sent) == 2
-    assert played == [("new", b"fresh")]
-
-
-def _fake_reconnect(service):
-    calls = []
-
-    async def drop():
-        calls.append("drop")
-        service._websocket = None
+    connects = []
 
     async def connect():
-        calls.append("connect")
-        service._websocket = FakeSocket([])
+        connects.append(1)
+        await asyncio.sleep(0)
+        service._websocket = FakeSocket()
 
-    service._drop_socket = drop
     service._connect = connect
-    return calls
+    service.create_task = lambda coro, name=None: asyncio.create_task(coro)
+    return service, connects
 
 
 async def _speak(service):
@@ -118,42 +83,64 @@ async def _speak(service):
         pass
 
 
-async def test_next_reply_waits_for_cleared_on_the_same_socket():
-    service = ClearAwareDeepgramTTSService(api_key="test")
-    calls = _fake_reconnect(service)
-    socket = service._websocket = FakeSocket([])
-    await service.on_audio_context_interrupted("old")
-    speak = asyncio.create_task(_speak(service))
-    await asyncio.sleep(0)
-    assert not [m for m in socket.sent if "Speak" in m]  # held until Cleared
-    assert service._keep_message(CLEARED)
-    await speak
-    assert calls == []
-    assert json.loads(socket.sent[-1])["type"] == "Speak"
+async def test_upstream_plays_old_audio_in_the_new_context():
+    # Documents the bug; if this fails after a Pipecat bump, the workaround may be removable.
+    script = [b"before", "interrupt", b"dropped", "next_reply", b"stale", FLUSHED, CLEARED]
+    played, stops = await replay_upstream(script)
+    assert ("new", b"stale") in played
+    assert "new" in stops  # the stale Flushed ended the new reply's context
 
 
-async def test_ignored_clear_replaces_the_socket_before_the_next_reply(monkeypatch):
-    # Seen live: no Cleared, and the old reply kept streaming until the socket closed.
-    monkeypatch.setattr(deepgram_tts, "CLEAR_TIMEOUT_S", 0.01)
+async def test_interruption_stops_reading_and_closes_the_old_socket():
     events = []
-    service = ClearAwareDeepgramTTSService(
-        api_key="test", on_event=lambda name, **f: events.append((name, f))
-    )
-    calls = _fake_reconnect(service)
-    old = service._websocket = FakeSocket([])
+    service, connects = _service(events)
+    old = service._websocket = FakeSocket()
+
+    async def forever():
+        await asyncio.sleep(60)
+
+    receive = service._receive_task = asyncio.create_task(forever())
+
+    async def cancel(task):
+        task.cancel()
+
+    service.cancel_task = cancel
     await service.on_audio_context_interrupted("old")
-    assert not service._keep_message(b"stale")
+    assert service._websocket is None and service._receive_task is None
+    assert json.loads(old.sent[-1]) == {"type": "Clear"}
+    await service._reopening
+    await asyncio.sleep(0)
+    assert receive.cancelled() and old.closed
+    assert connects == [1] and service._websocket is not old
+    assert events == ["tts_socket_reopened"]
+
+
+async def test_next_reply_waits_for_the_new_socket():
+    service, _ = _service()
+    old = service._websocket = FakeSocket()
+    await service.on_audio_context_interrupted("old")
     await _speak(service)
-    assert calls == ["drop", "connect"]
-    assert not [m for m in old.sent if "Speak" in m]
+    assert service._websocket is not old
     assert json.loads(service._websocket.sent[-1])["type"] == "Speak"
-    assert events[-1][1]["timed_out"] is True and events[-1][1]["stale_chunks"] == 1
-    assert service._keep_message(b"fresh")
+    assert not [m for m in old.sent if "Speak" in m]
 
 
-@pytest.mark.parametrize("message", ["not json", json.dumps({"type": "Warning"})])
-async def test_other_text_messages_pass_through_while_clearing(message):
-    service = ClearAwareDeepgramTTSService(api_key="test")
-    service._clears_pending = 1
-    service._clear_sent_at = time.monotonic()
-    assert service._keep_message(message)
+async def test_two_contexts_reopen_once():
+    service, connects = _service()
+    service._websocket = FakeSocket()
+    await service.on_audio_context_interrupted("a")
+    await service.on_audio_context_interrupted("b")
+    await service._reopening
+    assert connects == [1]
+
+
+async def test_interrupting_a_waiting_reply_keeps_the_reopen_running():
+    service, connects = _service()
+    service._websocket = FakeSocket()
+    await service.on_audio_context_interrupted("old")
+    waiting = asyncio.create_task(_speak(service))
+    await asyncio.sleep(0)
+    waiting.cancel()
+    await asyncio.gather(waiting, return_exceptions=True)
+    await asyncio.sleep(0.01)
+    assert connects == [1] and service._websocket is not None

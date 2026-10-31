@@ -94,14 +94,14 @@ def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None):
     if choice == "fake_words":
         return ToneTTSService(text_aggregation_mode=agg, word_timestamps=True)
     if choice == "deepgram_aura2":
-        from harness.deepgram_tts import ClearAwareDeepgramTTSService
+        from harness.deepgram_tts import FreshSocketDeepgramTTSService
 
         _, p, key = _authorize(choice, providers_cfg, ledger)
-        return ClearAwareDeepgramTTSService(
+        return FreshSocketDeepgramTTSService(
             on_event=on_event,
             api_key=key,
             mip_opt_out=True,
-            settings=ClearAwareDeepgramTTSService.Settings(voice=p["tts_voice"]),
+            settings=FreshSocketDeepgramTTSService.Settings(voice=p["tts_voice"]),
             text_aggregation_mode=agg,
         )
     if choice == "cartesia":
