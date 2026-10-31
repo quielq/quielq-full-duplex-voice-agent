@@ -1,0 +1,22 @@
+# Thermostat task cases. See clock.yaml for the format.
+server: thermostat
+cases:
+  - id: thermo_next_read
+    layer: next_reply
+    turns: ["what is the thermostat set to"]
+    expect: {tools: [get_thermostat]}
+
+  - id: thermo_args_set
+    layer: tool_call
+    turns: ["set the thermostat to 22"]
+    expect:
+      tools: [set_thermostat]
+      args: {set_thermostat: {target_c: 22}}
+      state: {thermostat: {has: [{target_c: 22}]}}
+
+  - id: thermo_conv_set_then_read
+    layer: conversation
+    turns: ["set the thermostat to 26", "what is the thermostat set to"]
+    expect:
+      tools: [set_thermostat, get_thermostat]
+      spoken_re: "26"

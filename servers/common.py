@@ -1,7 +1,8 @@
-"""Shared pieces for our FastMCP servers: tool-call logging and data paths."""
+"""Shared pieces for our FastMCP servers: tool-call logging, data paths, and startup."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import time
@@ -47,3 +48,16 @@ class ToolCallLog(Middleware):
             rec["duration_ms"] = (time.monotonic_ns() - start_ns) / 1e6
             with open(data_dir() / "tool_calls.jsonl", "a") as f:
                 f.write(json.dumps(rec, default=str) + "\n")
+
+
+def serve(mcp) -> None:
+    """Run a FastMCP server over stdio (default) or streamable HTTP, from the command line."""
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--transport", choices=["stdio", "http"], default="stdio")
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=8765)
+    args = ap.parse_args()
+    if args.transport == "stdio":
+        mcp.run(transport="stdio", show_banner=False)
+    else:
+        mcp.run(transport="http", host=args.host, port=args.port, show_banner=False)

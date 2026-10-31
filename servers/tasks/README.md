@@ -1,3 +1,3 @@
 # Task servers
 
-Only `clock` is built. The others (music, lights, thermostat, notes, comms, knowledge, delegate) wait until after Gate 1 and Thursday's command list. Tool names must be unique across servers, and every tool carries all four MCP annotation hints.
+`clock`, `notes` (SQLite), `thermostat` (mock), and `comms` (mock, nothing is really sent) are built. The bot starts `clock` only unless `--servers` lists more. The others (music, lights, knowledge, delegate) wait for Thursday's command list. Tool names must be unique across servers, and every tool carries all four MCP annotation hints.

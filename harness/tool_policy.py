@@ -179,9 +179,8 @@ class ToolPolicy:
         owners: dict[str, str] = {}
         kept: list[FunctionSchema] = []
         overrides = self._cfg.get("tools") or {}
-        for server, client in clients.items():
-            schema = await client.tools()
-            hints = await tool_hints(client)
+        listed = await asyncio.gather(*(self._list(c) for c in clients.values()))
+        for server, (schema, hints) in zip(clients, listed, strict=True):
             for tool in schema.standard_tools:
                 if tool.name in owners:
                     raise DuplicateToolName(
@@ -209,6 +208,10 @@ class ToolPolicy:
             logger.warning(f"tool policy names {name!r}, which no connected server offers")
             self._decide(name, "override_unused")
         return ToolsSchema(standard_tools=kept)
+
+    @staticmethod
+    async def _list(client: MCPClient) -> tuple[ToolsSchema, dict]:
+        return await client.tools(), await tool_hints(client)
 
     async def deny_unknown(self, params: FunctionCallParams) -> None:
         """Catch-all handler: a model that calls a disabled or invented tool reaches no server."""

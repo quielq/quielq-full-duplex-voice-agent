@@ -1,0 +1,41 @@
+# Notes task cases. See clock.yaml for the format.
+server: notes
+cases:
+  - id: notes_next_add
+    layer: next_reply
+    turns: ["add a note to buy rice"]
+    expect: {tools: [add_note]}
+
+  - id: notes_args_add
+    layer: tool_call
+    turns: ["add a note to buy rice"]
+    expect:
+      tools: [add_note]
+      args: {add_note: {text: {re: "rice"}}}
+      state: {notes: {count: 1, has: [{text: {re: "rice"}}]}}
+
+  - id: notes_delete_runs_after_undo
+    layer: tool_call
+    seed: {notes: [{id: n1, text: buy rice}]}
+    turns: ["delete my note"]
+    expect:
+      tools: [list_notes, delete_note]
+      args: {delete_note: {note_id: n1}}
+      state: {notes: {count: 0}}
+
+  - id: notes_conv_undo_keeps_note
+    layer: conversation
+    undo_s: 3.0
+    seed: {notes: [{id: n1, text: buy rice}]}
+    turns: ["delete my note", "undo"]
+    expect:
+      tools: [list_notes, delete_note]
+      spoken_re: "stopped that"
+      state: {notes: {count: 1}}
+
+  - id: notes_conv_add_then_read
+    layer: conversation
+    turns: ["add a note to buy rice", "read my notes"]
+    expect:
+      tools: [add_note, list_notes]
+      spoken_re: "one note"

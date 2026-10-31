@@ -50,14 +50,14 @@ from harness.costs import CostObserver
 from harness.ducking import DuckGain, DuckingProcessor
 from harness.events import EventLog, TurnEventObserver
 from harness.file_input import ScriptedMicSource, Segment
-from harness.mcp_tools import task_clients
+from harness.mcp_tools import TASK_SERVERS, task_clients
 from harness.null_output import PacedNullOutputTransport
 from harness.providers import build_llm, build_stt, build_tts
 from harness.tool_policy import PolicyGate, ToolPolicy
 
 SYSTEM_PROMPT = (
     "You are a hands-free voice assistant. Replies are spoken aloud, so keep them to one or "
-    "two short sentences with no lists or formatting. Use the tools for timers and alarms. "
+    "two short sentences with no lists or formatting. Use the tools when a request needs them. "
     "If a tool result says waiting_for_undo or needs_confirmation, it has not happened yet: say so "
     "briefly and do not call the tool again."
 )
@@ -325,6 +325,7 @@ def main() -> None:
     ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "speech_timeout"],
                     help="override the profile's turn.stop")  # fmt: skip
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
+    ap.add_argument("--servers", default="", help=f"task servers, default clock: {','.join(TASK_SERVERS)}")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
         ap.error("--input wav needs --wav")
@@ -340,10 +341,15 @@ def main() -> None:
     if args.barge_in:
         cfg.profile["barge_in"]["mode"] = args.barge_in
 
+    names = list(filter(None, args.servers.split(",")))
+    if unknown := set(names) - set(TASK_SERVERS):
+        ap.error(f"unknown servers {sorted(unknown)}")
+    servers = {n: TASK_SERVERS[n] for n in names} or None
+
     try:
         result = asyncio.run(
             run_bot(cfg, input_mode=args.input, mcp_transport=args.mcp,
-                    say=args.say, wav=args.wav)  # fmt: skip
+                    say=args.say, wav=args.wav, servers=servers)  # fmt: skip
         )
     except EchoRisk as e:
         raise SystemExit(f"refused: {e}") from None

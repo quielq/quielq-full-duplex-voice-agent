@@ -20,6 +20,7 @@ import copy
 import json
 import os
 import re
+import sqlite3
 import tempfile
 import time
 from collections import Counter
@@ -162,8 +163,45 @@ def read_clock(data_dir: Path) -> list[dict]:
     return list(json.loads(path.read_text()).values()) if path.exists() else []
 
 
+def seed_notes(data_dir: Path, items: list[dict]) -> None:
+    with sqlite3.connect(data_dir / "notes.db") as db:
+        db.execute("CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, text TEXT, created_at REAL)")
+        db.executemany("INSERT INTO notes VALUES (:id, :text, 0)", items)
+
+
+def read_notes(data_dir: Path) -> list[dict]:
+    path = data_dir / "notes.db"
+    if not path.exists():
+        return []
+    with sqlite3.connect(path) as db:
+        return [{"id": i, "text": t} for i, t in db.execute("SELECT id, text FROM notes")]
+
+
+def seed_thermostat(data_dir: Path, items: list[dict]) -> None:
+    (data_dir / "thermostat.json").write_text(json.dumps(items[0]))
+
+
+def read_thermostat(data_dir: Path) -> list[dict]:
+    path = data_dir / "thermostat.json"
+    return [json.loads(path.read_text())] if path.exists() else []
+
+
+def seed_comms(data_dir: Path, items: list[dict]) -> None:
+    (data_dir / "outbox.json").write_text(json.dumps({i["id"]: i for i in items}))
+
+
+def read_comms(data_dir: Path) -> list[dict]:
+    path = data_dir / "outbox.json"
+    return list(json.loads(path.read_text()).values()) if path.exists() else []
+
+
 # Each server's state, in the plain form cases compare against.
-STATE: dict[str, Any] = {"clock": (seed_clock, read_clock)}
+STATE: dict[str, Any] = {
+    "clock": (seed_clock, read_clock),
+    "notes": (seed_notes, read_notes),
+    "thermostat": (seed_thermostat, read_thermostat),
+    "comms": (seed_comms, read_comms),
+}
 
 
 def _pipeline_error(events_path: Path) -> str:
@@ -184,7 +222,7 @@ async def run_case(
     cfg = copy.deepcopy(base)
     undo_s = DEFAULT_UNDO_S if case.undo_s is None else case.undo_s
     cfg.tool_policy["defaults"]["undo_s"] = undo_s
-    for rule in cfg.tool_policy["tools"].values():
+    for rule in (cfg.tool_policy["tools"] or {}).values():
         if "undo_s" in rule:
             rule["undo_s"] = undo_s
     silent = case.expect.get("silent", False)

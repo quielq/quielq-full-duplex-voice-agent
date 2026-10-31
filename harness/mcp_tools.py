@@ -22,7 +22,13 @@ from pipecat.services.mcp_service import MCPClient
 from harness.config import REPO_ROOT
 
 CLOCK_MODULE = "servers.tasks.clock.server"
-TASK_SERVERS = {"clock": CLOCK_MODULE}
+TASK_SERVERS = {
+    "clock": CLOCK_MODULE,
+    "notes": "servers.tasks.notes.server",
+    "thermostat": "servers.tasks.thermostat.server",
+    "comms": "servers.tasks.comms.server",
+}
+DEFAULT_SERVERS = {"clock": CLOCK_MODULE}  # the mocks join a live run only with --servers
 
 
 def _server_env(data_dir: str | None) -> dict[str, str]:
@@ -123,7 +129,7 @@ async def task_clients(
     clients: dict[str, MCPClient] = {}
     entered = []
     try:
-        for name, module in (servers or TASK_SERVERS).items():
+        for name, module in (servers or DEFAULT_SERVERS).items():
             cm = server_client(module, transport, data_dir)
             clients[name] = await cm.__aenter__()
             entered.append(cm)

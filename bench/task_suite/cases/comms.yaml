@@ -1,0 +1,43 @@
+# Comms task cases. send_message needs a spoken yes, then waits out the undo window.
+# See clock.yaml for the format.
+server: comms
+cases:
+  - id: comms_next_asks_first
+    layer: next_reply
+    turns: ["send a message to Ana saying I am late"]
+    expect:
+      tools: [send_message]
+      spoken_re: "sure"
+      state: {comms: {count: 0}}
+
+  - id: comms_args
+    layer: tool_call
+    turns: ["send a message to Ana saying I am late", "yes"]
+    expect:
+      tools: [send_message]
+      args: {send_message: {to: {re: "(?i)ana"}, body: {re: "late"}}}
+      state: {comms: {count: 1, has: [{to: {re: "(?i)ana"}}]}}
+
+  - id: comms_conv_declined
+    layer: conversation
+    turns: ["send a message to Ana saying I am late", "no"]
+    expect:
+      tools: [send_message]
+      spoken_re: "won't do that"
+      state: {comms: {count: 0}}
+
+  - id: comms_conv_yes_then_cancel
+    layer: conversation
+    undo_s: 3.0
+    turns: ["send a message to Ana saying I am late", "yes", "cancel"]
+    expect:
+      tools: [send_message]
+      spoken_re: "stopped that"
+      state: {comms: {count: 0}}
+
+  - id: comms_conv_moved_on
+    layer: conversation
+    turns: ["send a message to Ana saying I am late", "hello there"]
+    expect:
+      tools: [send_message]
+      state: {comms: {count: 0}}

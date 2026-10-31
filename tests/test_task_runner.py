@@ -103,3 +103,10 @@ async def test_refused_provider_is_a_provider_error(cfg):
     cfg.providers["providers"]["groq"]["daily_cap_usd"] = 0.0
     r = await run_case(cfg, next(c for c in load_cases() if c.id == "next_no_tool"))
     assert r.bucket == "provider_error"
+
+
+async def test_all_servers_start_together_with_unique_tools(cfg):
+    # The real agent's tool list. A duplicate name raises at startup and lands here.
+    case = next(c for c in load_cases() if c.id == "comms_args")
+    r = await run_case(cfg, case, all_servers=True)
+    assert r.passed, r.detail

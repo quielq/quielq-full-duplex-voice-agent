@@ -104,6 +104,9 @@ STORY = (
 
 _CANCEL_RE = re.compile(r"\bcancel\b.*\b(timer|alarm)\b")
 _ALARM_RE = re.compile(r"alarm for (\d\d:\d\d)")
+_NOTE_RE = re.compile(r"add a note (?:to |that )?(.+)")
+_THERMOSTAT_RE = re.compile(r"set the thermostat to (\d+)")
+_MESSAGE_RE = re.compile(r"send a message to (\w+) saying (.+)")
 
 
 def _text_of(message: dict) -> str:
@@ -219,14 +222,40 @@ class RuleBasedLLMService(LLMService):
         if m and "set_alarm" in tools:
             await self._call(context, "set_alarm", {"time_hhmm": m.group(1), "label": ""})
             return True
+        m = _NOTE_RE.search(low)
+        if m and "add_note" in tools:
+            await self._call(context, "add_note", {"text": m.group(1)})
+            return True
+        if "list_notes" in tools and re.search(r"\b(read|delete)\b.*\bnotes?\b", low):
+            await self._call(context, "list_notes", {})
+            return True
+        m = _THERMOSTAT_RE.search(low)
+        if m and "set_thermostat" in tools:
+            await self._call(context, "set_thermostat", {"target_c": float(m.group(1))})
+            return True
+        if "get_thermostat" in tools and "thermostat" in low:
+            await self._call(context, "get_thermostat", {})
+            return True
+        m = _MESSAGE_RE.search(low)
+        if m and "send_message" in tools:
+            await self._call(context, "send_message", {"to": m.group(1), "body": m.group(2)})
+            return True
         return False
 
     async def _follow_up(self, context, content) -> bool:
-        """After a listing: cancel the soonest timer if that was the request, else report."""
-        timers = _timers_in(_decode(content))
+        """After a listing: delete or cancel the first item if asked to, else report."""
+        result = _decode(content)
+        user = next(m for m in reversed(context.get_messages()) if m.get("role") == "user")
+        notes = result.get("notes") if isinstance(result, dict) else None
+        if isinstance(notes, list):
+            if "delete" in (_text_of(user) or "").lower() and notes:
+                await self._call(context, "delete_note", {"note_id": notes[0]["id"]})
+            else:
+                await self._stream("You have one note." if len(notes) == 1 else f"You have {len(notes)} notes.")
+            return True
+        timers = _timers_in(result)
         if timers is None:
             return False
-        user = next(m for m in reversed(context.get_messages()) if m.get("role") == "user")
         wants_cancel = _CANCEL_RE.search((_text_of(user) or "").lower())
         if not wants_cancel or "cancel_timer" not in _tool_names(context):
             await self._stream(f"You have {len(timers)} timers." if len(timers) != 1 else "You have one timer.")
@@ -247,6 +276,8 @@ class RuleBasedLLMService(LLMService):
             return "Are you sure?"
         if isinstance(result, dict) and result.get("status") == "denied":
             return "Sorry, I can't do that."
+        if isinstance(result, dict) and "target_c" in result:
+            return f"The thermostat is set to {result['target_c']:g} degrees."
         if isinstance(result, dict) and "remaining_seconds" in result:
             return f"Done. Timer set for {say_duration(int(result['remaining_seconds']))}."
         if isinstance(result, dict) and result.get("error"):
