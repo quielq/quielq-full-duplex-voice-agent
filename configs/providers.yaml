@@ -24,8 +24,9 @@ providers:
     model: openai/gpt-oss-20b
   cartesia:
     env_key: CARTESIA_API_KEY
-    daily_cap_usd: 0.0
-    voice_id: null   # set after the account exists
+    daily_cap_usd: 0.10   # approved Oct 31, 2026, for the delivery comparison
+    voice_id: db6b0ed5-d5d3-463d-ae85-518a07d3c2b4   # Skylar, public voice
+    tts_sample_rate: 24000   # matches the output, so nothing resamples
   anthropic:
     env_key: ANTHROPIC_API_KEY
     daily_cap_usd: 0.0

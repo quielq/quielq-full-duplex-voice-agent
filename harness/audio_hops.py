@@ -10,6 +10,8 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
+from pipecat.frames.frames import TTSAudioRawFrame
+
 MAX_SPEECH_GAP_S = 5  # longer is just the bot being quiet
 
 
@@ -73,6 +75,24 @@ class AudioHops:
         )
         self._window_start = now
         self._clear()
+
+
+class HopTimedTTS:
+    """Mixin for a TTS service: counts audio as it leaves the socket."""
+
+    def __init__(self, *, hops: AudioHops | None = None, **kwargs):
+        super().__init__(**kwargs)
+        self._hops = hops
+
+    async def append_to_audio_context(self, context_id, frame):
+        if self._hops and isinstance(frame, TTSAudioRawFrame):
+            self._hops.on_arrival(len(frame.audio), frame.sample_rate)
+        await super().append_to_audio_context(context_id, frame)
+
+    async def on_audio_context_interrupted(self, context_id: str):
+        await super().on_audio_context_interrupted(context_id)
+        if self._hops:
+            self._hops.reset()
 
 
 def trace_writes(output, hops: AudioHops) -> None:

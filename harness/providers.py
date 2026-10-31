@@ -107,14 +107,20 @@ def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None, hops=No
             text_aggregation_mode=agg,
         )
     if choice == "cartesia":
+        from harness.audio_hops import HopTimedTTS
         from pipecat.services.cartesia.tts import CartesiaTTSService
+
+        class TimedCartesiaTTSService(HopTimedTTS, CartesiaTTSService):
+            pass
 
         _, p, key = _authorize(choice, providers_cfg, ledger)
         if not p.get("voice_id"):
             raise ValueError("cartesia: set providers.cartesia.voice_id in configs/providers.yaml")
-        return CartesiaTTSService(
+        return TimedCartesiaTTSService(
+            hops=hops,
             api_key=key,
-            settings=CartesiaTTSService.Settings(voice=p["voice_id"]),
+            sample_rate=p["tts_sample_rate"],
+            settings=TimedCartesiaTTSService.Settings(voice=p["voice_id"]),
             text_aggregation_mode=agg,
         )
     raise ValueError(f"unknown tts stage {choice!r}")

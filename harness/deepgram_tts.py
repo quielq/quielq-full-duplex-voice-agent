@@ -15,26 +15,19 @@ from collections.abc import AsyncGenerator, Callable
 
 from loguru import logger
 
-from pipecat.frames.frames import Frame, TTSAudioRawFrame
+from harness.audio_hops import HopTimedTTS
+from pipecat.frames.frames import Frame
 from pipecat.services.deepgram.tts import DeepgramTTSService
 
 
-class FreshSocketDeepgramTTSService(DeepgramTTSService):
-    def __init__(self, *, on_event: Callable[..., object] | None = None, hops=None, **kwargs):
+class FreshSocketDeepgramTTSService(HopTimedTTS, DeepgramTTSService):
+    def __init__(self, *, on_event: Callable[..., object] | None = None, **kwargs):
         super().__init__(**kwargs)
         self._on_event = on_event or (lambda *a, **k: None)
-        self._hops = hops
         self._reopening: asyncio.Task | None = None
-
-    async def append_to_audio_context(self, context_id, frame):
-        if self._hops and isinstance(frame, TTSAudioRawFrame):
-            self._hops.on_arrival(len(frame.audio), frame.sample_rate)
-        await super().append_to_audio_context(context_id, frame)
 
     async def on_audio_context_interrupted(self, context_id: str):
         await super().on_audio_context_interrupted(context_id)
-        if self._hops:
-            self._hops.reset()
         if not self._websocket:
             return  # already reopening, for this reply's other context
         old = self._websocket
