@@ -8,6 +8,7 @@ audio:
   # null means the system default. Run `uv run python -m harness.audio_io` to list names.
   input_device: null
   output_device: null
+  allow_speakers: false   # true lets a live run use built-in speakers, for deliberate echo tests
   in_sample_rate: 16000
   out_sample_rate: 24000
 

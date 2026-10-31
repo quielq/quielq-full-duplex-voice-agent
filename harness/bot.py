@@ -43,7 +43,7 @@ from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
 from bench.cost_ledger import CostLedger
-from harness.audio_io import local_transport
+from harness.audio_io import EchoRisk, local_transport
 from harness.config import Config, load_config
 from harness.costs import CostObserver
 from harness.ducking import DuckGain, DuckingProcessor
@@ -294,10 +294,13 @@ def main() -> None:
     if args.barge_in:
         cfg.profile["barge_in"]["mode"] = args.barge_in
 
-    result = asyncio.run(
-        run_bot(cfg, input_mode=args.input, mcp_transport=args.mcp,
-                say=args.say, wav=args.wav)  # fmt: skip
-    )
+    try:
+        result = asyncio.run(
+            run_bot(cfg, input_mode=args.input, mcp_transport=args.mcp,
+                    say=args.say, wav=args.wav)  # fmt: skip
+        )
+    except EchoRisk as e:
+        raise SystemExit(f"refused: {e}") from None
     print(f"run {result.run_id}")
     print(f"  transcripts: {result.transcripts}")
     print(f"  tool calls:  {result.tool_calls}")

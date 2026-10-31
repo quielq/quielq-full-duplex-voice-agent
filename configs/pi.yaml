@@ -6,6 +6,7 @@ profile: pi
 audio:
   input_device: null    # set to the speakerphone (or the PipeWire echo-cancel source) name
   output_device: null
+  allow_speakers: false   # only built-in laptop speakers are refused; a speakerphone passes
   in_sample_rate: 16000
   out_sample_rate: 24000
 

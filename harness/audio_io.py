@@ -10,6 +10,10 @@ from __future__ import annotations
 from pipecat.transports.local.audio import LocalAudioTransport, LocalAudioTransportParams
 
 
+class EchoRisk(RuntimeError):
+    """A live run would play the agent through speakers its own mic can hear."""
+
+
 def list_devices() -> list[dict]:
     import pyaudio
 
@@ -34,7 +38,35 @@ def resolve_device(name: str | None, kind: str) -> int | None:
     raise RuntimeError(f"no {kind} audio device matching {name!r}; run python -m harness.audio_io")
 
 
+def is_builtin_speaker(name: str) -> bool:
+    lowered = name.lower()
+    return "macbook" in lowered and "speakers" in lowered
+
+
+def output_device_name(index: int | None) -> str:
+    """Name of the output device at ``index``, or of the system default for ``None``."""
+    import pyaudio
+
+    pa = pyaudio.PyAudio()
+    try:
+        info = pa.get_default_output_device_info() if index is None else pa.get_device_info_by_index(index)
+        return str(info["name"])
+    finally:
+        pa.terminate()
+
+
+def check_echo_risk(output_name: str, *, allow_speakers: bool) -> None:
+    """Refuse a live run on built-in speakers: Pipecat has no AEC, so the agent hears itself."""
+    if is_builtin_speaker(output_name) and not allow_speakers:
+        raise EchoRisk(
+            f"output is {output_name!r}: the mic would hear the agent and it would interrupt "
+            "itself. Use headphones, or set audio.allow_speakers for a deliberate echo test."
+        )
+
+
 def local_transport(audio_cfg: dict, audio_out_filter=None) -> LocalAudioTransport:
+    output_index = resolve_device(audio_cfg.get("output_device"), "output")
+    check_echo_risk(output_device_name(output_index), allow_speakers=audio_cfg["allow_speakers"])
     params = LocalAudioTransportParams(
         audio_out_filter=audio_out_filter,
         audio_in_enabled=True,
@@ -42,7 +74,7 @@ def local_transport(audio_cfg: dict, audio_out_filter=None) -> LocalAudioTranspo
         audio_in_sample_rate=audio_cfg["in_sample_rate"],
         audio_out_sample_rate=audio_cfg["out_sample_rate"],
         input_device_index=resolve_device(audio_cfg.get("input_device"), "input"),
-        output_device_index=resolve_device(audio_cfg.get("output_device"), "output"),
+        output_device_index=output_index,
     )
     return LocalAudioTransport(params)
 
