@@ -45,7 +45,15 @@ What the installed package does (pipecat-ai 1.13.0):
 * The undo window starts when the tool returns, so the bot's own sentence uses part of the 5 s.
 * "cancel my other timer" during a window also undoes the held action. That is the safe direction.
 * The status is not called `pending`, because a successful `set_timer` already returns `status: pending` for a timer that is counting down. The runner caught this.
-* Not verified live: `waiting_for_undo` handling by a real LLM (Groq), a timeout on a real slow MCP call (tested with a stand-in handler), and Flux interim transcripts through `PolicyGate`.
+* Not verified live: a timeout on a real slow MCP call (tested with a stand-in handler), and Flux interim transcripts through `PolicyGate`.
+
+## Live check, Oct 31
+
+`bench/task_runner.py` ran once on Groq `gpt-oss-20b`, with fake STT and TTS and each case's own server only. Single runs, so these are not pass rates. Cost $0.0019 and $0.0022.
+
+* First run, 16 of 24. `waiting_for_undo` and `needs_confirmation` were both respected. Four failures were real: the model asked the user for timer and note ids. Four were cases fitted to the fake LLM's wording.
+* After telling the model to find ids itself and loosening those cases, 23 of 24. Every undo, commit, confirm, and decline case behaved. The one miss is `notes_delete_runs_after_undo`, which reached the right result with one extra `list_notes` call. It stays a failure because the extra call is a real LLM round trip.
+* In the runner the window is 0.2 s or 3 s, so the 5 s window itself was not run live.
 
 ## Sources
 

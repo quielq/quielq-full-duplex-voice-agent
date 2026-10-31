@@ -42,7 +42,7 @@ Tool policy (Nov 1):
 - [x] Spoken confirmation and 5 s undo, with "cancel" working in both barge-in modes (679207a; fake STT, not yet with Flux interim transcripts)
 - [x] Startup check for duplicate tool names; log every policy decision (2b0d52b, 679207a)
 - [x] Protect only the commit step, never block the mic (2b0d52b)
-- [ ] Check `waiting_for_undo` and `needs_confirmation` handling on a real LLM (run `bench/task_runner.py` on Groq, needs a go)
+- [x] Check `waiting_for_undo` and `needs_confirmation` handling on a real LLM (Groq `gpt-oss-20b`, one run: 23 of 24, ADR-011)
 
 Test layers (Nov 1 onward):
 
