@@ -21,9 +21,12 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 - [ ] Step 7, Pi port (needs a go):
   - [ ] `scripts/pi_setup.sh` and a smoke test (portaudio19-dev, onnxruntime aarch64 wheels)
   - [ ] Speakerphone plus PipeWire echo-cancel (`scripts/pipewire_aec.conf`)
+  - [ ] Speaker echo test once a speakerphone is in hand, on the Mac first: 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works
   - [ ] CPU and temperature logging
   - [ ] Smart Turn timing on one Pi core
   - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
+
+- [ ] Exercise the ADR-012 socket replacement against live Deepgram (fake-tested only)
 
 ## ADR-009 additions (approved)
 
