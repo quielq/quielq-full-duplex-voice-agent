@@ -1,6 +1,21 @@
 # ADR-014: Request Aura-2 at 16 kHz
 
-Date: Oct 31, 2026. Status: implemented on Quiel's go. Not yet heard in a live run.
+Date: Oct 31, 2026. Status: implemented, but its reasoning was wrong. 16 kHz did not fix the choppy speech, and the sample rate is not the cause.
+
+## Correction
+
+The live run after this change was still choppy (`20261031-160455-22d149`, about 39% of real time). A better test then sent the same text six more times, as `run_id` `delivery-test-2`:
+
+| Send | Rate | Socket | First byte | Speed | Gaps over 200 ms |
+|---|---|---|---|---|---|
+| 1 | 16 kHz | fresh | 0.31 s | 0.56x | 21 |
+| 2 | 24 kHz | fresh | 0.23 s | 2.25x | 0 |
+| 3 | 16 kHz | fresh | 0.23 s | 2.27x | 0 |
+| 4 | 24 kHz | fresh | 0.23 s | 2.25x | 0 |
+| 5 | 16 kHz | reused | 0.36 s | 1.00x | 13 |
+| 6 | 16 kHz | reused | 0.34 s | 0.43x | 44 |
+
+Both rates can be fast, and 16 kHz can be slow. Delivery switches between about 2.25x and under 1x with no Pipecat, mic or speakers involved. The original table below shows that chance, not the rate, separated the first two sends. The remaining text is kept as the record of what was believed at the time.
 
 ## Context
 
