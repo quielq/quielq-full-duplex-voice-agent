@@ -55,7 +55,7 @@ def list_notes() -> dict:
     annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}
 )
 def delete_note(note_id: str) -> dict:
-    """Delete a note by id."""
+    """Delete a note by id. Get the id from list_notes first; never ask the user for it."""
     with _db() as db:
         deleted = db.execute("DELETE FROM notes WHERE id = ?", (note_id,)).rowcount
     if not deleted:

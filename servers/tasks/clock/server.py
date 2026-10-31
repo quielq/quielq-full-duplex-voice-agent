@@ -114,7 +114,7 @@ def list_timers() -> dict:
     annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}
 )
 def cancel_timer(timer_id: str) -> dict:
-    """Cancel a timer or alarm by id."""
+    """Cancel a timer or alarm by id. Get the id from list_timers first; never ask the user for it."""
     with _lock:
         items = _load()
         item = items.pop(timer_id, None)
