@@ -39,6 +39,11 @@ filler:
   after_ms: 600      # hypothesis to tune: no reply audio this long after end of turn
   phrase: one_sec    # from harness/phrase_cache.py
 
+recovery:
+  # Fixed text, no LLM call (harness/recovery.py). The cap notice is skipped if TTS is the capped provider.
+  llm_error_phrase: "Sorry, I had trouble with that. Could you say it again?"
+  cap_phrase: "I've hit today's spending limit, so I'm stopping now."
+
 paths:
   logs_dir: logs
   data_dir: data

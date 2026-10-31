@@ -55,7 +55,8 @@ from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import TASK_SERVERS, task_clients
 from harness.null_output import PacedNullOutputTransport
 from harness.phrase_cache import load_phrase
-from harness.providers import build_llm, build_stt, build_tts
+from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
+from harness.recovery import LLMErrorRecovery
 from harness.tool_policy import PolicyGate, ToolPolicy
 
 SYSTEM_PROMPT = (
@@ -196,11 +197,21 @@ async def run_bot(
     turn_obs = TurnEventObserver(log)
     worker: PipelineWorker | None = None
 
+    cap_hit = False
+
     async def on_cap_reached(provider: str) -> None:
+        nonlocal cap_hit
+        if cap_hit:
+            return
+        cap_hit = True
         log.emit("spend_cap_reached", provider=provider)
         logger.warning(f"{provider}: daily spend cap reached, stopping the agent")
-        if worker is not None:
-            await worker.stop_when_done()
+        if worker is None:
+            return
+        # Never spend past a cap to announce it: if TTS is the capped provider, stay quiet.
+        if STAGE_PROVIDER.get(cfg.providers["stages"]["tts"]) != provider:
+            await worker.queue_frame(TTSSpeakFrame(cfg.profile["recovery"]["cap_phrase"]))
+        await worker.stop_when_done()
 
     cost_obs = CostObserver(ledger, cfg.providers, log.run_id, on_cap_reached)
     log.emit("run_start", profile=cfg.name, input=input_mode, mcp=mcp_transport,
@@ -267,6 +278,9 @@ async def run_bot(
             turn_obs.reply_done.set()
 
         policy.speak = speak
+        worker.add_observer(
+            LLMErrorRecovery(cfg.profile["recovery"]["llm_error_phrase"], speak, lambda: log.turn_id, log.emit)
+        )
 
         async def text_turn(text: str) -> None:
             log.next_turn()
