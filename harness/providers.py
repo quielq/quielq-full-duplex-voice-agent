@@ -85,7 +85,7 @@ def build_llm(providers_cfg: dict, ledger: CostLedger, *, system_instruction: st
     raise ValueError(f"unknown llm stage {choice!r}")
 
 
-def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None):
+def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None, hops=None):
     choice = providers_cfg["stages"]["tts"]
     # SENTENCE aggregation always: token aggregation commits unspoken text on interruption.
     agg = TextAggregationMode.SENTENCE
@@ -99,6 +99,7 @@ def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None):
         _, p, key = _authorize(choice, providers_cfg, ledger)
         return FreshSocketDeepgramTTSService(
             on_event=on_event,
+            hops=hops,
             api_key=key,
             sample_rate=p["tts_sample_rate"],
             mip_opt_out=True,

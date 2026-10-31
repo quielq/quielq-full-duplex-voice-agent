@@ -44,6 +44,7 @@ from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
 from bench.cost_ledger import CostLedger
+from harness.audio_hops import AudioHops, trace_writes
 from harness.audio_io import EchoRisk, local_transport
 from harness.config import Config, load_config
 from harness.costs import CostObserver
@@ -214,7 +215,8 @@ async def run_bot(
             context, user_params=LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
         )
         llm = build_llm(cfg.providers, ledger, system_instruction=SYSTEM_PROMPT)
-        tts = build_tts(cfg.providers, ledger, on_event=log.emit)
+        hops = AudioHops(log.emit)
+        tts = build_tts(cfg.providers, ledger, on_event=log.emit, hops=hops)
         llm.register_function(None, policy.deny_unknown)  # disabled or invented tools stop here
 
         audio = cfg.profile["audio"]
@@ -227,6 +229,7 @@ async def run_bot(
         turn_obs.filler = filler
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain, on_event=log.emit)
+            trace_writes(transport.output(), hops)
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts)
             front = [transport.input(), _vad(cfg), stt, gate, *duck_procs]
             back = [*filler_procs, transport.output()]
