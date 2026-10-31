@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ PROFILES = ("mac", "pi")
 class Config:
     profile: dict[str, Any]
     providers: dict[str, Any]
+    tool_policy: dict[str, Any] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -38,4 +39,6 @@ def load_config(profile: str, configs_dir: Path = CONFIGS_DIR) -> Config:
         prof = yaml.safe_load(f)
     with open(configs_dir / "providers.yaml") as f:
         providers = yaml.safe_load(f)
-    return Config(profile=prof, providers=providers)
+    with open(configs_dir / "tool_policy.yaml") as f:
+        tool_policy = yaml.safe_load(f)
+    return Config(profile=prof, providers=providers, tool_policy=tool_policy)

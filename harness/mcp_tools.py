@@ -22,6 +22,7 @@ from pipecat.services.mcp_service import MCPClient
 from harness.config import REPO_ROOT
 
 CLOCK_MODULE = "servers.tasks.clock.server"
+TASK_SERVERS = {"clock": CLOCK_MODULE}
 
 
 def _server_env(data_dir: str | None) -> dict[str, str]:
@@ -91,10 +92,44 @@ async def clock_http_client(data_dir: str | None = None) -> AsyncIterator[MCPCli
 
 @contextlib.asynccontextmanager
 async def clock_client(transport: str, data_dir: str | None = None) -> AsyncIterator[MCPClient]:
+    async with server_client(CLOCK_MODULE, transport, data_dir) as client:
+        yield client
+
+
+@contextlib.asynccontextmanager
+async def server_client(
+    module: str, transport: str, data_dir: str | None = None
+) -> AsyncIterator[MCPClient]:
     if transport == "stdio":
-        yield clock_stdio_client(data_dir)
+        params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", module],
+            cwd=str(REPO_ROOT),
+            env=_server_env(data_dir),
+        )
+        yield MCPClient(server_params=params)
     elif transport == "http":
-        async with clock_http_client(data_dir) as client:
-            yield client
+        async with http_server(module, data_dir) as url:
+            yield MCPClient(server_params=StreamableHttpParameters(url=url))
     else:
         raise ValueError(f"unknown MCP transport {transport!r}")
+
+
+@contextlib.asynccontextmanager
+async def task_clients(
+    transport: str, data_dir: str | None = None, servers: dict[str, str] | None = None
+) -> AsyncIterator[dict[str, MCPClient]]:
+    """One client per task server, keyed by server name."""
+    clients: dict[str, MCPClient] = {}
+    entered = []
+    try:
+        for name, module in (servers or TASK_SERVERS).items():
+            cm = server_client(module, transport, data_dir)
+            clients[name] = await cm.__aenter__()
+            entered.append(cm)
+        yield clients
+    finally:
+        for client in clients.values():
+            await client.close()
+        for cm in reversed(entered):
+            await cm.__aexit__(None, None, None)

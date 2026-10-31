@@ -1,0 +1,37 @@
+# Per-tool policy, enforced by the harness (harness/tool_policy.py, ADR-009, ADR-010).
+# MCP hints are only hints: this file and the rules in tool_policy.py decide what runs.
+#
+# Defaults from hints, when a tool has no entry under `tools`:
+#   read only, or a write that is not destructive    run at once
+#   destructive, closed world (cancel_timer)         run after the undo window
+#   destructive, open world (calls, messages)        spoken confirmation, then the undo window
+#   hints missing                                    spoken confirmation
+
+defaults:
+  undo_s: 5.0            # destructive tools wait this long; "cancel" stops them
+  timeout_s: 10.0        # for the tool call itself, never counting the undo or confirm wait
+  confirm_wait_s: 20.0   # no answer by then means no
+
+# Words matched on interim and final transcripts while something is held.
+undo_words: ["cancel", "stop", "undo", "wait", "no", "pause"]   # quoted: bare no is a YAML boolean
+yes_words: ["yes", "yeah", "yep", "sure", "okay", "ok", "confirm", "go ahead", "do it"]
+no_words: ["no", "nope", "cancel", "stop", "don't", "do not", "never mind"]
+
+# A held-action answer of this many words or fewer is consumed by the harness. A longer one
+# ("cancel that and set a new timer") still acts on the hold, then reaches the LLM as usual.
+answer_max_words: 3
+yes_max_words: 6   # a longer reply with "okay" in it is not a yes
+
+# Fixed phrases: spoken by the harness with no LLM call.
+phrases:
+  undone: "Okay, I stopped that. Nothing changed."
+  denied: "Okay, I won't do that."
+  confirmed_undo: "Okay. Say cancel in the next {undo_s} seconds to stop it."
+  confirmed_now: "Okay, doing that now."
+  failed: "Sorry, that did not go through."
+
+# Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s.
+tools:
+  cancel_timer:
+    permission: auto
+    undo_s: 5.0
