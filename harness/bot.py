@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,7 +26,7 @@ from loguru import logger
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
-from pipecat.frames.frames import LLMMessagesAppendFrame
+from pipecat.frames.frames import LLMMessagesAppendFrame, TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -49,13 +50,16 @@ from harness.costs import CostObserver
 from harness.ducking import DuckGain, DuckingProcessor
 from harness.events import EventLog, TurnEventObserver
 from harness.file_input import ScriptedMicSource, Segment
-from harness.mcp_tools import clock_client
+from harness.mcp_tools import task_clients
 from harness.null_output import PacedNullOutputTransport
 from harness.providers import build_llm, build_stt, build_tts
+from harness.tool_policy import PolicyGate, ToolPolicy
 
 SYSTEM_PROMPT = (
     "You are a hands-free voice assistant. Replies are spoken aloud, so keep them to one or "
-    "two short sentences with no lists or formatting. Use the tools for timers and alarms."
+    "two short sentences with no lists or formatting. Use the tools for timers and alarms. "
+    "If a tool result says pending or needs_confirmation, it has not happened yet: say so "
+    "briefly and do not call the tool again."
 )
 
 
@@ -68,6 +72,7 @@ class BotResult:
     spoken_text: str = ""
     tool_calls: list[dict] = field(default_factory=list)
     session_usd: float = 0.0
+    policy_decisions: list[dict] = field(default_factory=list)
     context_messages: list[dict] = field(default_factory=list)
     output: PacedNullOutputTransport | None = None
 
@@ -142,18 +147,30 @@ def _vad(cfg: Config) -> VADProcessor:
     return VADProcessor(vad_analyzer=SileroVADAnalyzer(params=params))
 
 
+async def _assistant_committed(context: LLMContext, timeout_s: float = 2.0) -> None:
+    """In text mode nothing paces the next turn, so let the reply reach the context first."""
+    deadline = asyncio.get_running_loop().time() + timeout_s
+    while asyncio.get_running_loop().time() < deadline:
+        messages = context.get_messages()
+        if messages and messages[-1].get("role") == "assistant" and messages[-1].get("content"):
+            return
+        await asyncio.sleep(0.01)
+
+
 async def run_bot(
     cfg: Config,
     *,
     input_mode: str = "mic",
     mcp_transport: str = "stdio",
     say: str = "set a timer for one minute",
+    turns: Sequence[str | float] | None = None,
     wav: Path | None = None,
     segments: list[Segment] | None = None,
     stt_script: list[str] | None = None,
     data_dir: str | None = None,
     reply_timeout_s: float = 60.0,
     handle_sigint: bool = True,
+    servers: dict[str, str] | None = None,
 ) -> BotResult:
     log = EventLog(cfg.path("logs_dir"))
     ledger = CostLedger.from_providers_config(
@@ -172,29 +189,33 @@ async def run_bot(
     log.emit("run_start", profile=cfg.name, input=input_mode, mcp=mcp_transport,
              stages=cfg.providers["stages"])  # fmt: skip
 
-    async with clock_client(mcp_transport, data_dir) as mcp:
+    policy = ToolPolicy(cfg.tool_policy, on_event=log.emit)
+
+    async with task_clients(mcp_transport, data_dir, servers) as clients:
         # The system prompt lives on the LLM service (system messages in LLMContext are
         # deprecated since Pipecat 1.9).
-        context = LLMContext(tools=await mcp.tools())
+        context = LLMContext(tools=await policy.tools(clients))
         aggregators = LLMContextAggregatorPair(
             context, user_params=LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
         )
         llm = build_llm(cfg.providers, ledger, system_instruction=SYSTEM_PROMPT)
         tts = build_tts(cfg.providers, ledger)
+        llm.register_function(None, policy.deny_unknown)  # disabled or invented tools stop here
 
         audio = cfg.profile["audio"]
         source = output = None
         duck_gain, duck_procs = _ducking(cfg, log)
         stt_interrupts = duck_gain is None
+        gate = PolicyGate(policy, on_spoken=turn_obs.reply_done.set)
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain)
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts)
-            front = [transport.input(), _vad(cfg), stt, *duck_procs]
+            front = [transport.input(), _vad(cfg), stt, gate, *duck_procs]
             back = [transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts)
-            front = [source, _vad(cfg), stt, *duck_procs]
+            front = [source, _vad(cfg), stt, gate, *duck_procs]
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
             )
@@ -219,19 +240,42 @@ async def run_bot(
             idle_timeout_secs=None,
         )
 
+        async def speak(text: str) -> None:
+            await worker.queue_frame(TTSSpeakFrame(text))
+            turn_obs.reply_done.set()
+
+        policy.speak = speak
+
+        async def text_turn(text: str) -> None:
+            log.next_turn()
+            log.emit("user_text", text=text)
+            turn_obs.reply_done.clear()
+            if verdict := policy.on_transcript(text):
+                await speak(verdict.phrase)
+                if len(text.split()) <= policy.answer_max_words:
+                    return
+                turn_obs.reply_done.clear()
+            await worker.queue_frame(
+                LLMMessagesAppendFrame(messages=[{"role": "user", "content": text}], run_llm=True)
+            )
+            await asyncio.wait_for(turn_obs.reply_done.wait(), reply_timeout_s)
+            await _assistant_committed(context)
+
         async def finish_after_reply() -> None:
-            if input_mode == "text":
-                log.next_turn()
-                log.emit("user_text", text=say)
-                await worker.queue_frame(
-                    LLMMessagesAppendFrame(messages=[{"role": "user", "content": say}], run_llm=True)
-                )
             try:
+                if input_mode == "text":
+                    # A number in the script is a pause, to outlast an undo window.
+                    for turn in turns or [say]:
+                        if isinstance(turn, str):
+                            await text_turn(turn)
+                        else:
+                            await asyncio.sleep(turn)
                 if source is not None:
                     # Answer the last scripted utterance, not an earlier one.
                     await asyncio.wait_for(source.all_injected.wait(), reply_timeout_s)
                     turn_obs.reply_done.clear()
-                await asyncio.wait_for(turn_obs.reply_done.wait(), reply_timeout_s)
+                    await asyncio.wait_for(turn_obs.reply_done.wait(), reply_timeout_s)
+                await policy.settled()
             except TimeoutError:
                 log.emit("reply_timeout")
                 logger.error(f"no reply within {reply_timeout_s}s")
@@ -249,6 +293,7 @@ async def run_bot(
                 finisher.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await finisher
+            await policy.close()
 
     await cost_obs.flush_tts()
     log.emit("run_end", session_usd=round(cost_obs.session_usd, 6))
@@ -261,6 +306,7 @@ async def run_bot(
         spoken_text=" ".join(turn_obs.spoken_text).strip(),
         tool_calls=turn_obs.tool_calls,
         session_usd=cost_obs.session_usd,
+        policy_decisions=policy.decisions,
         context_messages=list(context.get_messages()),
         output=output,
     )
