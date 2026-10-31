@@ -62,6 +62,7 @@ SYSTEM_PROMPT = (
     "You are a hands-free voice assistant. Replies are spoken aloud, so keep them to one or "
     "two short sentences with no lists or formatting. Use the tools when a request needs them. "
     "Users never know ids: find an id with a list tool, and never ask for one. "
+    "If no tool can do what was asked, say so; never claim you did it. "
     "If a tool result says waiting_for_undo or needs_confirmation, it has not happened yet: say so "
     "briefly and do not call the tool again."
 )
@@ -347,7 +348,7 @@ def main() -> None:
                     help="override the profile's turn.stop")  # fmt: skip
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
     ap.add_argument("--echo-cancel", action="store_true", help="WebRTC AEC, for live runs on speakers")
-    ap.add_argument("--servers", default="", help=f"task servers, default clock: {','.join(TASK_SERVERS)}")
+    ap.add_argument("--servers", default="", help=f"task servers, default all: {','.join(TASK_SERVERS)}")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
         ap.error("--input wav needs --wav")

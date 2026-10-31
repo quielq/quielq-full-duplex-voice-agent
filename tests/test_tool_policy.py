@@ -366,3 +366,14 @@ async def test_get_time_runs_at_once_and_the_reply_uses_the_tool(cfg, tmp_path):
     assert cfg.tool_policy["tools"].get("get_time") is None
     rule = next(e for e in policy_events(r) if e["tool"] == "get_time" and e["decision"] == "registered")
     assert (rule["permission"], rule["undo_s"]) == ("auto", 0.0)
+
+
+async def test_default_run_offers_every_server_and_notes_persist(cfg, tmp_path):
+    # A live run once had clock tools only, so "add a note" reached no tool at all.
+    first = await _text(cfg, tmp_path, ["add a note to buy rice"])
+    assert [c["name"] for c in first.tool_calls] == ["add_note"]
+    offered = {e["tool"] for e in policy_events(first) if e["decision"] == "registered"}
+    assert {"list_notes", "get_thermostat", "send_message", "get_time"} <= offered
+    second = await _text(cfg, tmp_path, ["read my notes"])  # a new session
+    assert [c["name"] for c in second.tool_calls] == ["list_notes"]
+    assert "one note" in second.spoken_text

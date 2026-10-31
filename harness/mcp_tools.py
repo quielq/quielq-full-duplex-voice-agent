@@ -28,7 +28,6 @@ TASK_SERVERS = {
     "thermostat": "servers.tasks.thermostat.server",
     "comms": "servers.tasks.comms.server",
 }
-DEFAULT_SERVERS = {"clock": CLOCK_MODULE}  # the mocks join a live run only with --servers
 
 
 def _server_env(data_dir: str | None) -> dict[str, str]:
@@ -129,7 +128,7 @@ async def task_clients(
     clients: dict[str, MCPClient] = {}
     entered = []
     try:
-        for name, module in (servers or DEFAULT_SERVERS).items():
+        for name, module in (servers or TASK_SERVERS).items():
             cm = server_client(module, transport, data_dir)
             clients[name] = await cm.__aenter__()
             entered.append(cm)

@@ -57,7 +57,7 @@ uv run python -m bench.task_runner --repeat 5             # task suite on fakes,
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
-Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts `clock` only unless `--servers clock,notes,thermostat,comms` says otherwise. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
+Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts all four task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
 
 Live mic runs refuse the built-in speakers unless `--echo-cancel` is set (WebRTC AEC, ADR-013). `uv run python -m bench.echo_probe [--talker]` measures it with no cloud calls and reads aloud through the speakers.
 
