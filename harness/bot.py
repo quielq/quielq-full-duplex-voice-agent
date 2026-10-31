@@ -49,9 +49,11 @@ from harness.config import Config, load_config
 from harness.costs import CostObserver
 from harness.ducking import DuckGain, DuckingProcessor
 from harness.events import EventLog, TurnEventObserver
+from harness.filler import FillerProcessor
 from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import TASK_SERVERS, task_clients
 from harness.null_output import PacedNullOutputTransport
+from harness.phrase_cache import load_phrase
 from harness.providers import build_llm, build_stt, build_tts
 from harness.tool_policy import PolicyGate, ToolPolicy
 
@@ -134,6 +136,18 @@ def _ducking(cfg: Config, log: EventLog) -> tuple[DuckGain | None, list]:
     return gain, [proc]
 
 
+def _filler(cfg: Config, log: EventLog) -> FillerProcessor | None:
+    f = cfg.profile["filler"]
+    if not f["enabled"]:
+        return None
+    rate = cfg.profile["audio"]["out_sample_rate"]
+    clip, real = load_phrase(f["phrase"], rate)
+    if not real:
+        logger.warning(f"no clip for {f['phrase']}: the waiting phrase is a placeholder tone")
+    log.emit("filler_clip", phrase=f["phrase"], real=real)
+    return FillerProcessor(clip, rate, after_ms=f["after_ms"], on_event=log.emit)
+
+
 def _vad(cfg: Config) -> VADProcessor:
     v = cfg.profile["vad"]
     params = VADParams(
@@ -207,11 +221,14 @@ async def run_bot(
         duck_gain, duck_procs = _ducking(cfg, log)
         stt_interrupts = duck_gain is None
         gate = PolicyGate(policy, on_spoken=turn_obs.reply_done.set)
+        filler = _filler(cfg, log)
+        filler_procs = [filler] if filler else []
+        turn_obs.filler = filler
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain)
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts)
             front = [transport.input(), _vad(cfg), stt, gate, *duck_procs]
-            back = [transport.output()]
+            back = [*filler_procs, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts)
@@ -219,7 +236,7 @@ async def run_bot(
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
             )
-            back = [output]
+            back = [*filler_procs, output]
         elif input_mode == "text":
             front, back = [], []
         else:

@@ -82,6 +82,8 @@ class TurnEventObserver(BaseObserver):
         self._response_has_text = False
         # Set when an LLM response that carried text has ended (used by scripted runs).
         self.reply_done = asyncio.Event()
+        # Set by the bot when the waiting phrase is on (harness/filler.py).
+        self.filler = None
 
     def _first(self, name: str, **fields) -> None:
         if name not in self._firsts:
@@ -139,7 +141,8 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, TTSTextFrame):
             self.spoken_text.append(frame.text)
         elif isinstance(frame, BotStartedSpeakingFrame):
-            log.emit("first_audio_out")
+            playing_filler = self.filler is not None and self.filler.playing
+            log.emit("filler_audio_out" if playing_filler else "first_audio_out")
         elif isinstance(frame, BotStoppedSpeakingFrame):
             log.emit("audio_silent")
         elif isinstance(frame, InterruptionFrame):

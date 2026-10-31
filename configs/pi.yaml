@@ -28,6 +28,12 @@ barge_in:
   backchannel_max_words: 1
   allowlist: ["stop", "wait", "no", "cancel", "pause"]   # quoted: bare no is a YAML boolean
 
+filler:
+  # Waiting phrase (harness/filler.py, ADR-009). Off until tested. Never counts toward latency.
+  enabled: false
+  after_ms: 600      # hypothesis to tune: no reply audio this long after end of turn
+  phrase: one_sec    # from harness/phrase_cache.py
+
 paths:
   logs_dir: logs
   data_dir: data

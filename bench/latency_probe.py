@@ -28,6 +28,8 @@ STAGES = [
     ("tts_first_byte", ("first", "llm_first_token"), ("first", "tts_first_byte")),
     ("speech_end_to_tts_first_byte", ("first", "injection_speech_end"), ("first", "tts_first_byte")),
     ("speech_end_to_audio_out", ("first", "injection_speech_end"), ("first", "first_audio_out")),
+    # Reported apart: the waiting phrase never counts toward the latency target (ADR-009).
+    ("end_of_turn_to_filler", ("first", "end_of_turn"), ("first", "filler_audio_out")),
 ]
 
 
@@ -65,12 +67,23 @@ def stage_deltas(events: list[dict]) -> dict[int, dict[str, float]]:
     return out
 
 
+def filler_rate(events: list[dict]) -> tuple[int, int]:
+    """(turns with a waiting phrase, turns). A filler on most turns annoys, so this gets reviewed."""
+    turns = {e["turn_id"] for e in events if e["event"] == "end_of_turn"}
+    played = {e["turn_id"] for e in events if e["event"] == "filler_trigger"}
+    return len(played & turns), len(turns)
+
+
 def main() -> None:
     path = Path(sys.argv[1])
-    for turn, row in stage_deltas(load(path)).items():
+    events = load(path)
+    for turn, row in stage_deltas(events).items():
         print(f"turn {turn}")
         for k, v in row.items():
             print(f"  {k:<30} {v:8.1f} ms")
+    played, turns = filler_rate(events)
+    if played:
+        print(f"waiting phrase on {played} of {turns} turns")
 
 
 if __name__ == "__main__":
