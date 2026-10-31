@@ -1,0 +1,96 @@
+# Clock task cases (ADR-009). Layers: next_reply, tool_call, conversation.
+# Text mode, so these cost LLM tokens only, and nothing on the fake LLM.
+#
+# turns: what the user says, in order. A number is a pause in seconds.
+# seed:  state the mock server starts with (in_s is seconds from now).
+# undo_s: overrides the runner's short undo window for this case.
+# expect:
+#   tools:         exact tool names, in order ([] means no tool)
+#   tools_include: names that must appear, in any order, with any others
+#   args:          per tool, keys that must match. Exact, or {re: pattern}.
+#   state:         per server, count and/or has (items that must exist)
+#   spoken_re:     pattern the spoken reply must match
+#   silent:        true if the agent must say nothing
+
+server: clock
+cases:
+  - id: next_set_timer
+    layer: next_reply
+    turns: ["set a timer for five minutes"]
+    expect: {tools: [set_timer]}
+
+  - id: next_list
+    layer: next_reply
+    turns: ["what timers do I have"]
+    expect: {tools: [list_timers]}
+
+  - id: next_no_tool
+    layer: next_reply
+    turns: ["hello there"]
+    expect: {tools: []}
+
+  - id: next_alarm
+    layer: next_reply
+    turns: ["set an alarm for 07:30"]
+    expect: {tools: [set_alarm]}
+
+  - id: args_timer_minutes
+    layer: tool_call
+    turns: ["set a timer for five minutes"]
+    expect:
+      tools: [set_timer]
+      args: {set_timer: {duration_seconds: 300}}
+      state: {clock: {count: 1, has: [{kind: timer}]}}
+
+  - id: args_timer_seconds
+    layer: tool_call
+    turns: ["set a timer for 90 seconds"]
+    expect:
+      tools: [set_timer]
+      args: {set_timer: {duration_seconds: 90}}
+      state: {clock: {count: 1}}
+
+  - id: args_alarm
+    layer: tool_call
+    turns: ["set an alarm for 07:30"]
+    expect:
+      tools: [set_alarm]
+      args: {set_alarm: {time_hhmm: {re: "^07:30$"}}}
+      state: {clock: {count: 1, has: [{kind: alarm}]}}
+
+  - id: cancel_existing
+    layer: tool_call
+    seed: {clock: [{id: abc12345, kind: timer, label: "", in_s: 600}]}
+    turns: ["cancel my timer"]
+    expect:
+      tools_include: [cancel_timer]
+      args: {cancel_timer: {timer_id: abc12345}}
+      state: {clock: {count: 0}}
+
+  - id: conv_set_list_cancel
+    layer: conversation
+    turns:
+      - "set a timer for five minutes"
+      - "what timers do I have"
+      - "cancel my timer"
+    expect:
+      tools: [set_timer, list_timers, list_timers, cancel_timer]
+      state: {clock: {count: 0}}
+
+  - id: conv_undo_keeps_timer
+    layer: conversation
+    undo_s: 3.0
+    seed: {clock: [{id: abc12345, kind: timer, label: "", in_s: 600}]}
+    turns: ["cancel my timer", "cancel"]
+    expect:
+      tools_include: [cancel_timer]
+      spoken_re: "stopped that"
+      state: {clock: {count: 1}}
+
+  - id: conv_cancel_nothing
+    layer: conversation
+    turns: ["cancel my timer"]
+    expect:
+      tools: [list_timers]
+      spoken_re: "no timers"
+      state: {clock: {count: 0}}
