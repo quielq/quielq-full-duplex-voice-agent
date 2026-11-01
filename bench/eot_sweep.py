@@ -111,6 +111,8 @@ def _value(name: str, raw: str) -> float | int | None:
 async def run_clip(args, name: str, value, kind: str, text: str, wav: Path, workdir: Path) -> dict:
     cfg = load_config("mac")  # real ledger path, so live spend counts against the caps
     cfg.providers["stages"] = {"stt": args.stt, "llm": args.llm, "tts": "fake"}
+    if args.model:
+        cfg.providers["providers"]["groq"]["model"] = args.model
     cfg.providers["providers"]["deepgram"]["flux"].update(args.fixed)
     if name == "reply_templates":
         cfg.tool_policy["reply_templates"]["enabled"] = value
@@ -189,6 +191,7 @@ def main() -> None:
     ap.add_argument("--stt", choices=["fake", "deepgram_flux"], default="fake")
     ap.add_argument("--llm", choices=["fake", "groq"], default="fake")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--model", help="override the Groq model for this run")
     ap.add_argument("--kinds", default="", help="only these clip kinds, e.g. command")
     args = ap.parse_args()
     if (args.stt != "fake" or args.llm != "fake") and os.environ.get("ME3_LIVE") != "1":
