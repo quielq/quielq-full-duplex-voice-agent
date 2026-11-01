@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -68,6 +70,39 @@ def test_an_unreadable_page_is_an_answer_not_a_crash(monkeypatch):
     monkeypatch.setenv("ME3_TOOL_STAGES", "fetch=http")
     monkeypatch.setattr(knowledge, "_get", broken)
     assert "fetch failed" in knowledge.fetch_content("https://example.com/x.pdf")["error"]
+
+
+def small_pdf(pages):
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(100, 100)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def test_a_pdf_page_past_the_end_is_empty_not_a_crash():
+    assert knowledge.pdf_text(small_pdf(3), 9) == ("", 3)
+
+
+def test_a_long_pdf_stops_reading_once_it_has_enough(monkeypatch):
+    read = []
+
+    class Page:
+        def __init__(self, n):
+            self.n = n
+
+        def extract_text(self):
+            read.append(self.n)
+            return "x" * 3000
+
+    import pypdf
+
+    monkeypatch.setattr(pypdf, "PdfReader", lambda f: SimpleNamespace(pages=[Page(i) for i in range(100)]))
+    text, pages = knowledge.pdf_text(b"", 11)
+    assert pages == 100 and read == [10, 11] and len(text) > knowledge.MAX_CHARS
 
 
 def test_every_weather_code_has_words():

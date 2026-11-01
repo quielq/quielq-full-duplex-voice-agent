@@ -28,7 +28,7 @@ Finish on the Mac and then move to the Pi. Every part below is chosen at run tim
 
 ## Consequences
 
-- Live tests found what fakes could not: a PDF over 2 MB crashed `fetch_content`. It now says the PDF is too large, so long papers cannot be read.
+- Live tests found what fakes could not: a PDF over 2 MB crashed `fetch_content`. PDFs up to 30 MB now load in full, and `fetch_content` returns about 4,000 characters from a chosen `page`, stopping early so a long paper stays quick.
 - `doctor` found that `sandbox-exec` treats an allow rule with no paths as allow everything. Fixed, with a test.
 - Each read-back replaces an LLM reply, so it costs nothing extra in tokens.
 - A user who barges in on a read-back and then says yes has not heard all of it. The undo window is the backstop.
