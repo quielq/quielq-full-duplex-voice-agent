@@ -4,6 +4,7 @@ machine. Bubblewrap cannot run on a Mac, so the Pi arguments are only checked fo
 from __future__ import annotations
 
 import socket
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -117,6 +118,15 @@ def test_a_service_can_listen_on_this_machine_only(live):
     else:
         pytest.fail(workspace.serve_status("web").get("log", "no log"))
     workspace.serve("stop", "web")
+
+
+@darwin_only
+def test_no_read_only_folders_does_not_open_every_read(tmp_path):
+    secret = tmp_path / "secret"
+    secret.write_text("no")
+    (tmp_path / "work").mkdir()
+    argv = sandbox.wrap(["/bin/cat", str(secret)], tmp_path / "work", [], {})
+    assert subprocess.run(argv, capture_output=True).returncode != 0
 
 
 def test_no_sandbox_means_nothing_runs(live, monkeypatch):

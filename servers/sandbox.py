@@ -43,8 +43,9 @@ def _mac_profile(root: Path, read_only: list[Path], network: Network) -> str:
         f"(allow file-read* {subpaths(MAC_SYSTEM_READS)})",
         '(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper") (regex #"^/dev/tty"))',
         f"(allow file-read* file-write* {subpaths([root])})",
-        f"(allow file-read* {subpaths(read_only)})",
     ]
+    if read_only:  # an empty allow rule has no filter, and would allow every read
+        rules.append(f"(allow file-read* {subpaths(read_only)})")
     for parent in root.parents:  # a shell must be able to stat its way to its own folder
         rules.append(f"(allow file-read-metadata (literal {json.dumps(str(parent))}))")
     if network == "local":
