@@ -16,6 +16,8 @@ from typing import Any
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    EagerEndOfTurnCancelFrame,
+    EagerTranscriptionFrame,
     ErrorFrame,
     FunctionCallInProgressFrame,
     FunctionCallResultFrame,
@@ -113,7 +115,13 @@ class TurnEventObserver(BaseObserver):
             log.emit("end_of_turn")
         elif isinstance(frame, TranscriptionFrame):
             self.transcripts.append(frame.text)
-            log.emit("asr_final", text=frame.text)
+            # Flux says why the turn ended; other STTs have no such field.
+            result = frame.result if isinstance(frame.result, dict) else {}
+            log.emit("asr_final", text=frame.text, trigger=result.get("trigger"))
+        elif isinstance(frame, EagerTranscriptionFrame):
+            log.emit("eager_eot", text=frame.text)
+        elif isinstance(frame, EagerEndOfTurnCancelFrame):
+            log.emit("eager_cancel")
         elif isinstance(frame, LLMFullResponseStartFrame):
             self._response_has_text = False
             log.emit("llm_request")
