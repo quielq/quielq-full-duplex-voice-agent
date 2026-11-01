@@ -25,7 +25,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - `MCPClient` has no notification hook. `harness/voice_bridge.py` (`VoiceMCPBridge`) uses the raw MCP SDK `ClientSession` with a logging callback. Use `MCPClient` for ordinary tools.
 - Pins move together: `pipecat-ai==1.13.0`, `fastmcp>=4.1,<5`, `mcp>=2,<3` (PR 5624 is merged). Test stdio and streamable HTTP. Do not add the `local-smart-turn` extra (ADR-001).
 - Truncating context to what was heard needs TTS word timestamps: Cartesia, ElevenLabs WebSocket, Rime. Not Deepgram Aura-2 or Flux TTS. Aura-2 for bulk development, Cartesia for truncation tests and final runs.
-- Every MCP tool carries `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. They are hints: the harness enforces policy. Destructive tools default to a mock with a roughly 5 s undo window. `harness/tool_policy.py` enforces this (ADR-011): a tool result of `waiting_for_undo` or `needs_confirmation` means it has not run, and only a transcript can release it.
+- Every MCP tool carries `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. They are hints: the harness enforces policy. Destructive tools default to a mock with a roughly 5 s undo window. `harness/tool_policy.py` enforces this (ADR-011): a tool result of `waiting_for_undo` or `needs_confirmation` means it has not run, and only a transcript can release it. Anything open world and destructive needs a `readback` in `configs/tool_policy.yaml`, so the harness asks from the real arguments and the model does not (ADR-024).
 - Tool names must be unique across all servers (Pipecat flattens them), so prefer `list_timers` over `list`.
 - Headline latency comes from audio timestamps. Pipecat metrics frames are attribution only.
 - Python 3.13 on both machines, managed by uv (ADR-002).
@@ -39,7 +39,7 @@ harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy
 servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (not built)
 bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
-docs/           architecture.md, research.md, prompt.md, decisions/
+docs/           architecture.md, tools.md, research.md, prompt.md, decisions/
 ```
 
 ```
@@ -67,7 +67,13 @@ Spotify (demo only, ADR-022): register the redirect URI, run `uv run python -m b
 
 Live mic runs refuse the built-in speakers unless `--echo-cancel` is set (WebRTC AEC, ADR-013). `uv run python -m bench.echo_probe [--talker]` measures it with no cloud calls and reads aloud through the speakers.
 
-General tools (ADR-021): search, weather, and fetch default to fakes (`ME3_TOOL_STAGES=search=ddgs,weather=open_meteo,fetch=http`, caps start at zero). File tools are real but confined to `data/workspace`, with `data/documents` read-only. `bash` and `serve` are mocks unless `ME3_WORKSPACE_LIVE=1`, which is not an OS sandbox. `send_file` is always a mock.
+General tools (ADR-021, ADR-024): weather and fetch are real by default, and `search` is a fake until `ME3_TOOL_STAGES=search=tavily`. File tools are real but confined to `data/workspace`, with `data/documents` read-only. `send_file` is always a mock.
+
+`bash` and `serve` are mocks unless `ME3_WORKSPACE_LIVE=1`. Live, they pass `servers/shell_guard.py` and run in `servers/sandbox.py` (`sandbox-exec` on the Mac, `bwrap` on the Pi). With no sandbox they refuse. Never weaken this.
+
+Messages and calls are mocks unless `ME3_TOOL_STAGES=comms=bridge`, which needs `scripts/mac_phone_bridge.py` running on the Mac, the bridge settings in `.env`, and `data/contacts.yaml`. Calls need a click on the Mac.
+
+How tools work, how to add one, and which guardrails it needs: `docs/tools.md`. Read it before adding or changing a tool.
 
 Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by default and has only run on fakes (ADR-016). Mute: `kill -USR1 <pid>` in mic mode.
 

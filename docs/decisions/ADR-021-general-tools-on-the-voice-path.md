@@ -65,6 +65,10 @@ Fakes pick tools by rule, so these runs say nothing about whether a real model s
 
 Run `20261101-192724-03eda3` asked "What files can you see?". No tool listed files, so the model chose `bash` with `ls -la`, which needs spoken confirmation and is a mock. `list_files` is read only, so it runs at once. It lists both folders, newest first, so "the latest file" is answerable. `~/Downloads` stays outside the roots.
 
+## Addendum, Nov 1, 2026: ADR-024
+
+ADR-024 turns on weather and fetching by default, closes the DNS rebinding gap, and adds a read-back, a command guard, and an OS sandbox for `bash` and `serve`. The sandbox consequence above is resolved by it.
+
 ## Sources
 
 - https://github.com/sibyl-oracles/onit/blob/main/docs/TOOLS.md
