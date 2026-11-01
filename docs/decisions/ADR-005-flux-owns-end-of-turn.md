@@ -28,7 +28,7 @@ The Smart Turn arm of the A/B uses an STT that can finalize on local VAD stop (D
 
 These are framework timings, not acoustic ones, and well above the p50 under 1.0 s target. The end of turn wait is the largest block. Levers to try: Flux `eot_threshold`, eager end of turn (`EagerUserTurnStrategies`), and the Nova-3 plus Smart Turn arm.
 
-Update, Nov 1, 2026 (ADR-018): the threshold and eager levers were tested and neither changed a default. "No finalize message" holds for Pipecat 1.13 only: Deepgram documents `ForceEndTurn`, which Pipecat does not send, so Smart Turn may be able to end a Flux turn without Nova-3. Not yet tried.
+Update, Nov 1, 2026 (ADR-018): the threshold and eager levers were tested and neither changed a default. "No finalize message" holds for Pipecat 1.13 only: Deepgram documents `ForceEndTurn`, which Pipecat does not send, so Smart Turn may be able to end a Flux turn without Nova-3. ADR-019 built this as `flux_forced`. It works but did not earn the default.
 
 ## Alternatives
 

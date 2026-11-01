@@ -52,7 +52,7 @@ Keep `eot_threshold` at 0.7, `eot_timeout_ms` at 5000, and eager end of turn off
 
 - The wait on complete sentences has a floor of about 1.0 s that this threshold does not move, so Flux settings cannot reach the p50 target of 1.0 s. Non-tool replies sit near 1.8 s and tool replies near 2.8 s with fake TTS.
 - Flux's own pause handling is the weak point: 0.7 cuts half of the clips with a long pause. `say` pauses are clean silence after an unfinished phrase, and a person may differ, so this needs checking on the live mic.
-- Deepgram documents a `ForceEndTurn` message, which ADR-005 assumed did not exist. With `eot_threshold=1.0`, a local detector can end a Flux turn. Pipecat 1.13 does not send it, but `_transport_send_json` is available. This is the next lever for the 1.0 s floor, and needs a spike.
+- Deepgram documents a `ForceEndTurn` message, which ADR-005 assumed did not exist. With `eot_threshold=1.0`, a local detector can end a Flux turn. Pipecat 1.13 does not send it, but `_transport_send_json` is available. This is the next lever for the 1.0 s floor, and needs a spike (done in ADR-019, not adopted).
 - Withdrawn LLM calls report no usage, because Groq sends it in the last chunk. `CostObserver` now records an estimate of the prompt tokens (`llm_input_tokens_est`), which can count a call twice and errs high.
 - The gap after a tool call is untouched, and it is about 1 s of the difference between tool and non-tool turns.
 

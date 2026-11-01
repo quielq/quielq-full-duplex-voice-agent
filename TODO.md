@@ -70,7 +70,8 @@ Waiting phrase (Nov 2):
 ## Latency (about 2.8 s now, target p50 under 1.0 s)
 
 - [x] Tune Flux end of turn: `eot_threshold` stays 0.7, timeout unchanged, eager stays off (ADR-018)
-- [ ] Spike `ForceEndTurn` with Smart Turn: the wait on complete sentences has a floor of about 1.0 s that Flux settings do not move, and 0.7 cuts half of the clips with a long pause (ADR-018)
+- [x] Spike `ForceEndTurn` with Smart Turn: built as `turn.stop: flux_forced`, failed the 300 ms rule on questions, stays off (ADR-019)
+- [ ] Optional: try a shorter Smart Turn `stop_secs` with `flux_forced`, whose worst waits reach 5.7 s (ADR-019)
 - [ ] Check mid-sentence pauses on the live mic: `say` pauses may be harsher than a person (ADR-018)
 - [ ] Add Deepgram Nova-3 so Smart Turn can be A/B tested against Flux fairly
 - [ ] Cut the gap after a tool call (two LLM round trips per tool turn); try streaming the confirmation
