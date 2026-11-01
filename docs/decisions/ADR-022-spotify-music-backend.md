@@ -31,12 +31,15 @@ A live run on Nov 1, 2026 said "now playing" and nothing played. On the open Mac
 
 The cause on Spotify's side is unknown. Pause through the Web API did work on the playing app.
 
+A second test the same day, with a track loaded in the Mac app: Web API pause and resume kept the position, Web API next and previous returned 200, though the track names did not show a change because both were called "Dive". AppleScript next and previous changed the track. Queueing search results returned 200, but next after "Dive" gave "Dive - Acoustic". Playing a track in its album context made next go to the album's next song. One AppleScript play passed the 2.5 s limit while the app did start the song, so a timeout now leaves the decision to the start check.
+
 ## Decision
 
 - `servers/tasks/music/backends.py` holds `MockBackend` (the default) and `SpotifyBackend`. The tool names stay `play_music`, `stop_music`, `set_volume`, and `get_now_playing`, so the task suite stays on the mock.
 - `--stages music=spotify` selects Spotify. The bot passes it to the server as `ME3_MUSIC_BACKEND`.
 - `play_music` queues the search results over the Web API, so a mood keeps playing after one track. The result carries `now_playing`, the track Spotify started, and the reply template uses it.
-- On macOS, when the chosen device is a computer, `play_music` starts the first result in the local app through AppleScript instead. It plays that one track, not a queue. This assumes the listed computer is this Mac.
+- On macOS, when the chosen device is a computer, `play_music` starts the first result inside its album in the local app through AppleScript instead. The album supplies the next songs, so a mood stays in one album. This assumes the listed computer is this Mac.
+- `resume_music`, `next_track`, and `previous_track` use the Web API on every device, and `stop_music` is a pause. Each reports the track Spotify shows afterwards, and fails if the player did not move. `previous_track` may restart the current song, as Spotify decides.
 - `play_music` succeeds only once `GET /me/player` shows an asked-for track playing, checked for about 3 s. A 204 alone is not success, and a track that was already playing does not count.
 - Device order is the active device, then a computer, then anything else. A smart speaker never starts unless it is already active or the only device.
 - A failure returns `{"error": ...}`, which the harness treats as failed, so the success template cannot claim that music started. The text never holds a response body.
@@ -46,7 +49,8 @@ The cause on Spotify's side is unknown. Pause through the Web API did work on th
 
 ## Alternatives
 
-- `search_and_play`, `pause`, `next`, and `previous` from the review: `next` and `previous` wait until they are asked for, and the other two already exist under the names above.
+- `search_and_play`, `pause`, `next`, and `previous` from the review: `next` and `previous` were added once Quiel asked for them, as `next_track` and `previous_track`, because tool names must be unique across servers. The other two already exist under the names above.
+- Queueing search results after a local play: it needs up to nine more requests per play, and a song search mostly returns other versions of that song.
 - Authorization code with PKCE needs no client secret, but its refresh tokens rotate on each use. The chosen flow did not rotate in the spike, and a rotated token is still saved if one arrives.
 - Playing Spotify audio through the harness: Spotify's terms and the Web API do not provide it, and it would need a device library such as librespot. Audio stays in the Spotify app.
 
