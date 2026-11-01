@@ -24,7 +24,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - MCP carries control only. Audio flows on a local side channel. Voice tools: `listen`, `stop_listening`, `speak`, `stop`, `duck`, `unduck`, `interrupt`. Events (`speech_started`, `played_up_to` with word index and ms offset, ...) are MCP logging notifications on the `voice` logger, sent while `speak` or `listen` is open, because the sessionless MCP protocol drops unrelated notifications (ADR-008).
 - `MCPClient` has no notification hook. `harness/voice_bridge.py` (`VoiceMCPBridge`) uses the raw MCP SDK `ClientSession` with a logging callback. Use `MCPClient` for ordinary tools.
 - Pins move together: `pipecat-ai==1.13.0`, `fastmcp>=4.1,<5`, `mcp>=2,<3` (PR 5624 is merged). Test stdio and streamable HTTP. Do not add the `local-smart-turn` extra (ADR-001).
-- Truncating context to what was heard needs TTS word timestamps: Cartesia, ElevenLabs WebSocket, Rime. Not Deepgram Aura-2 or Flux TTS. Aura-2 for bulk development, Cartesia for truncation tests and final runs.
+- Truncating context to what was heard needs TTS word timestamps: Cartesia, ElevenLabs WebSocket, Rime. Not Deepgram Aura-2 or Flux TTS. Cartesia is the live TTS (ADR-015, chosen by Quiel Nov 1, 2026). Aura-2 stays available but cannot truncate.
 - Every MCP tool carries `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. They are hints: the harness enforces policy. Destructive tools default to a mock with a roughly 5 s undo window. `harness/tool_policy.py` enforces this (ADR-011): a tool result of `waiting_for_undo` or `needs_confirmation` means it has not run, and only a transcript can release it. Anything open world and destructive needs a `readback` in `configs/tool_policy.yaml`, so the harness asks from the real arguments and the model does not (ADR-024).
 - Tool names must be unique across all servers (Pipecat flattens them), so prefer `list_timers` over `list`.
 - Headline latency comes from audio timestamps. Pipecat metrics frames are attribution only.
@@ -61,7 +61,7 @@ uv run python -m bench.eot_sweep --grid eot_threshold=0.7  # end-of-turn sweep o
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
-Live runs: add `--stages stt=deepgram_flux,llm=anthropic,tts=deepgram_aura2` to `harness.bot` (Haiku 5.5, ADR-025; Groq's rate limits stop long runs). Defaults stay fake. The bot starts all nine task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=anthropic --all-servers` needs `ME3_LIVE=1`.
+Live runs: add `--stages stt=deepgram_flux,llm=anthropic,tts=cartesia` to `harness.bot` (Haiku 5.5, ADR-025; Groq's rate limits stop long runs). Defaults stay fake. The bot starts all nine task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=anthropic --all-servers` needs `ME3_LIVE=1`.
 
 Spotify (demo only, ADR-022): register the redirect URI, run `uv run python -m bench.spotify_login` once, open the Spotify app, then add `music=spotify` to `--stages`. Audio plays in the Spotify app, not through the harness.
 
