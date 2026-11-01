@@ -28,3 +28,17 @@ cases:
     expect:
       tools: [play_music, stop_music]
       state: {music: {has: [{playing: false}]}}
+
+  - id: music_conv_pause_then_resume
+    layer: conversation
+    turns: ["play some jazz", "stop the music", "resume the music"]
+    expect:
+      tools: [play_music, stop_music, resume_music]
+      state: {music: {has: [{playing: true}]}}
+
+  - id: music_conv_skip_forward_and_back
+    layer: conversation
+    turns: ["play some jazz", "play the next song", "play the previous song"]
+    expect:
+      tools: [play_music, next_track, previous_track]
+      state: {music: {has: [{playing: true}]}}

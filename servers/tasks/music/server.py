@@ -44,7 +44,7 @@ def get_now_playing() -> dict:
     annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def play_music(query: Annotated[str, Field(min_length=1, description="Song, artist, or mood")]) -> dict:
-    """Play music matching a search."""
+    """Search for music and start it from the beginning. To continue paused music, use resume_music."""
     return _run(lambda: _backend().play(query))
 
 
@@ -52,8 +52,32 @@ def play_music(query: Annotated[str, Field(min_length=1, description="Song, arti
     annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def stop_music() -> dict:
-    """Stop the music."""
+    """Pause the music. resume_music continues it from the same point."""
     return _run(lambda: _backend().stop())
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
+)
+def resume_music() -> dict:
+    """Continue paused music from where it stopped. Use this for resume, continue, or play it again after a pause."""
+    return _run(lambda: _backend().resume())
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True}
+)
+def next_track() -> dict:
+    """Skip to the next song."""
+    return _run(lambda: _backend().next())
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True}
+)
+def previous_track() -> dict:
+    """Go back to the previous song. Spotify may restart the current song instead."""
+    return _run(lambda: _backend().previous())
 
 
 @mcp.tool(
