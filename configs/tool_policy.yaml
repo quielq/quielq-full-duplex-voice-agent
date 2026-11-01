@@ -10,7 +10,7 @@
 defaults:
   undo_s: 5.0            # destructive tools wait this long; "cancel" stops them
   timeout_s: 10.0        # for the tool call itself, never counting the undo or confirm wait
-  confirm_wait_s: 20.0   # no answer by then means no
+  confirm_wait_s: 20.0   # no answer this long after the question has played means no
   announce_wait_s: 30.0  # the undo window opens once the user has heard about it; if that never happens, drop it
 
 # Words matched on interim and final transcripts while something is held.
@@ -45,9 +45,13 @@ reply_templates:
     set_thermostat: "Thermostat set to {target_c:g} degrees."
     set_light: "The {room} light is {on_off}."
     play_music: "Playing {now_playing}."
-    stop_music: "Music stopped."
+    stop_music: "Music paused."
+    resume_music: "Resuming {now_playing}."
+    next_track: "Playing {now_playing}."
+    previous_track: "Playing {now_playing}."
 
-# Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s.
+# Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s, report_result.
+# report_result: true by default. A held tool's success gets one more LLM reply (ADR-023).
 tools:
   cancel_timer:
     permission: auto

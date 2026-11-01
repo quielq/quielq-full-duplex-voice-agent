@@ -10,7 +10,14 @@ outcome then replaces that tool message in the context, so the LLM sees one curr
 with no new message role and no async-tool text in the system prompt.
 
 The undo window opens when the user has heard about it, not when the tool is held, so a slow
-reply cannot use it up (ADR-017). If that never happens the action is dropped, not run.
+reply cannot use it up (ADR-017). If that never happens the action is dropped, not run. A
+confirmation works the same way: only a transcript after the question can answer it, and the
+wait for an answer starts when the question has played. Until then a transcript may be the
+bot's own opening line coming back through the mic.
+
+A held tool finishes after the turn that asked for it, so nothing else would make the LLM say
+how it went. A success then starts one more LLM reply (ADR-023). The result stays in the tool
+message: the note that starts the reply is fixed text, so tool output never gets the user role.
 
 Only the commit step is protected. An interruption cannot touch a held action (only a
 transcript can), and once a write has started it finishes even if the user barges in; the
@@ -57,6 +64,11 @@ from pipecat.services.mcp_service import MCPClient
 
 PERMISSIONS = ("auto", "confirm", "disabled")
 HINT_FIELDS = ("read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint")
+RESULT_NOTE = (
+    "(Automatic note, not from the user: the held action has finished and its tool result above "
+    "is current, even if earlier replies said otherwise. Tell the user the outcome in one short "
+    "sentence, and do not call a tool.)"
+)
 
 
 def spoken_duration(seconds: int) -> str:
@@ -94,6 +106,7 @@ class ToolRule:
     timeout_s: float
     read_only: bool = False
     source: str = "hints"
+    report_result: bool = True  # held tools only: an LLM reply says how it went
 
 
 def default_rule(name: str, hints: dict | None, defaults: dict) -> ToolRule:
@@ -118,7 +131,7 @@ def default_rule(name: str, hints: dict | None, defaults: dict) -> ToolRule:
 def apply_override(rule: ToolRule, override: dict | None) -> ToolRule:
     if not override:
         return rule
-    unknown = set(override) - {"permission", "undo_s", "timeout_s"}
+    unknown = set(override) - {"permission", "undo_s", "timeout_s", "report_result"}
     if unknown:
         raise ValueError(f"{rule.name}: unknown tool policy keys {sorted(unknown)}")
     permission = override.get("permission", rule.permission)
@@ -129,6 +142,7 @@ def apply_override(rule: ToolRule, override: dict | None) -> ToolRule:
         permission=permission,
         undo_s=float(override.get("undo_s", rule.undo_s)),
         timeout_s=float(override.get("timeout_s", rule.timeout_s)),
+        report_result=bool(override.get("report_result", rule.report_result)),
         source="override",
     )
 
@@ -162,6 +176,7 @@ class HeldAction:
     announced: bool = False  # the reply or phrase telling the user is on its way
     await_bot_start: bool = False  # a fixed phrase: speech already playing does not count
     window_open: bool = False
+    answer_clock: bool = False  # the confirm wait is running from the end of the question
 
 
 @dataclass
@@ -202,6 +217,8 @@ class ToolPolicy:
         self._background: set[asyncio.Task] = set()
         # Set by the bot once the pipeline exists; speaks a fixed phrase.
         self.speak: Callable[..., Awaitable[None]] | None = None
+        # Set by the bot too; starts an LLM reply after adding this note to the context.
+        self.report: Callable[[str], Awaitable[None]] | None = None
         # Set by the bot. Text mode has no playback, so a finished reply counts as heard.
         self.plays_audio = False
         replies = config.get("reply_templates") or {}
@@ -315,7 +332,9 @@ class ToolPolicy:
         self._held.append(action)
         self._decide(rule.name, f"hold_{state}", args=dict(params.arguments), undo_s=rule.undo_s)
         if state == "confirm":
-            action.task = self._spawn(self._confirm_expiry(action))
+            defaults = self._cfg["defaults"]
+            wait_s = defaults["announce_wait_s"] if self.plays_audio else defaults["confirm_wait_s"]
+            action.task = self._spawn(self._confirm_expiry(action, wait_s))
             result = {
                 "status": "needs_confirmation",
                 "note": "Not done. Ask the user to confirm in one short question, then stop. "
@@ -344,8 +363,8 @@ class ToolPolicy:
         task.add_done_callback(self._background.discard)
         return task
 
-    async def _confirm_expiry(self, action: HeldAction) -> None:
-        await asyncio.sleep(self._cfg["defaults"]["confirm_wait_s"])
+    async def _confirm_expiry(self, action: HeldAction, wait_s: float) -> None:
+        await asyncio.sleep(wait_s)
         self._finish(action, "denied_timeout", {"status": "not_done", "reason": "no answer"})
 
     async def _announce_expiry(self, action: HeldAction) -> None:
@@ -364,6 +383,9 @@ class ToolPolicy:
     def _unannounced(self) -> list[HeldAction]:
         return [a for a in self._held if a.state == "undo" and not a.window_open]
 
+    def _awaiting_answer(self) -> list[HeldAction]:
+        return [a for a in self._held if a.state == "confirm"]
+
     def reply_ended(self) -> None:
         """An LLM reply with text has ended, so a held action in the context has been announced."""
         for action in self._unannounced():
@@ -371,6 +393,9 @@ class ToolPolicy:
                 action.announced = True
                 if not self.plays_audio:
                     self._open_window(action)
+        for action in self._awaiting_answer():
+            if action.in_context:
+                action.announced = True
 
     def bot_started(self) -> None:
         for action in self._unannounced():
@@ -380,6 +405,11 @@ class ToolPolicy:
         for action in self._unannounced():
             if action.announced and not action.await_bot_start:
                 self._open_window(action)
+        for action in self._awaiting_answer():
+            if action.announced and not action.answer_clock:
+                action.answer_clock = True
+                action.task.cancel()
+                action.task = self._spawn(self._confirm_expiry(action, self._cfg["defaults"]["confirm_wait_s"]))
 
     async def _undo_window(self, action: HeldAction) -> None:
         await asyncio.sleep(action.rule.undo_s)
@@ -392,6 +422,9 @@ class ToolPolicy:
         self._finish(action, "commit_failed" if failed else "committed", {"status": "failed" if failed else "done", "result": result})  # fmt: skip
         if failed and self.speak:
             await self.speak(self.phrases["failed"])
+        elif not failed and action.rule.report_result and self.report:
+            self._decide(action.rule.name, "result_reported")
+            await self.report(RESULT_NOTE)
 
     async def _call(self, rule: ToolRule, inner, params: FunctionCallParams) -> Any:
         """Run the real tool with the policy timeout and return its result."""
@@ -471,7 +504,7 @@ class ToolPolicy:
             if self._no_re.search(text):
                 self._end_hold(action, "denied_user", "the user declined", text)
                 return Verdict("denied", self.phrases["denied"])
-            if not final:
+            if not final or (self.plays_audio and not action.announced):
                 continue
             if self._yes_re.search(text) and len(text.split()) <= self._yes_max_words:
                 return self._confirm(action, text)
@@ -489,6 +522,10 @@ class ToolPolicy:
             action.task.cancel()
         self._decide(action.rule.name, "confirmed", text=text)
         undo_s = action.rule.undo_s
+        # A longer yes also reaches the LLM, which must not still read "needs_confirmation".
+        when = f"runs in {undo_s:g} seconds unless they say cancel" if undo_s > 0 else "is running now"
+        action.outcome = {"status": "confirmed", "note": f"The user said yes. It {when}. Do not call this tool again."}
+        self._write_back(action)
         if undo_s > 0:
             action.state = "undo"
             action.announced = True

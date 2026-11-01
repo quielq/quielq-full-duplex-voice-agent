@@ -334,7 +334,13 @@ async def run_bot(
             await worker.queue_frame(TTSSpeakFrame(text, append_to_context=append_to_context))
             turn_obs.reply_done.set()
 
+        async def report(note: str) -> None:
+            await worker.queue_frame(
+                LLMMessagesAppendFrame(messages=[{"role": "user", "content": note}], run_llm=True)
+            )
+
         policy.speak = speak
+        policy.report = report
         worker.add_observer(
             LLMErrorRecovery(cfg.profile["recovery"]["llm_error_phrase"], speak, lambda: log.turn_id, log.emit)
         )
