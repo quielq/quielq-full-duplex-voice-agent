@@ -1,0 +1,21 @@
+# Knowledge task cases, on fake backends. See clock.yaml for the format.
+server: knowledge
+cases:
+  - id: knowledge_next_weather
+    layer: next_reply
+    turns: ["what's the weather like"]
+    expect: {tools: [get_weather]}
+
+  - id: knowledge_args_search
+    layer: tool_call
+    turns: ["search the web for the Pi 5 price"]
+    expect:
+      tools: [search]
+      args: {search: {query: {re: "(?i)pi 5"}}}
+
+  - id: knowledge_args_fetch
+    layer: tool_call
+    turns: ["fetch https://example.com"]
+    expect:
+      tools: [fetch_content]
+      args: {fetch_content: {url: {re: "example\\.com"}}}

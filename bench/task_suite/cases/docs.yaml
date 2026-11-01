@@ -1,0 +1,14 @@
+# Docs task cases. See clock.yaml for the format.
+server: docs
+cases:
+  - id: docs_next_search
+    layer: next_reply
+    seed: {docs: [{path: policy.md, text: "Refunds take thirty days."}]}
+    turns: ["search my documents for refunds"]
+    expect: {tools: [local_search]}
+
+  - id: docs_args_index
+    layer: tool_call
+    seed: {docs: [{path: policy.md, text: "Refunds take thirty days."}]}
+    turns: ["index my documents"]
+    expect: {tools: [index_documents]}

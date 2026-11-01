@@ -215,6 +215,32 @@ def read_music(data_dir: Path) -> list[dict]:
     return [json.loads(path.read_text())] if path.exists() else []
 
 
+def seed_workspace(data_dir: Path, items: list[dict]) -> None:
+    root = data_dir / "workspace"
+    root.mkdir(exist_ok=True)
+    for item in items:
+        (root / item["path"]).write_text(item["text"])
+
+
+def read_workspace(data_dir: Path) -> list[dict]:
+    root = data_dir / "workspace"
+    if not root.exists():
+        return []
+    return [{"path": p.name, "text": p.read_text()} for p in sorted(root.iterdir()) if p.is_file()]
+
+
+def seed_docs(data_dir: Path, items: list[dict]) -> None:
+    root = data_dir / "documents"
+    root.mkdir(exist_ok=True)
+    for item in items:
+        (root / item["path"]).write_text(item["text"])
+
+
+def read_mock_commands(data_dir: Path) -> list[dict]:
+    path = data_dir / "workspace_mock.jsonl"
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
 # Each server's state, in the plain form cases compare against.
 STATE: dict[str, Any] = {
     "clock": (seed_clock, read_clock),
@@ -223,6 +249,9 @@ STATE: dict[str, Any] = {
     "comms": (seed_comms, read_comms),
     "lights": (seed_lights, read_lights),
     "music": (seed_music, read_music),
+    "workspace": (seed_workspace, read_workspace),
+    "docs": (seed_docs, lambda data_dir: []),
+    "mock_commands": (lambda data_dir, items: None, read_mock_commands),
 }
 
 

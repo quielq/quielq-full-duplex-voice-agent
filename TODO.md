@@ -104,7 +104,7 @@ Waiting phrase (Nov 2):
 - [x] `notes` (SQLite) (bc171bd)
 - [x] `thermostat` mock (bc171bd)
 - [x] `comms` mock (bc171bd)
-- [ ] `knowledge` (search provider not chosen)
+- [x] `knowledge`, `docs`, `workspace` on fakes and mocks (ADR-021). Live backends need a cap above zero
 - [ ] `delegate` (onit in a per-task sandbox, with a token cap)
 
 ## No-wake-word addressing

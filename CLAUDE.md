@@ -36,7 +36,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 
 ```
 harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O
-servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), other tasks (not built)
+servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (not built)
 bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
 docs/           architecture.md, research.md, prompt.md, decisions/
@@ -61,14 +61,16 @@ uv run python -m bench.eot_sweep --grid eot_threshold=0.7  # end-of-turn sweep o
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
-Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts all six task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
+Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts all nine task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
 
 Spotify (demo only, ADR-022): register the redirect URI, run `uv run python -m bench.spotify_login` once, open the Spotify app, then add `music=spotify` to `--stages`. Audio plays in the Spotify app, not through the harness.
 
 Live mic runs refuse the built-in speakers unless `--echo-cancel` is set (WebRTC AEC, ADR-013). `uv run python -m bench.echo_probe [--talker]` measures it with no cloud calls and reads aloud through the speakers.
 
+General tools (ADR-021): search, weather, and fetch default to fakes (`ME3_TOOL_STAGES=search=ddgs,weather=open_meteo,fetch=http`, caps start at zero). File tools are real but confined to `data/workspace`, with `data/documents` read-only. `bash` and `serve` are mocks unless `ME3_WORKSPACE_LIVE=1`, which is not an OS sandbox. `send_file` is always a mock.
+
 Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by default and has only run on fakes (ADR-016). Mute: `kill -USR1 <pid>` in mic mode.
 
 Reply templates skip the second LLM call on simple tools, off by default (`--reply-templates`, ADR-020). `flux_forced` is built and off (ADR-019).
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `knowledge` and `delegate`, real voice servers and the audio side channel, the model comparison, anything on the Pi. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `delegate`, real voice servers and the audio side channel, the model comparison, anything on the Pi. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.

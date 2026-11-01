@@ -1,0 +1,55 @@
+# Workspace task cases. bash is a mock here, and the state check proves nothing ran.
+server: workspace
+cases:
+  - id: workspace_args_read
+    layer: tool_call
+    seed: {workspace: [{path: plan.md, text: "ship friday"}]}
+    turns: ["read the file plan.md"]
+    expect:
+      tools: [read_file]
+      args: {read_file: {path: plan.md}}
+
+  - id: workspace_args_grep
+    layer: tool_call
+    seed: {workspace: [{path: plan.md, text: "ship friday"}]}
+    turns: ["grep for friday"]
+    expect: {tools: [grep]}
+
+  - id: workspace_write_runs_after_undo
+    layer: tool_call
+    turns: ["write hello to hello.txt"]
+    expect:
+      tools: [write_file]
+      state: {workspace: {count: 1, has: [{path: hello.txt, text: hello}]}}
+
+  - id: workspace_conv_undo_keeps_file
+    layer: conversation
+    undo_s: 3.0
+    seed: {workspace: [{path: keep.txt, text: old}]}
+    turns: ["write hello to keep.txt", "undo"]
+    expect:
+      tools: [write_file]
+      spoken_re: "stopped that"
+      state: {workspace: {count: 1, has: [{path: keep.txt, text: old}]}}
+
+  - id: workspace_bash_waits_for_yes
+    layer: tool_call
+    turns: ["run the command ls"]
+    expect:
+      tools: [bash]
+      state: {mock_commands: {count: 0}}
+
+  - id: workspace_conv_bash_yes_runs_mock
+    layer: conversation
+    undo_s: 0.1
+    turns: ["run the command ls", "yes"]
+    expect:
+      tools: [bash]
+      state: {mock_commands: {count: 1, has: [{command: ls}]}}
+
+  - id: workspace_conv_bash_no_stops
+    layer: conversation
+    turns: ["run the command ls", "no"]
+    expect:
+      tools: [bash]
+      state: {mock_commands: {count: 0}}

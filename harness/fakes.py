@@ -251,7 +251,29 @@ class RuleBasedLLMService(LLMService):
         if m and "send_message" in tools:
             await self._call(context, "send_message", {"to": m.group(1), "body": m.group(2)})
             return True
-        return await self._media_rule(context, low, tools)
+        if await self._media_rule(context, low, tools):
+            return True
+        return await self._general_rule(context, low, tools)
+
+    async def _general_rule(self, context, low: str, tools: set[str]) -> bool:
+        """Requests for the knowledge, docs, and workspace tools (ADR-021)."""
+        rules = [
+            ("get_weather", r"\bweather\b", lambda m: {}),
+            ("search", r"\bsearch the web for (.+)", lambda m: {"query": m.group(1)}),
+            ("fetch_content", r"\bfetch (\S+)", lambda m: {"url": m.group(1)}),
+            ("local_search", r"\bsearch my documents for (.+)", lambda m: {"query": m.group(1)}),
+            ("index_documents", r"\bindex my documents\b", lambda m: {}),
+            ("write_file", r"\bwrite (\w+) to (\S+)", lambda m: {"path": m.group(2), "content": m.group(1)}),
+            ("read_file", r"\bread the file (\S+)", lambda m: {"path": m.group(1)}),
+            ("grep", r"\bgrep for (\w+)", lambda m: {"pattern": m.group(1)}),
+            ("bash", r"\brun the command (.+)", lambda m: {"command": m.group(1)}),
+        ]
+        for tool, pattern, args in rules:
+            m = re.search(pattern, low)
+            if m and tool in tools:
+                await self._call(context, tool, args(m))
+                return True
+        return False
 
     async def _media_rule(self, context, low: str, tools: set[str]) -> bool:
         if "list_lights" in tools and "which lights" in low:
