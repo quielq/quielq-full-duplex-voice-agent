@@ -53,7 +53,7 @@ class ToolCallLog(Middleware):
                 f.write(json.dumps(rec, default=str) + "\n")
 
 
-FAKE_TOOL_STAGES = "search=fake,weather=fake,fetch=fake"  # tests and the task suite spend nothing
+FAKE_TOOL_STAGES = "search=fake,weather=fake,fetch=fake,comms=mock"  # tests and the task suite spend nothing
 
 
 def tool_stage(name: str) -> str:

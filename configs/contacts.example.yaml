@@ -1,0 +1,4 @@
+# Copy to data/contacts.yaml on each machine that runs ME3, and put real numbers there.
+# data/ is not committed. The model only ever sees names, so it cannot reach anyone else.
+contacts:
+  Ana: "+639170000000"

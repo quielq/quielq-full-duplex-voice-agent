@@ -35,6 +35,8 @@ from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import httpx
+
 from bench.cost_ledger import CostLedger
 from bench.run_report import all_logs, build_report
 from harness.config import PROFILES, REPO_ROOT, Config, load_config
@@ -357,6 +359,15 @@ def check_reachability(cfg: Config) -> Iterator[tuple]:
         median, worst = times[len(times) // 2], times[-1]
         detail = f"handshake median {median:.0f} ms, worst {worst:.0f} ms"
         yield _warn(host, f"{detail}, slow") if median > SLOW_TLS_MS else _ok(host, detail)
+    url = os.environ.get("ME3_PHONE_BRIDGE_URL")
+    if url:  # asks the bridge if it is up: nothing is sent (ADR-024)
+        headers = {"X-Bridge-Token": os.environ.get("ME3_PHONE_BRIDGE_TOKEN", "")}
+        try:
+            code = httpx.get(url, headers=headers, timeout=3.0, trust_env=False).status_code
+        except httpx.HTTPError as e:
+            yield _warn("phone bridge", type(e).__name__, "start scripts/mac_phone_bridge.py on the Mac")
+        else:
+            yield _ok("phone bridge") if code == 200 else _warn("phone bridge", f"HTTP {code}", "check the token and --allow-from")
 
 
 def tls_handshake_ms(host: str) -> float:

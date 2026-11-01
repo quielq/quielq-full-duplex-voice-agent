@@ -41,3 +41,18 @@ cases:
     expect:
       tools: [send_message]
       state: {comms: {count: 0}}
+
+  - id: comms_call_reads_back_and_waits
+    layer: next_reply
+    turns: ["call ana"]
+    expect:
+      tools: [call_contact]
+      spoken_re: "(?i)call ana"   # read by the harness, not the model
+      state: {comms: {count: 0}}
+
+  - id: comms_conv_call_yes
+    layer: conversation
+    turns: ["call ana", "yes"]
+    expect:
+      tools: [call_contact]
+      state: {comms: {count: 1}}

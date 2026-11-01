@@ -67,7 +67,11 @@ tools:
   get_weather: {timeout_s: 15.0}
   index_documents: {timeout_s: 60.0}
   send_message:
+    timeout_s: 25.0   # the bridge can take 22 s
     readback: "Send {to} this message: {body}. Should I send it?"
+  call_contact:
+    timeout_s: 25.0
+    readback: "Call {to}. Should I call?"
   bash:
     timeout_s: 30.0   # the server stops the command at 25 s; longer work goes through serve
     readback: "Run this command: {command_spoken}. Should I run it?"

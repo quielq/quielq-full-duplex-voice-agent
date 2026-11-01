@@ -263,6 +263,7 @@ class RuleBasedLLMService(LLMService):
     async def _general_rule(self, context, low: str, tools: set[str]) -> bool:
         """Requests for the knowledge, docs, and workspace tools (ADR-021)."""
         rules = [
+            ("call_contact", r"\bcall (\w+)$", lambda m: {"to": m.group(1)}),
             ("get_weather", r"\bweather\b", lambda m: {}),
             ("search", r"\bsearch the web for (.+)", lambda m: {"query": m.group(1)}),
             ("fetch_content", r"\bfetch (\S+)", lambda m: {"url": m.group(1)}),

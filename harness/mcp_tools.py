@@ -41,6 +41,8 @@ def _server_env(data_dir: str | None, module: str = "") -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY") or k in allowed}
     if module != TASK_SERVERS["music"]:  # Spotify credentials reach only music (ADR-022)
         env = {k: v for k, v in env.items() if not k.startswith("SPOTIFY_")}
+    if module != TASK_SERVERS["comms"]:  # the bridge token reaches only comms (ADR-024)
+        env.pop("ME3_PHONE_BRIDGE_TOKEN", None)
     if data_dir:
         env["ME3_DATA_DIR"] = data_dir
     return env
