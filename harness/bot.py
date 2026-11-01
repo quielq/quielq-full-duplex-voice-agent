@@ -418,6 +418,8 @@ def main() -> None:
     ap.add_argument("--wav", type=Path)
     ap.add_argument("--stages", default="",
                     help="override providers.yaml stages for this run, e.g. stt=deepgram_flux,llm=groq")  # fmt: skip
+    ap.add_argument("--flux", default="",
+                    help="override Flux settings for this run, e.g. eot_threshold=0.6,eot_timeout_ms=2000")  # fmt: skip
     ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "speech_timeout"],
                     help="override the profile's turn.stop")  # fmt: skip
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
@@ -433,6 +435,12 @@ def main() -> None:
         if stage not in cfg.providers["stages"]:
             ap.error(f"unknown stage {stage!r}")
         cfg.providers["stages"][stage] = choice
+    flux = cfg.providers["providers"]["deepgram"]["flux"]
+    for item in filter(None, args.flux.split(",")):
+        name, _, value = item.partition("=")
+        if name not in flux:
+            ap.error(f"unknown Flux setting {name!r}")
+        flux[name] = int(value) if name == "eot_timeout_ms" else float(value)
     if args.turn_stop:
         cfg.profile["turn"]["stop"] = args.turn_stop
     if args.barge_in:

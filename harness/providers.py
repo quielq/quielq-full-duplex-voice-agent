@@ -49,11 +49,14 @@ def build_stt(
         from pipecat.services.deepgram.flux.stt import DeepgramFluxSTTService
 
         _, p, key = _authorize(choice, providers_cfg, ledger)
+        # Unset values keep Deepgram's defaults. An eager threshold is what turns eager on.
+        flux = {k: v for k, v in (p.get("flux") or {}).items() if v is not None}
         return DeepgramFluxSTTService(
             api_key=key,
             mip_opt_out=True,
             should_interrupt=interrupt,
-            settings=DeepgramFluxSTTService.Settings(model=p["stt_model"]),
+            enable_eager_end_of_turn="eager_eot_threshold" in flux,
+            settings=DeepgramFluxSTTService.Settings(model=p["stt_model"], **flux),
         )
     raise ValueError(f"unknown stt stage {choice!r}")
 

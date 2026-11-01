@@ -16,6 +16,10 @@ providers:
     env_key: DEEPGRAM_API_KEY
     daily_cap_usd: 0.50   # approved Oct 21, 2026; free credit, list price
     stt_model: flux-general-en
+    flux:                        # null keeps Deepgram's default; override per run with --flux
+      eot_threshold: null        # 0.5 to 1.0, default 0.7
+      eager_eot_threshold: null  # 0.3 to 0.9, unset leaves eager end of turn off
+      eot_timeout_ms: null       # 500 to 60000, default 5000
     tts_voice: aura-2-thalia-en
     tts_sample_rate: 16000   # 24000 arrives slower than real time on this link (ADR-014)
   groq:
