@@ -19,11 +19,25 @@ Run Nov 1, 2026 against Quiel's Development Mode app: token refresh 200, devices
 
 With no active device, taking the first device started a Xiaomi speaker rather than the Mac.
 
+That spike checked status codes only, so it did not show that audio came out.
+
+## Playback finding
+
+A live run on Nov 1, 2026 said "now playing" and nothing played. On the open Mac app, listed as the active device:
+
+- Web API play with 10 URIs, then with one URI: 204, and the app stayed stopped with no track for the next 5 s. `GET /me/player` showed `is_playing` false.
+- Web API play with the app paused on a loaded track: 204, and the app dropped that track and went to stopped.
+- AppleScript `play track` in the same app: audio started at once, and `GET /me/player` showed the track playing.
+
+The cause on Spotify's side is unknown. Pause through the Web API did work on the playing app.
+
 ## Decision
 
 - `servers/tasks/music/backends.py` holds `MockBackend` (the default) and `SpotifyBackend`. The tool names stay `play_music`, `stop_music`, `set_volume`, and `get_now_playing`, so the task suite stays on the mock.
 - `--stages music=spotify` selects Spotify. The bot passes it to the server as `ME3_MUSIC_BACKEND`.
-- `play_music` queues the search results, so a mood keeps playing after one track. The result carries `now_playing`, the track Spotify started, and the reply template uses it.
+- `play_music` queues the search results over the Web API, so a mood keeps playing after one track. The result carries `now_playing`, the track Spotify started, and the reply template uses it.
+- On macOS, when the chosen device is a computer, `play_music` starts the first result in the local app through AppleScript instead. It plays that one track, not a queue. This assumes the listed computer is this Mac.
+- `play_music` succeeds only once `GET /me/player` shows an asked-for track playing, checked for about 3 s. A 204 alone is not success, and a track that was already playing does not count.
 - Device order is the active device, then a computer, then anything else. A smart speaker never starts unless it is already active or the only device.
 - A failure returns `{"error": ...}`, which the harness treats as failed, so the success template cannot claim that music started. The text never holds a response body.
 - Login is the authorization code flow, once, through `bench/spotify_login.py`. The refresh token lives in `.env`, and the access token stays in memory.
@@ -41,7 +55,9 @@ With no active device, taking the first device started a Xiaomi speaker rather t
 - A Spotify app must be open. If none is, ME3 says so.
 - ME3 cannot duck Spotify. Lowering it would take a Web API volume call, slower than the 100 ms duck rule, and it is not built.
 - Music on speakers can reach the mic. Use headphones.
-- The Pi has no Spotify app, so Phase 2 needs a separate device.
+- The first AppleScript call may make macOS ask to let the terminal control Spotify. Until that is allowed, ME3 says it could not start the app.
+- `play_music` takes up to about 3 s longer on a failure, and a successful play adds at least one request.
+- The Pi has no Spotify app. Phase 2 plan (Quiel, Nov 1, 2026): speakers on the Pi, and a web app on the Pi that plays the music. It is not built, and it needs its own ADR. It would use the Web API path, so the start check covers it, and it must first show that the Web API can start that player. The likely route, Spotify's Web Playback SDK, still has to be checked against current docs, including whether it runs in a Pi browser.
 - Spotify remains demo only, as the review says.
 
 ## Sources
