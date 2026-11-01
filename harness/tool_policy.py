@@ -20,6 +20,11 @@ real result then replaces the "CANCELLED" that Pipecat writes for the cancelled 
 that one drops short finals as backchannels, and in ``immediate`` mode nothing else
 listens for "cancel".
 
+A tool with a reply template can skip the second LLM call: its success is spoken from the
+template and ``run_llm=False`` ends the turn (ADR-020). The model calls tools one at a time, so
+skipping that call would lose the next tool of a compound request. A request that sounds
+compound therefore keeps the LLM, as do failures and held actions.
+
 Every decision is one ``tool_policy`` event in the event log, including denials the servers
 never see. The undo and confirm waits are outside the path to the first reply, so latency
 reports need no correction for them.
@@ -52,6 +57,29 @@ from pipecat.services.mcp_service import MCPClient
 
 PERMISSIONS = ("auto", "confirm", "disabled")
 HINT_FIELDS = ("read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint")
+
+
+def spoken_duration(seconds: int) -> str:
+    parts = [(seconds // 3600, "hour"), (seconds % 3600 // 60, "minute"), (seconds % 60, "second")]
+    return " ".join(f"{n} {unit}{'' if n == 1 else 's'}" for n, unit in parts if n)
+
+
+def _as_data(result: Any) -> Any:
+    if isinstance(result, str):
+        with contextlib.suppress(ValueError):
+            return json.loads(result)
+    return result
+
+
+def _reply_fields(args: dict, result: Any) -> dict:
+    """What a template may use: the call's arguments, the result, and spoken forms of both."""
+    data = _as_data(result)
+    fields = {**args, **(data if isinstance(data, dict) else {})}
+    if "duration_seconds" in fields:
+        fields["spoken_duration"] = spoken_duration(int(fields["duration_seconds"]))
+    if "is_on" in fields:
+        fields["on_off"] = "on" if fields["is_on"] else "off"
+    return fields
 
 
 class DuplicateToolName(RuntimeError):
@@ -173,9 +201,12 @@ class ToolPolicy:
         self._held: list[HeldAction] = []
         self._background: set[asyncio.Task] = set()
         # Set by the bot once the pipeline exists; speaks a fixed phrase.
-        self.speak: Callable[[str], Awaitable[None]] | None = None
+        self.speak: Callable[..., Awaitable[None]] | None = None
         # Set by the bot. Text mode has no playback, so a finished reply counts as heard.
         self.plays_audio = False
+        replies = config.get("reply_templates") or {}
+        self._templates: dict[str, str] = replies.get("templates") or {} if replies.get("enabled") else {}
+        self._compound_re = _word_re(replies.get("compound_words") or ["and"])
 
     def _decide(self, tool: str, decision: str, **fields: Any) -> None:
         rec = {"tool": tool, "decision": decision, **fields}
@@ -239,10 +270,43 @@ class ToolPolicy:
             await self._hold(rule, inner, params, "undo")
         elif rule.read_only:
             self._decide(rule.name, "allowed", args=args)
-            await params.result_callback(await self._call(rule, inner, params))
+            await self._answer(rule, params, await self._call(rule, inner, params))
         else:
             self._decide(rule.name, "allowed", args=args)
             await self._protected_commit(rule, inner, params)
+
+    def _sounds_compound(self, params: FunctionCallParams) -> bool:
+        users = [m for m in params.context.get_messages() if m.get("role") == "user"]
+        content = users[-1].get("content") if users else ""
+        text = content if isinstance(content, str) else ""
+        return bool(self._compound_re.search(text) or re.search(r"[,;.?!]\s+\S", text))
+
+    def _template_reply(self, rule: ToolRule, params: FunctionCallParams, result: Any) -> str | None:
+        template = self._templates.get(rule.name)
+        if not template or not self.speak or _is_failure(result) or self._sounds_compound(params):
+            return None
+        try:
+            return template.format(**_reply_fields(dict(params.arguments), result))
+        except (KeyError, ValueError, IndexError):
+            return None
+
+    async def _answer(self, rule: ToolRule, params: FunctionCallParams, result: Any) -> None:
+        """Hand the result to the LLM, or speak it and skip the LLM when a template applies."""
+        reply = self._template_reply(rule, params, result)
+        if reply is None:
+            await params.result_callback(result)
+            return
+        self._decide(rule.name, "template_reply", text=reply)
+
+        async def reached_context() -> None:
+            # Speech outside an LLM response never reaches the context by itself here, so the
+            # reply goes in directly, after its tool message. A barge-in does not trim it.
+            params.context.add_message({"role": "assistant", "content": reply})
+
+        await params.result_callback(
+            result, properties=FunctionCallResultProperties(run_llm=False, on_context_updated=reached_context)
+        )
+        await self.speak(reply, append_to_context=False)
 
     async def _hold(self, rule: ToolRule, inner, params: FunctionCallParams, state: str) -> None:
         for old in [a for a in self._held if a.rule.name == rule.name and a.state == state]:
@@ -353,7 +417,7 @@ class ToolPolicy:
         """A write that has started finishes. A barge-in cancels this handler, not the write."""
         task = self._spawn(self._call(rule, inner, params))
         try:
-            await params.result_callback(await asyncio.shield(task))
+            await self._answer(rule, params, await asyncio.shield(task))
         except asyncio.CancelledError:
             self._decide(rule.name, "commit_outlived_interruption")
             self._spawn(self._write_back_late(rule, inner, params, task))
@@ -457,8 +521,9 @@ class ToolPolicy:
 
 
 def _is_failure(result: Any) -> bool:
-    if isinstance(result, dict):
-        return "error" in result
+    data = _as_data(result)  # MCP results arrive as JSON text
+    if isinstance(data, dict):
+        return "error" in data
     return isinstance(result, str) and result.startswith(("Error calling mcp tool", "Sorry, could not"))
 
 

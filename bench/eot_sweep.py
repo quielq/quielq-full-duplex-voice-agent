@@ -101,6 +101,8 @@ def clip_row(events: list[dict], pad_s: float, text: str) -> dict:
 def _value(name: str, raw: str) -> float | int | None:
     if name == "turn_stop":
         return raw
+    if name == "reply_templates":
+        return raw == "on"
     if raw == "off":
         return None
     return int(raw) if name == "eot_timeout_ms" else float(raw)
@@ -110,7 +112,9 @@ async def run_clip(args, name: str, value, kind: str, text: str, wav: Path, work
     cfg = load_config("mac")  # real ledger path, so live spend counts against the caps
     cfg.providers["stages"] = {"stt": args.stt, "llm": args.llm, "tts": "fake"}
     cfg.providers["providers"]["deepgram"]["flux"].update(args.fixed)
-    if name == "turn_stop":
+    if name == "reply_templates":
+        cfg.tool_policy["reply_templates"]["enabled"] = value
+    elif name == "turn_stop":
         cfg.profile["turn"]["stop"] = value
     else:
         cfg.providers["providers"]["deepgram"]["flux"][name] = value
@@ -165,10 +169,11 @@ async def sweep(args) -> list[dict]:
     out = Path(load_config("mac").path("logs_dir")) / f"eot_sweep-{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
     with tempfile.TemporaryDirectory() as d, open(out, "a", buffering=1) as f:
         workdir = Path(d)
-        wavs = [_say(text, workdir / f"clip{i}.wav") for i, (_, text) in enumerate(CLIPS)]
+        clips = [c for c in CLIPS if not args.kinds or c[0] in args.kinds.split(",")]
+        wavs = [_say(text, workdir / f"clip{i}.wav") for i, (_, text) in enumerate(clips)]
         for repeat in range(args.repeat):
             for value in values:
-                for (kind, text), wav in zip(CLIPS, wavs, strict=True):
+                for (kind, text), wav in zip(clips, wavs, strict=True):
                     row = await run_clip(args, name, value, kind, text, wav, workdir / str(len(rows)))
                     row["repeat"] = repeat
                     rows.append(row)
@@ -184,6 +189,7 @@ def main() -> None:
     ap.add_argument("--stt", choices=["fake", "deepgram_flux"], default="fake")
     ap.add_argument("--llm", choices=["fake", "groq"], default="fake")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--kinds", default="", help="only these clip kinds, e.g. command")
     args = ap.parse_args()
     if (args.stt != "fake" or args.llm != "fake") and os.environ.get("ME3_LIVE") != "1":
         raise SystemExit("this run spends money: set ME3_LIVE=1")

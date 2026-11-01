@@ -54,6 +54,7 @@ class Case:
     seed: dict[str, list[dict]] = field(default_factory=dict)
     undo_s: float | None = None
     addressing: bool = False
+    live_only: bool = False  # the fake LLM cannot do this
 
 
 @dataclass
@@ -331,6 +332,7 @@ def main() -> None:
     ap.add_argument("--model", help="override the model of the chosen LLM provider for this run")
     ap.add_argument("--all-servers", action="store_true",
                     help="offer every server's tools, as the real agent does (slower start)")  # fmt: skip
+    ap.add_argument("--reply-templates", action="store_true", help="skip the second LLM call (ADR-020)")
     ap.add_argument("--out", type=Path, help="also write the report as JSON here")
     args = ap.parse_args()
 
@@ -343,14 +345,17 @@ def main() -> None:
         cfg.providers["stages"]["llm"] = choice
     if cfg.providers["stages"]["llm"] != "fake" and os.environ.get("ME3_LIVE") != "1":
         ap.error("a real LLM spends money: set ME3_LIVE=1 to confirm")
+    if args.reply_templates:
+        cfg.tool_policy["reply_templates"]["enabled"] = True
     if args.model:
         if cfg.providers["stages"]["llm"] == "fake":
             ap.error("--model needs a real LLM, e.g. --stages llm=groq")
         cfg.providers["providers"][cfg.providers["stages"]["llm"]]["model"] = args.model
 
+    live = cfg.providers["stages"]["llm"] != "fake"
     cases = [
         c for c in load_cases()
-        if (not args.layer or c.layer == args.layer) and (not args.case or args.case in c.id)
+        if (live or not c.live_only) and (not args.layer or c.layer == args.layer) and (not args.case or args.case in c.id)
     ]  # fmt: skip
     if not cases:
         ap.error("no cases match")

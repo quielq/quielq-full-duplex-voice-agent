@@ -31,6 +31,22 @@ phrases:
   confirmed_now: "Okay, doing that now."
   failed: "Sorry, that did not go through."
 
+# Spoken instead of a second LLM call when the tool succeeds (ADR-020). Off by default. Fields
+# come from the call's arguments and the result, plus spoken_duration and on_off. Held tools
+# never use these. The model calls tools one at a time, so a request that may need another
+# tool keeps the LLM: any word below, or punctuation inside the sentence.
+reply_templates:
+  enabled: false
+  compound_words: ["and", "then", "also", "plus", "after", "before", "all", "every", "both", "everything", "lights"]
+  templates:
+    get_time: "It's {spoken_time}."
+    set_timer: "Timer set for {spoken_duration}."
+    add_note: "Noted."
+    set_thermostat: "Thermostat set to {target_c:g} degrees."
+    set_light: "The {room} light is {on_off}."
+    play_music: "Playing {query}."
+    stop_music: "Music stopped."
+
 # Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s.
 tools:
   cancel_timer:

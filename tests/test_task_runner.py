@@ -79,7 +79,7 @@ def test_cases_load_and_cover_every_layer():
 
 
 async def test_all_cases_pass_on_fakes(cfg):
-    out = await run_suite(cfg, load_cases())
+    out = await run_suite(cfg, [c for c in load_cases() if not c.live_only])
     assert out["failures"] == []
     assert out["overall"]["pass_rate"] == 1.0
     assert out["total_usd"] == 0.0

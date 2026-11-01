@@ -329,8 +329,8 @@ async def run_bot(
             idle_timeout_secs=None,
         )
 
-        async def speak(text: str) -> None:
-            await worker.queue_frame(TTSSpeakFrame(text))
+        async def speak(text: str, *, append_to_context: bool = True) -> None:
+            await worker.queue_frame(TTSSpeakFrame(text, append_to_context=append_to_context))
             turn_obs.reply_done.set()
 
         policy.speak = speak
@@ -432,6 +432,7 @@ def main() -> None:
     ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "flux_forced", "speech_timeout"],
                     help="override the profile's turn.stop")  # fmt: skip
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
+    ap.add_argument("--reply-templates", action="store_true", help="skip the second LLM call (ADR-020)")
     ap.add_argument("--echo-cancel", action="store_true", help="WebRTC AEC, for live runs on speakers")
     ap.add_argument("--servers", default="", help=f"task servers, default all: {','.join(TASK_SERVERS)}")
     args = ap.parse_args()
@@ -454,6 +455,8 @@ def main() -> None:
         cfg.profile["turn"]["stop"] = args.turn_stop
     if args.barge_in:
         cfg.profile["barge_in"]["mode"] = args.barge_in
+    if args.reply_templates:
+        cfg.tool_policy["reply_templates"]["enabled"] = True
     if args.echo_cancel:
         cfg.profile["audio"]["echo_cancel"] = True
 
