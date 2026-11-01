@@ -328,6 +328,7 @@ def main() -> None:
     ap.add_argument("--case", help="only case ids containing this text")
     ap.add_argument("--mcp", choices=["stdio", "http"], default="stdio")
     ap.add_argument("--stages", default="", help="only llm may change, e.g. llm=groq (needs ME3_LIVE=1)")
+    ap.add_argument("--model", help="override the model of the chosen LLM provider for this run")
     ap.add_argument("--all-servers", action="store_true",
                     help="offer every server's tools, as the real agent does (slower start)")  # fmt: skip
     ap.add_argument("--out", type=Path, help="also write the report as JSON here")
@@ -342,6 +343,10 @@ def main() -> None:
         cfg.providers["stages"]["llm"] = choice
     if cfg.providers["stages"]["llm"] != "fake" and os.environ.get("ME3_LIVE") != "1":
         ap.error("a real LLM spends money: set ME3_LIVE=1 to confirm")
+    if args.model:
+        if cfg.providers["stages"]["llm"] == "fake":
+            ap.error("--model needs a real LLM, e.g. --stages llm=groq")
+        cfg.providers["providers"][cfg.providers["stages"]["llm"]]["model"] = args.model
 
     cases = [
         c for c in load_cases()
