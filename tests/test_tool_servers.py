@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 
 import pytest
 
@@ -131,6 +132,21 @@ def test_docx_and_xlsx_are_read(data):
     book.save(root / "b.xlsx")
     assert docs.local_search("word")["results"][0]["path"] == "a.docx"
     assert docs.local_search("excel")["results"][0]["path"] == "b.xlsx"
+
+
+def test_list_files_shows_both_folders_newest_first(data):
+    workspace.write_file("old.txt", "x")
+    os.utime(data / "workspace" / "old.txt", (1_000_000, 1_000_000))
+    workspace.write_file(".hidden", "x")
+    (data / "documents").mkdir(exist_ok=True)
+    (data / "documents" / "new.md").write_text("text")
+    files = workspace.list_files()["files"]
+    assert [Path(f["path"]).name for f in files] == ["new.md", "old.txt"]
+    assert files[1]["modified"].startswith("1970")
+    assert workspace.read_file(files[1]["path"])["text"] == "x"
+    assert workspace.read_file(files[0]["path"])["text"] == "text"
+    assert [f["path"] for f in workspace.list_files(file_pattern="*.txt")["files"]] == ["old.txt"]
+    assert workspace.list_files(max_results=1)["truncated"] is True
 
 
 def test_files_round_trip():

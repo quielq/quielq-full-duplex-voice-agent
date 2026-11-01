@@ -80,6 +80,30 @@ def read_file(
 
 
 @mcp.tool(
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+)
+def list_files(
+    file_pattern: Annotated[str, Field(description="Only these file names, for example *.pdf")] = "*",
+    max_results: Annotated[int, Field(ge=1, le=100)] = 20,
+) -> dict:
+    """List the files in the workspace and documents folders, newest first."""
+    found: list[tuple[float, int, str]] = []
+    for root in _readable():
+        for p in root.rglob("*"):
+            hidden = any(s.startswith(".") for s in p.relative_to(root).parts)
+            if hidden or p.is_symlink() or not p.is_file() or not fnmatch.fnmatch(p.name, file_pattern):
+                continue
+            stat = p.stat()
+            # A relative path starts from the workspace, so read_file needs documents in full.
+            name = str(p.relative_to(root)) if root == workspace_dir() else str(p)
+            found.append((stat.st_mtime, stat.st_size, name))
+    found.sort(reverse=True)
+    files = [{"path": name, "bytes": size, "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime))}
+             for mtime, size, name in found[:max_results]]  # fmt: skip
+    return {"files": files, "truncated": len(found) > max_results}
+
+
+@mcp.tool(
     annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False}
 )
 def write_file(
@@ -168,7 +192,7 @@ def bash(
     command: Annotated[str, Field(min_length=1, description="The shell command")],
     cwd: Annotated[str, Field(description="Folder, relative to the workspace")] = ".",
 ) -> dict:
-    """Run a short shell command in the workspace. Use serve for anything over about 20 seconds."""
+    """Run a short shell command in the workspace. Use list_files to see files, and serve for anything over about 20 seconds."""
     try:
         folder = inside(cwd, [workspace_dir()])
     except OutsideRoots as e:

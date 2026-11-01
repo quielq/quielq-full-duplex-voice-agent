@@ -32,6 +32,8 @@ from pipecat.services.stt_service import SegmentedSTTService
 from pipecat.services.tts_service import TextAggregationMode, TTSService
 from pipecat.utils.time import time_now_iso8601
 
+from harness.tool_policy import RESULT_NOTE
+
 
 def _unsupported(cls, **given):
     """Settings object with every field None (unsupported) except the ones given."""
@@ -179,6 +181,9 @@ class RuleBasedLLMService(LLMService):
 
         text = _text_of(last) if role == "user" else ""
         low = (text or "").lower()
+        if text == RESULT_NOTE:
+            await self._stream("That's finished.")
+            return
         if await self._tool_rule(context, low):
             return
         seconds = parse_timer_request(text or "")
@@ -266,6 +271,7 @@ class RuleBasedLLMService(LLMService):
             ("write_file", r"\bwrite (\w+) to (\S+)", lambda m: {"path": m.group(2), "content": m.group(1)}),
             ("read_file", r"\bread the file (\S+)", lambda m: {"path": m.group(1)}),
             ("grep", r"\bgrep for (\w+)", lambda m: {"pattern": m.group(1)}),
+            ("list_files", r"\bwhat files\b", lambda m: {}),
             ("bash", r"\brun the command (.+)", lambda m: {"command": m.group(1)}),
         ]
         for tool, pattern, args in rules:
@@ -293,6 +299,15 @@ class RuleBasedLLMService(LLMService):
             return True
         if "stop_music" in tools and "stop the music" in low:
             await self._call(context, "stop_music", {})
+            return True
+        if "resume_music" in tools and "resume the music" in low:
+            await self._call(context, "resume_music", {})
+            return True
+        if "next_track" in tools and re.search(r"next (song|track)|skip", low):
+            await self._call(context, "next_track", {})
+            return True
+        if "previous_track" in tools and re.search(r"previous (song|track)", low):
+            await self._call(context, "previous_track", {})
             return True
         if "get_now_playing" in tools and re.search(r"what(.s| is)? (song|music)|what song", low):
             await self._call(context, "get_now_playing", {})

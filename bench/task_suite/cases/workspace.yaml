@@ -9,6 +9,12 @@ cases:
       tools: [read_file]
       args: {read_file: {path: plan.md}}
 
+  - id: workspace_list_files_runs_at_once
+    layer: tool_call
+    seed: {workspace: [{path: plan.md, text: "ship friday"}]}
+    turns: ["what files can you see"]
+    expect: {tools: [list_files]}
+
   - id: workspace_args_grep
     layer: tool_call
     seed: {workspace: [{path: plan.md, text: "ship friday"}]}

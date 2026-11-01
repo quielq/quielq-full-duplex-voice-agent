@@ -16,7 +16,7 @@ Three MCP servers, written in this repo and using OnIt's tool names and meanings
 | --- | --- |
 | `knowledge` | `search`, `fetch_content`, `get_weather` |
 | `docs` | `index_documents`, `search_document`, `local_search` |
-| `workspace` | `bash`, `grep`, `read_file`, `write_file`, `edit_file`, `send_file`, `serve`, `serve_status` |
+| `workspace` | `bash`, `grep`, `list_files`, `read_file`, `write_file`, `edit_file`, `send_file`, `serve`, `serve_status` |
 
 Search and web search are one tool with a `type` of web or news, as in OnIt. `serve` is split in two because policy is per tool, so checking status needs no confirmation.
 
@@ -60,6 +60,10 @@ On fakes, Nov 1, 2026, with every server offered:
 Schemas grow by about 1,600 tokens per LLM call at four characters a token. `workspace` is more than half of that. Each stdio server adds about 0.5 s to startup, and tool listing works on stdio and streamable HTTP.
 
 Fakes pick tools by rule, so these runs say nothing about whether a real model still picks the right tool, or how much the larger prompt costs in latency. All nine servers stay on by default until a live Groq run shows that. Real `ddgs`, Tavily, Open-Meteo, and HTTP fetching have not been run. Live `bash` and `serve` were run only in unit tests.
+
+## Addendum, Nov 1, 2026: `list_files`
+
+Run `20261101-192724-03eda3` asked "What files can you see?". No tool listed files, so the model chose `bash` with `ls -la`, which needs spoken confirmation and is a mock. `list_files` is read only, so it runs at once. It lists both folders, newest first, so "the latest file" is answerable. `~/Downloads` stays outside the roots.
 
 ## Sources
 
