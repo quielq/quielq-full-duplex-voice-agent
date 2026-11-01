@@ -9,6 +9,8 @@ clip: use them to compare settings, not as headline latency.
         --grid eot_threshold=0.5,0.6,0.7,0.8 --repeat 3                       # about $0.09
     ME3_LIVE=1 uv run python -m bench.eot_sweep --stt deepgram_flux --llm groq \
         --grid eager_eot_threshold=off,0.4,0.5 --repeat 2
+    ME3_LIVE=1 uv run python -m bench.eot_sweep --stt deepgram_flux \
+        --grid turn_stop=flux,flux_forced --repeat 3                          # about $0.04
 
 Each clip kind answers one question. "command" and "chat" give the wait; "pause" has a
 silence mid-sentence, so a turn that ends inside it cut the speaker off.
@@ -76,6 +78,8 @@ def clip_row(events: list[dict], pad_s: float, text: str) -> dict:
     ends = [e["t_ns"] for e in events if e["event"] == "end_of_turn"]
     audio = next((e["t_ns"] for e in events if e["event"] == "tts_first_byte" and e["t_ns"] >= speech_end), None)
     finals = [e for e in events if e["event"] == "asr_final"]
+    forced_at = next((e["t_ns"] for e in events if e["event"] == "force_end_turn" and e["sent"]), None)
+    final_after_force = next((e["t_ns"] for e in finals if forced_at and e["t_ns"] >= forced_at), None)
     heard = _words(" ".join(e["text"] for e in finals))
     count = lambda name: sum(e["event"] == name for e in events)  # noqa: E731
     return {
@@ -89,10 +93,14 @@ def clip_row(events: list[dict], pad_s: float, text: str) -> dict:
         # A held speculative call logs llm_request only if released, so add the withdrawn ones.
         "llm_calls": count("llm_request") + count("eager_cancel"),
         "timed_out": count("reply_timeout") > 0,
+        "forced": sum(e["event"] == "force_end_turn" and e["sent"] for e in events),
+        "force_ms": round((final_after_force - forced_at) / 1e6) if forced_at and final_after_force else None,
     }
 
 
 def _value(name: str, raw: str) -> float | int | None:
+    if name == "turn_stop":
+        return raw
     if raw == "off":
         return None
     return int(raw) if name == "eot_timeout_ms" else float(raw)
@@ -102,7 +110,10 @@ async def run_clip(args, name: str, value, kind: str, text: str, wav: Path, work
     cfg = load_config("mac")  # real ledger path, so live spend counts against the caps
     cfg.providers["stages"] = {"stt": args.stt, "llm": args.llm, "tts": "fake"}
     cfg.providers["providers"]["deepgram"]["flux"].update(args.fixed)
-    cfg.providers["providers"]["deepgram"]["flux"][name] = value
+    if name == "turn_stop":
+        cfg.profile["turn"]["stop"] = value
+    else:
+        cfg.providers["providers"]["deepgram"]["flux"][name] = value
     result = await run_bot(
         cfg,
         input_mode="wav",
@@ -141,6 +152,7 @@ def summarise(rows: list[dict], name: str) -> list[dict]:
                     "eager": sum(r["eager"] for r in group),
                     "withdrawn": sum(r["withdrawn"] for r in group),
                     "llm_calls": sum(r["llm_calls"] for r in group),
+                    "force_p50": _p50(group, "force_ms"),
                     "usd": round(sum(r["cost_usd"] for r in group), 4),
                 })  # fmt: skip
     return out

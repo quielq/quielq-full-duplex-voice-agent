@@ -38,10 +38,16 @@ def _authorize(choice: str, providers_cfg: dict, ledger: CostLedger) -> tuple[st
 
 
 def build_stt(
-    providers_cfg: dict, ledger: CostLedger, *, script: Sequence[str] = (), interrupt: bool = True
+    providers_cfg: dict,
+    ledger: CostLedger,
+    *,
+    script: Sequence[str] = (),
+    interrupt: bool = True,
+    forced: bool = False,
 ):
     """``interrupt=False`` stops a turn-detecting STT (Flux) from interrupting the bot itself,
-    so the DuckingProcessor can decide instead."""
+    so the DuckingProcessor can decide instead. ``forced`` leaves ending the turn to Smart
+    Turn (ADR-019), so Flux must not end one by itself or predict one."""
     choice = providers_cfg["stages"]["stt"]
     if choice == "fake":
         return ScriptedSTTService(script=script or ["set a timer for one minute"])
@@ -51,7 +57,14 @@ def build_stt(
         _, p, key = _authorize(choice, providers_cfg, ledger)
         # Unset values keep Deepgram's defaults. An eager threshold is what turns eager on.
         flux = {k: v for k, v in (p.get("flux") or {}).items() if v is not None}
-        return DeepgramFluxSTTService(
+        service = DeepgramFluxSTTService
+        if forced:
+            from harness.flux_forced import ForcedEndFluxSTT
+
+            service = ForcedEndFluxSTT
+            flux = {**flux, "eot_threshold": 1.0}
+            flux.pop("eager_eot_threshold", None)
+        return service(
             api_key=key,
             mip_opt_out=True,
             should_interrupt=interrupt,

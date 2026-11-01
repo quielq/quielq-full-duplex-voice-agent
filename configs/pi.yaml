@@ -19,7 +19,7 @@ vad:
   min_volume: 0.6
 
 turn:
-  stop: auto            # auto | smart_turn | flux | speech_timeout; Smart Turn timing on one Pi core still to be measured
+  stop: auto            # auto | smart_turn | flux | flux_forced | speech_timeout; Smart Turn timing on one Pi core still to be measured
 
 barge_in:
   # immediate: Pipecat default, any speech during playback interrupts at once.

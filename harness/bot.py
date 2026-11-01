@@ -64,6 +64,7 @@ from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import TASK_SERVERS, task_clients
 from harness.null_output import PacedNullOutputTransport
 from harness.phrase_cache import load_phrase
+from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
 from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
 from harness.recovery import LLMErrorRecovery
 from harness.tool_policy import PolicyGate, ToolPolicy
@@ -92,8 +93,8 @@ class BotResult:
     output: PacedNullOutputTransport | None = None
 
 
-def _turn_strategies(cfg: Config) -> UserTurnStrategies | None:
-    """Turn detection from profile ``turn.stop``: auto | smart_turn | flux | speech_timeout.
+def _turn_strategies(cfg: Config, force_end: ForcedEndTurn | None = None) -> UserTurnStrategies | None:
+    """Turn detection from profile ``turn.stop``: auto | smart_turn | flux | flux_forced | speech_timeout.
 
     "auto" is flux when the STT is Deepgram Flux and smart_turn otherwise. Flux has no
     finalize message, so Smart Turn cannot end a Flux turn early, and mixing the two
@@ -108,14 +109,18 @@ def _turn_strategies(cfg: Config) -> UserTurnStrategies | None:
     flux_stt = cfg.providers["stages"]["stt"] == "deepgram_flux"
     if mode == "auto":
         mode = "flux" if flux_stt else "smart_turn"
-    elif mode != "flux" and flux_stt:
+    elif mode not in ("flux", "flux_forced") and flux_stt:
         raise ValueError(f"turn.stop={mode} does not work with Deepgram Flux STT; use auto or flux")
+    elif mode == "flux_forced" and not flux_stt:
+        raise ValueError("turn.stop=flux_forced needs stages.stt=deepgram_flux")
     if mode == "flux":
         if cfg.providers["stages"]["stt"] != "deepgram_flux":
             raise ValueError("turn.stop=flux needs stages.stt=deepgram_flux")
         return None
     if mode == "smart_turn":
         stop = [TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())]
+    elif mode == "flux_forced":
+        stop = [ForcedEndTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3(), force_end=force_end)]
     elif mode == "speech_timeout":
         stop = [SpeechTimeoutUserTurnStopStrategy()]
     else:
@@ -264,7 +269,9 @@ async def run_bot(
         if addressing:
             tools.standard_tools.append(addressing.tool(on_silent))
         context = LLMContext(tools=tools)
-        user_params = LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg))
+        forced = cfg.profile["turn"]["stop"] == "flux_forced"
+        force_end = ForcedEndTurn(log.emit) if forced else None
+        user_params = LLMUserAggregatorParams(user_turn_strategies=_turn_strategies(cfg, force_end))
         if addressing:
             # Pipecat's default asks the LLM to request a repeat after an empty turn, which is
             # exactly what a dropped utterance leaves behind (ADR-016).
@@ -289,12 +296,12 @@ async def run_bot(
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain, on_event=log.emit)
             trace_writes(transport.output(), hops)
-            stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts)
+            stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts, forced=forced)
             front = [transport.input(), mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
             back = [*filler_procs, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
-            stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts)
+            stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts, forced=forced)
             front = [source, mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
@@ -305,6 +312,8 @@ async def run_bot(
         else:
             raise ValueError(f"unknown input mode {input_mode!r}")
 
+        if force_end and input_mode != "text":
+            force_end.stt = stt
         pipeline = Pipeline(
             [*front, aggregators.user(), llm, tts, *back, aggregators.assistant()]
         )
@@ -420,7 +429,7 @@ def main() -> None:
                     help="override providers.yaml stages for this run, e.g. stt=deepgram_flux,llm=groq")  # fmt: skip
     ap.add_argument("--flux", default="",
                     help="override Flux settings for this run, e.g. eot_threshold=0.6,eot_timeout_ms=2000")  # fmt: skip
-    ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "speech_timeout"],
+    ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "flux_forced", "speech_timeout"],
                     help="override the profile's turn.stop")  # fmt: skip
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
     ap.add_argument("--echo-cancel", action="store_true", help="WebRTC AEC, for live runs on speakers")

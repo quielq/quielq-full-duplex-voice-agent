@@ -53,9 +53,20 @@ def test_withdrawn_calls_count_as_llm_calls():
 
 def test_summary_groups_by_setting_and_kind():
     base = {"eot_ms": 100, "reply_ms": None, "cut": False, "triggers": ["timeout"],
-            "eager": 0, "withdrawn": 0, "llm_calls": 1, "cost_usd": 0.001}  # fmt: skip
+            "eager": 0, "withdrawn": 0, "llm_calls": 1, "force_ms": None, "cost_usd": 0.001}  # fmt: skip
     rows = [{**base, "eot_threshold": 0.5, "kind": "chat"}, {**base, "eot_threshold": 0.7, "kind": "pause"}]
     lines = summarise(rows, "eot_threshold")
     assert [(x["eot_threshold"], x["kind"]) for x in lines] == [(0.5, "chat"), (0.7, "pause")]
     assert lines[0]["no_reply"] == 1
     assert lines[0]["timeout_ends"] == 1
+
+
+def test_force_round_trip_is_reported():
+    events = [
+        _ev("injection_speech_end", 2000),
+        _ev("force_end_turn", 2300, sent=True),
+        _ev("asr_final", 2550, text="done", trigger="manual"),
+        _ev("end_of_turn", 2560),
+    ]
+    row = clip_row(events, 0.0, "done")
+    assert (row["forced"], row["force_ms"]) == (1, 250)
