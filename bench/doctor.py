@@ -139,6 +139,9 @@ def check_env(cfg: Config) -> Iterator[tuple]:
             yield _fail(p["env_key"], f"{state}, but a stage selects {name}", "add it to .env")
         else:
             yield _ok(p["env_key"], state)
+        for key in p.get("extra_env_keys", []):
+            if name in in_use and not os.environ.get(key, "").strip():
+                yield _fail(key, f"not set, but a stage selects {name}", "add it to .env")
 
 
 def _stage_providers(cfg: Config) -> set[str]:

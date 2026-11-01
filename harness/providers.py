@@ -20,6 +20,7 @@ STAGE_PROVIDER = {
     "cartesia": "cartesia",
     "groq": "groq",
     "anthropic": "anthropic",
+    "spotify": "spotify",
 }
 
 

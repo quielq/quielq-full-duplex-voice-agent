@@ -10,6 +10,7 @@ stages:
   stt: fake   # fake | deepgram_flux
   llm: fake   # fake | groq | anthropic
   tts: fake   # fake | fake_words (fake with word timestamps) | deepgram_aura2 | cartesia
+  music: fake # fake (nothing plays) | spotify (demo only, ADR-022)
 
 providers:
   deepgram:
@@ -38,6 +39,10 @@ providers:
   openrouter:
     env_key: OPENROUTER_API_KEY
     daily_cap_usd: 5.00   # approved Nov 1, 2026
+  spotify:
+    env_key: SPOTIFY_REFRESH_TOKEN
+    extra_env_keys: [SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET]
+    daily_cap_usd: 0.01   # the API is free, so this only keeps the call allowed; 0 switches it off
 
 # List prices used by the cost ledger (USD). Recheck on the day a provider is switched on.
 # Sources: docs/architecture.md, "Cost and budget" and "Model comparison under $20".

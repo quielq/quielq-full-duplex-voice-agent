@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import os
 import signal
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -445,6 +446,7 @@ def main() -> None:
         if stage not in cfg.providers["stages"]:
             ap.error(f"unknown stage {stage!r}")
         cfg.providers["stages"][stage] = choice
+    os.environ["ME3_MUSIC_BACKEND"] = cfg.providers["stages"].get("music", "fake")
     flux = cfg.providers["providers"]["deepgram"]["flux"]
     for item in filter(None, args.flux.split(",")):
         name, _, value = item.partition("=")
