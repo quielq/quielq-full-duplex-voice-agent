@@ -61,7 +61,7 @@ uv run python -m bench.eot_sweep --grid eot_threshold=0.7  # end-of-turn sweep o
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
-Live runs: add `--stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2` to `harness.bot`. Defaults stay fake. The bot starts all nine task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=groq` needs `ME3_LIVE=1`.
+Live runs: add `--stages stt=deepgram_flux,llm=anthropic,tts=deepgram_aura2` to `harness.bot` (Haiku 5.5, ADR-025; Groq's rate limits stop long runs). Defaults stay fake. The bot starts all nine task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=anthropic --all-servers` needs `ME3_LIVE=1`.
 
 Spotify (demo only, ADR-022): register the redirect URI, run `uv run python -m bench.spotify_login` once, open the Spotify app, then add `music=spotify` to `--stages`. Audio plays in the Spotify app, not through the harness.
 
