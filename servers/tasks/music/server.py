@@ -1,65 +1,67 @@
-"""Music mock MCP server: a player state in $ME3_DATA_DIR/music.json, and no audio plays.
+"""Music MCP server. A mock by default; `--stages music=spotify` uses Spotify, for demos only.
 
-The plan is Spotify, for demos only, once a developer app exists. These tools are the
-interface a real backend would keep.
+A failed action returns {"error": ...}, so the harness never reports it as done (ADR-022).
 """
 
 from __future__ import annotations
 
-import json
+import functools
+import os
+from collections.abc import Callable
 from typing import Annotated
 
 from fastmcp import FastMCP
 from pydantic import Field
 
-from servers.common import ToolCallLog, data_dir, serve
+from servers.common import ToolCallLog, serve
+from servers.tasks.music.backends import MusicError, build_backend
 
-mcp = FastMCP("music", instructions="A mock music player. Nothing really plays.")
+mcp = FastMCP("music", instructions="A music player. It may be a mock, depending on the run.")
 mcp.add_middleware(ToolCallLog("music"))
 
-DEFAULT = {"playing": False, "query": "", "volume": 50}
+
+@functools.cache
+def _backend():
+    return build_backend(os.environ.get("ME3_MUSIC_BACKEND", "fake"))
 
 
-def _load() -> dict:
-    p = data_dir() / "music.json"
-    return json.loads(p.read_text()) if p.exists() else dict(DEFAULT)
-
-
-def _save(state: dict) -> dict:
-    (data_dir() / "music.json").write_text(json.dumps(state))
-    return state
+def _run(action: Callable[[], dict]) -> dict:
+    try:
+        return action()
+    except MusicError as e:
+        return {"error": str(e)}
 
 
 @mcp.tool(
-    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+    annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def get_now_playing() -> dict:
     """Read what is playing, and the volume."""
-    return _load()
+    return _run(lambda: _backend().now_playing())
 
 
 @mcp.tool(
-    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def play_music(query: Annotated[str, Field(min_length=1, description="Song, artist, or mood")]) -> dict:
     """Play music matching a search."""
-    return _save(_load() | {"playing": True, "query": query})
+    return _run(lambda: _backend().play(query))
 
 
 @mcp.tool(
-    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def stop_music() -> dict:
     """Stop the music."""
-    return _save(_load() | {"playing": False})
+    return _run(lambda: _backend().stop())
 
 
 @mcp.tool(
-    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def set_volume(level: Annotated[int, Field(ge=0, le=100, description="Volume, 0 to 100")]) -> dict:
     """Set the music volume."""
-    return _save(_load() | {"volume": level})
+    return _run(lambda: _backend().set_volume(level))
 
 
 if __name__ == "__main__":

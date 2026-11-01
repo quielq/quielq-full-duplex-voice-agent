@@ -44,7 +44,7 @@ reply_templates:
     add_note: "Noted."
     set_thermostat: "Thermostat set to {target_c:g} degrees."
     set_light: "The {room} light is {on_off}."
-    play_music: "Playing {query}."
+    play_music: "Playing {now_playing}."
     stop_music: "Music stopped."
 
 # Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s.
