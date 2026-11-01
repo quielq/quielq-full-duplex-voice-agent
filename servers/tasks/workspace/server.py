@@ -2,7 +2,8 @@
 
 Files are real and stay inside $ME3_DATA_DIR/workspace; reads may also use the documents folder.
 ``bash`` and ``serve`` are mocks unless ME3_WORKSPACE_LIVE=1, and ``send_file`` is always a
-mock. These limits are not an OS sandbox: a confirmed live command runs as the user.
+mock. Live commands pass servers/shell_guard.py and then run in servers/sandbox.py (ADR-024):
+with no sandbox on the machine, nothing runs.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ from pydantic import Field
 
 from servers.common import OutsideRoots, ToolCallLog, data_dir, documents_dir, inside, serve as serve_mcp, workspace_dir
 from servers.documents import extract_text
+from servers.sandbox import SAFE_PATH, NoSandbox, wrap
+from servers.shell_guard import DENY, check
 
 mcp = FastMCP("workspace", instructions="Read, write, and run things in the agent's workspace folder.")
 mcp.add_middleware(ToolCallLog("workspace"))
@@ -34,7 +37,7 @@ MAX_CHARS = 4000
 BASH_TIMEOUT_S = 25   # under the policy timeout, so the server reports it and kills the command
 MAX_SCAN_BYTES = 2_000_000
 MAX_SEND_BYTES = 10_000_000
-ENV_ALLOWED = ("PATH", "LANG", "LC_ALL", "TERM", "TMPDIR")
+ENV_ALLOWED = ("LANG", "LC_ALL", "TERM")
 
 
 def _live() -> bool:
@@ -48,7 +51,17 @@ def _readable() -> list[Path]:
 def _command_env() -> dict[str, str]:
     """Only what a shell needs, so no secret in the server's environment reaches a command."""
     env = {k: os.environ[k] for k in ENV_ALLOWED if k in os.environ}
-    return env | {"HOME": str(workspace_dir())}
+    tmp = workspace_dir() / ".tmp"
+    tmp.mkdir(exist_ok=True)
+    return env | {"HOME": str(workspace_dir()), "PATH": SAFE_PATH, "TMPDIR": str(tmp)}
+
+
+def _sandboxed(command: str, network: str, cwd: Path | None = None) -> list[str]:
+    """The argv for a live command. Refuses by raising, so no path runs one unchecked."""
+    decision = check(command)
+    if decision.verdict == DENY:
+        raise NoSandbox(decision.reason)
+    return wrap(["/bin/bash", "-c", command], workspace_dir(), [documents_dir()], _command_env(), network, cwd)
 
 
 def _mock(tool: str, **fields) -> dict:
@@ -199,8 +212,12 @@ def bash(
         return {"error": str(e)}
     if not _live():
         return _mock("bash", command=command, cwd=cwd)
+    try:
+        argv = _sandboxed(command, "none", folder)
+    except NoSandbox as e:
+        return {"error": str(e)}
     proc = subprocess.Popen(
-        ["/bin/bash", "-c", command], cwd=folder, env=_command_env(), text=True, errors="replace",
+        argv, cwd=folder, env=_command_env(), text=True, errors="replace",
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
     )  # fmt: skip
     try:
@@ -244,7 +261,7 @@ def _start(name: str, command: str) -> dict:
     log = root / ".services" / f"{name}.log"
     log.parent.mkdir(exist_ok=True)
     with open(log, "ab") as f:
-        proc = subprocess.Popen(["/bin/bash", "-c", command], cwd=root, env=_command_env(), stdout=f,
+        proc = subprocess.Popen(_sandboxed(command, "local"), cwd=root, env=_command_env(), stdout=f,
                                 stderr=subprocess.STDOUT, start_new_session=True)  # fmt: skip
     return {"pid": proc.pid, "command": command, "log": str(log), "started_at": time.time()}
 
@@ -277,6 +294,11 @@ def serve(
     if action == "start" and name in services and _alive(services[name]["pid"]):
         return {"error": f"{name} is already running"}
     command = command or services.get(name, {}).get("command")
+    if action != "stop":
+        try:
+            _sandboxed(command, "local")
+        except NoSandbox as e:  # refused before the old one stops
+            return {"error": str(e)}
     if name in services:
         _stop(name, services)
     if action != "stop":

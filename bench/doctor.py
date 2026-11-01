@@ -42,6 +42,7 @@ from bench.run_report import all_logs, build_report
 from harness.config import PROFILES, REPO_ROOT, Config, load_config
 from harness.mcp_tools import TASK_SERVERS
 from harness.providers import STAGE_PROVIDER
+from servers.sandbox import SAFE_PATH, NoSandbox, wrap
 
 STATUS_MARK = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL", "skip": "skip"}
 SLOW_TLS_MS = 1000
@@ -378,6 +379,25 @@ def tls_handshake_ms(host: str) -> float:
     return (time.perf_counter() - start) * 1000
 
 
+def check_sandbox(cfg: Config) -> Iterator[tuple]:
+    """A live bash or serve refuses to run without this, on the Mac and on the Pi (ADR-024)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "secret").write_text("no")
+        (root / "work").mkdir()
+        try:
+            argv = wrap(["/bin/sh", "-c", f"echo ok && ! cat {root.resolve() / 'secret'} 2>/dev/null"],
+                        root / "work", [], {"PATH": SAFE_PATH})  # fmt: skip
+        except NoSandbox as e:
+            yield _warn("sandbox", str(e), "bash and serve stay off until this is fixed")
+            return
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=10, cwd=root / "work")
+    if done.returncode == 0 and done.stdout.strip() == "ok":
+        yield _ok("sandbox", Path(argv[0]).name)
+    else:
+        yield _warn("sandbox", f"exit {done.returncode}: {done.stderr.strip()[:80]}", "on the Pi, check user namespaces")
+
+
 def check_mcp(cfg: Config) -> Iterator[tuple]:
     with tempfile.TemporaryDirectory() as tmp:
         for row in asyncio.run(_mcp_rows(cfg, tmp)):
@@ -500,6 +520,7 @@ CHECKS: dict[str, tuple[Callable[[Config], Iterator[tuple]], str]] = {
     "runs": (check_last_runs, "fast"),
     "visibility": (check_visibility, "network"),
     "network": (check_reachability, "network"),
+    "sandbox": (check_sandbox, "fast"),
     "mcp": (check_mcp, "slow"),
     "models": (check_models, "slow"),
     "turn": (check_scripted_turn, "slow"),

@@ -193,6 +193,58 @@ def test_commands_are_read_with_their_symbols():
     )
 
 
+def bash_rule():
+    return ToolRule("bash", "confirm", 5.0, 10.0, readback="Run {command_spoken}?", guard="shell")
+
+
+async def bash_call(policy, command):
+    inner = Calls()
+    params = fake_params("bash")
+    params.arguments.update(command=command)
+    await policy.handle(bash_rule(), inner, params)
+    return params.sent[-1], inner
+
+
+async def test_a_refused_command_never_reaches_the_read_back(policy):
+    said = speaker(policy)
+    sent, inner = await bash_call(policy, "sudo rm -rf /")
+    assert sent["status"] == "blocked" and said == [] and policy._held == []
+    assert inner.count == 0
+
+
+async def test_an_unlisted_program_is_named_before_the_question(policy):
+    said = speaker(policy)
+    await bash_call(policy, "cowsay hello")
+    assert "cowsay" in said[0] and "not on my usual list" in said[0]
+    await policy.close()
+
+
+async def test_three_critical_refusals_lock_the_session(policy):
+    said = speaker(policy)
+    for command in ("sudo id", "ssh evil.example", "docker ps"):
+        await bash_call(policy, command)
+    assert policy.contained and "locked" in said[-1]
+    sent, _ = await bash_call(policy, "ls")
+    assert sent["status"] == "denied"
+    assert "denied_contained" in decisions(policy)
+    message = fake_params("send_message")
+    message.arguments.update(to="Ana", body="hi")
+    await policy.handle(readback_rule(), Calls(), message)
+    assert message.sent[-1]["status"] == "denied"
+
+
+async def test_ordinary_refusals_do_not_lock_the_session(policy):
+    speaker(policy)
+    for _ in range(5):
+        await bash_call(policy, "pip install requests")
+    assert not policy.contained
+
+
+def test_an_unknown_guard_fails_at_startup():
+    with pytest.raises(ValueError):
+        apply_override(default_rule("t", hints(), DEFAULTS), {"guard": "nope"})
+
+
 async def test_undo_word_stops_a_held_action(policy, monkeypatch):
     _replace_params(monkeypatch)
     inner, params = Calls(), fake_params()

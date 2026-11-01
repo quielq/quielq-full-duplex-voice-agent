@@ -27,6 +27,12 @@ yes_max_words: 6   # a longer reply with "okay" in it is not a yes
 # no LLM call (ADR-024). Text longer than this is refused, since it cannot be heard in full.
 readback_max_chars: 240
 
+# After this many critical refusals in a session something is steering the model, so these
+# tools refuse every call until the session ends (ADR-024).
+containment:
+  after_critical: 3
+  tools: [bash, serve, write_file, edit_file, send_file, send_message, call_contact]
+
 # Fixed phrases: spoken by the harness with no LLM call.
 phrases:
   undone: "Okay, I stopped that. Nothing changed."
@@ -34,6 +40,8 @@ phrases:
   confirmed_undo: "Okay. Say cancel in the next {undo_s} seconds to stop it."
   confirmed_now: "Okay, doing that now."
   failed: "Sorry, that did not go through."
+  unlisted: "Careful, this uses {what}, which is not on my usual list."
+  contained: "I've been asked to do several unsafe things, so I've locked my shell and messaging until this session ends."
 
 # Spoken instead of a second LLM call when the tool succeeds (ADR-020). Off by default. Fields
 # come from the call's arguments and the result, plus spoken_duration and on_off. Held tools
@@ -55,8 +63,9 @@ reply_templates:
     next_track: "Playing {now_playing}."
     previous_track: "Playing {now_playing}."
 
-# Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s, report_result, readback.
+# Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s, report_result, readback, guard.
 # readback: fields are the call's arguments, plus command_spoken for shell commands.
+# guard: a check in harness/tool_policy.py GUARDS, run before anyone is asked.
 # report_result: true by default. A held tool's success gets one more LLM reply (ADR-023).
 tools:
   cancel_timer:
@@ -74,7 +83,9 @@ tools:
     readback: "Call {to}. Should I call?"
   bash:
     timeout_s: 30.0   # the server stops the command at 25 s; longer work goes through serve
+    guard: shell
     readback: "Run this command: {command_spoken}. Should I run it?"
   serve:
     timeout_s: 15.0
+    guard: shell
     readback: "{action} the service {name}. {command_spoken}. Should I do that?"

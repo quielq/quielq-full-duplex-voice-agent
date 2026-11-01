@@ -24,6 +24,10 @@ has a ``readback``: then the harness reads the real arguments aloud with no LLM 
 page the model has read cannot soften what the user is agreeing to (ADR-024). A yes counts only
 after the read-back has played, and arguments too long to read aloud are refused.
 
+A tool with a ``guard`` is checked before anyone is asked, so a refused shell command never
+reaches the read-back. Repeated critical refusals mean something is steering the model: the
+session then contains itself, and ``contain_tools`` refuse every call until it ends (ADR-024).
+
 Only the commit step is protected. An interruption cannot touch a held action (only a
 transcript can), and once a write has started it finishes even if the user barges in; the
 real result then replaces the "CANCELLED" that Pipecat writes for the cancelled handler.
@@ -67,6 +71,8 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.llm_service import FunctionCallParams
 from pipecat.services.mcp_service import MCPClient
 
+from servers import shell_guard
+
 PERMISSIONS = ("auto", "confirm", "disabled")
 HINT_FIELDS = ("read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint")
 RESULT_NOTE = (
@@ -74,6 +80,7 @@ RESULT_NOTE = (
     "is current, even if earlier replies said otherwise. Tell the user the outcome in one short "
     "sentence, and do not call a tool.)"
 )
+GUARDS = {"shell": lambda args: shell_guard.check(str(args.get("command") or ""))}
 
 
 def spoken_duration(seconds: int) -> str:
@@ -137,6 +144,7 @@ class ToolRule:
     source: str = "hints"
     report_result: bool = True  # held tools only: an LLM reply says how it went
     readback: str = ""  # confirm tools only: the harness asks, from the real arguments
+    guard: str = ""  # a name in GUARDS, checked before anyone is asked
 
 
 def default_rule(name: str, hints: dict | None, defaults: dict) -> ToolRule:
@@ -161,9 +169,11 @@ def default_rule(name: str, hints: dict | None, defaults: dict) -> ToolRule:
 def apply_override(rule: ToolRule, override: dict | None) -> ToolRule:
     if not override:
         return rule
-    unknown = set(override) - {"permission", "undo_s", "timeout_s", "report_result", "readback"}
+    unknown = set(override) - {"permission", "undo_s", "timeout_s", "report_result", "readback", "guard"}
     if unknown:
         raise ValueError(f"{rule.name}: unknown tool policy keys {sorted(unknown)}")
+    if override.get("guard", "") and override["guard"] not in GUARDS:
+        raise ValueError(f"{rule.name}: unknown guard {override['guard']!r}")
     permission = override.get("permission", rule.permission)
     if permission not in PERMISSIONS:
         raise ValueError(f"{rule.name}: permission must be one of {PERMISSIONS}, not {permission!r}")
@@ -174,6 +184,7 @@ def apply_override(rule: ToolRule, override: dict | None) -> ToolRule:
         timeout_s=float(override.get("timeout_s", rule.timeout_s)),
         report_result=bool(override.get("report_result", rule.report_result)),
         readback=str(override.get("readback", rule.readback)),
+        guard=str(override.get("guard", rule.guard)),
         source="override",
     )
 
@@ -244,6 +255,11 @@ class ToolPolicy:
         self.answer_max_words: int = config["answer_max_words"]
         self._yes_max_words: int = config["yes_max_words"]
         self._readback_max_chars: int = config.get("readback_max_chars", 240)
+        contain = config.get("containment") or {}
+        self._contain_after: int = contain.get("after_critical", 3)
+        self._contain_tools: set[str] = set(contain.get("tools") or [])
+        self._critical_refusals = 0
+        self.contained = False
         self.rules: dict[str, ToolRule] = {}
         self.decisions: list[dict] = []
         self._held: list[HeldAction] = []
@@ -311,11 +327,18 @@ class ToolPolicy:
 
     async def handle(self, rule: ToolRule, inner, params: FunctionCallParams) -> None:
         args = dict(params.arguments)
+        if self.contained and rule.name in self._contain_tools:
+            self._decide(rule.name, "denied_contained", args=args)
+            await params.result_callback({"status": "denied", "reason": "Locked for the rest of this session."})
+            return
+        warning = await self._guarded(rule, params, args)
+        if warning is None:
+            return
         if rule.permission == "disabled":  # removed from the schema, so only a stale call lands here
             self._decide(rule.name, "denied_disabled", args=args)
             await params.result_callback({"status": "denied", "reason": "disabled"})
         elif rule.permission == "confirm":
-            await self._hold(rule, inner, params, "confirm")
+            await self._hold(rule, inner, params, "confirm", warning)
         elif rule.undo_s > 0:
             await self._hold(rule, inner, params, "undo")
         elif rule.read_only:
@@ -324,6 +347,28 @@ class ToolPolicy:
         else:
             self._decide(rule.name, "allowed", args=args)
             await self._protected_commit(rule, inner, params)
+
+    async def _guarded(self, rule: ToolRule, params: FunctionCallParams, args: dict) -> str | None:
+        """Run the tool's guard. None means it refused and has answered; otherwise the words to
+        put before the read-back."""
+        guard = GUARDS.get(rule.guard)
+        decision = guard(args) if guard else None
+        if decision is None or decision.verdict == shell_guard.ALLOW:
+            return ""
+        if decision.verdict == shell_guard.ASK:
+            self._decide(rule.name, "guard_ask", reason=decision.reason, subjects=list(decision.subjects))
+            return self.phrases["unlisted"].format(what=", ".join(decision.subjects))
+        self._decide(rule.name, "denied_guard", args=args, reason=decision.reason, severity=decision.severity)
+        self._critical_refusals += decision.severity == shell_guard.CRITICAL
+        locked = self._critical_refusals >= self._contain_after and not self.contained
+        await params.result_callback({"status": "blocked", "reason": decision.reason,
+                                      "note": "Not done. Do not retry this or a variation of it."})  # fmt: skip
+        if locked:
+            self.contained = True
+            self._decide(rule.name, "contained", refusals=self._critical_refusals, tools=sorted(self._contain_tools))
+            if self.speak:
+                await self.speak(self.phrases["contained"])
+        return None
 
     def _sounds_compound(self, params: FunctionCallParams) -> bool:
         users = [m for m in params.context.get_messages() if m.get("role") == "user"]
@@ -358,7 +403,7 @@ class ToolPolicy:
         )
         await self.speak(reply, append_to_context=False)
 
-    async def _hold(self, rule: ToolRule, inner, params: FunctionCallParams, state: str) -> None:
+    async def _hold(self, rule: ToolRule, inner, params: FunctionCallParams, state: str, warning: str = "") -> None:
         question = ""
         if state == "confirm" and rule.readback and self.speak:
             question = readback_text(rule.readback, dict(params.arguments), self._readback_max_chars)
@@ -367,6 +412,7 @@ class ToolPolicy:
                 await params.result_callback({"status": "denied", "reason": "Not done. That is too long to read "
                                               "aloud for a yes or no. Offer something shorter."})  # fmt: skip
                 return
+            question = f"{warning} {question}".strip()
         for old in [a for a in self._held if a.rule.name == rule.name and a.state == state]:
             await self._drop(old, "superseded")
         action = HeldAction(rule, inner, params, state)
