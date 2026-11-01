@@ -19,6 +19,11 @@ A held tool finishes after the turn that asked for it, so nothing else would mak
 how it went. A success then starts one more LLM reply (ADR-023). The result stays in the tool
 message: the note that starts the reply is fixed text, so tool output never gets the user role.
 
+A confirmation is only as good as the question. The model writes that question unless the tool
+has a ``readback``: then the harness reads the real arguments aloud with no LLM call, so a
+page the model has read cannot soften what the user is agreeing to (ADR-024). A yes counts only
+after the read-back has played, and arguments too long to read aloud are refused.
+
 Only the commit step is protected. An interruption cannot touch a held action (only a
 transcript can), and once a write has started it finishes even if the user barges in; the
 real result then replaces the "CANCELLED" that Pipecat writes for the cancelled handler.
@@ -76,6 +81,30 @@ def spoken_duration(seconds: int) -> str:
     return " ".join(f"{n} {unit}{'' if n == 1 else 's'}" for n, unit in parts if n)
 
 
+SHELL_WORDS = (("&&", " and then "), ("||", " or else "), ("2>", " errors into "), (">>", " append to "),
+               (">", " into "), ("<", " from "), ("|", " pipe to "), (";", " then "), ("~", " home "),
+               ("$", " dollar "), ("*", " star "), ("/", " slash "), ("--", " dash dash "),
+               (" -", " dash "))  # fmt: skip
+
+
+def spoken_command(command: str) -> str:
+    """A shell command as words. TTS drops most symbols, and they are what changes its meaning."""
+    for symbol, word in SHELL_WORDS:
+        command = command.replace(symbol, word)
+    return " ".join(command.split())
+
+
+def readback_text(template: str, args: dict, max_chars: int) -> str | None:
+    """The question to read aloud, or None when it cannot be read in full."""
+    fields = {k: "" if v is None else v for k, v in args.items()}
+    fields["command_spoken"] = spoken_command(str(fields.get("command", "")))
+    try:
+        text = " ".join(template.format(**fields).split())
+    except (KeyError, ValueError, IndexError):
+        return None
+    return text if len(text) <= max_chars else None
+
+
 def _as_data(result: Any) -> Any:
     if isinstance(result, str):
         with contextlib.suppress(ValueError):
@@ -107,6 +136,7 @@ class ToolRule:
     read_only: bool = False
     source: str = "hints"
     report_result: bool = True  # held tools only: an LLM reply says how it went
+    readback: str = ""  # confirm tools only: the harness asks, from the real arguments
 
 
 def default_rule(name: str, hints: dict | None, defaults: dict) -> ToolRule:
@@ -131,7 +161,7 @@ def default_rule(name: str, hints: dict | None, defaults: dict) -> ToolRule:
 def apply_override(rule: ToolRule, override: dict | None) -> ToolRule:
     if not override:
         return rule
-    unknown = set(override) - {"permission", "undo_s", "timeout_s", "report_result"}
+    unknown = set(override) - {"permission", "undo_s", "timeout_s", "report_result", "readback"}
     if unknown:
         raise ValueError(f"{rule.name}: unknown tool policy keys {sorted(unknown)}")
     permission = override.get("permission", rule.permission)
@@ -143,6 +173,7 @@ def apply_override(rule: ToolRule, override: dict | None) -> ToolRule:
         undo_s=float(override.get("undo_s", rule.undo_s)),
         timeout_s=float(override.get("timeout_s", rule.timeout_s)),
         report_result=bool(override.get("report_result", rule.report_result)),
+        readback=str(override.get("readback", rule.readback)),
         source="override",
     )
 
@@ -175,6 +206,7 @@ class HeldAction:
     in_context: bool = False
     announced: bool = False  # the reply or phrase telling the user is on its way
     await_bot_start: bool = False  # a fixed phrase: speech already playing does not count
+    read_back: bool = False  # the harness read the arguments, so a yes must follow all of it
     window_open: bool = False
     answer_clock: bool = False  # the confirm wait is running from the end of the question
 
@@ -211,6 +243,7 @@ class ToolPolicy:
         self.phrases: dict[str, str] = config["phrases"]
         self.answer_max_words: int = config["answer_max_words"]
         self._yes_max_words: int = config["yes_max_words"]
+        self._readback_max_chars: int = config.get("readback_max_chars", 240)
         self.rules: dict[str, ToolRule] = {}
         self.decisions: list[dict] = []
         self._held: list[HeldAction] = []
@@ -326,6 +359,14 @@ class ToolPolicy:
         await self.speak(reply, append_to_context=False)
 
     async def _hold(self, rule: ToolRule, inner, params: FunctionCallParams, state: str) -> None:
+        question = ""
+        if state == "confirm" and rule.readback and self.speak:
+            question = readback_text(rule.readback, dict(params.arguments), self._readback_max_chars)
+            if question is None:
+                self._decide(rule.name, "denied_unreadable", args=dict(params.arguments))
+                await params.result_callback({"status": "denied", "reason": "Not done. That is too long to read "
+                                              "aloud for a yes or no. Offer something shorter."})  # fmt: skip
+                return
         for old in [a for a in self._held if a.rule.name == rule.name and a.state == state]:
             await self._drop(old, "superseded")
         action = HeldAction(rule, inner, params, state)
@@ -335,6 +376,9 @@ class ToolPolicy:
             defaults = self._cfg["defaults"]
             wait_s = defaults["announce_wait_s"] if self.plays_audio else defaults["confirm_wait_s"]
             action.task = self._spawn(self._confirm_expiry(action, wait_s))
+            if question:
+                await self._read_back(action, question)
+                return
             result = {
                 "status": "needs_confirmation",
                 "note": "Not done. Ask the user to confirm in one short question, then stop. "
@@ -356,6 +400,25 @@ class ToolPolicy:
         await params.result_callback(
             result, properties=FunctionCallResultProperties(on_context_updated=reached_context)
         )
+
+    async def _read_back(self, action: HeldAction, question: str) -> None:
+        """Ask from the real arguments, with no LLM reply, as a reply template does."""
+        action.read_back = action.announced = True
+        action.await_bot_start = self.plays_audio
+        self._decide(action.rule.name, "read_back", text=question)
+
+        async def reached_context() -> None:
+            action.in_context = True
+            action.params.context.add_message({"role": "assistant", "content": question})
+            self._write_back(action)
+
+        result = {"status": "needs_confirmation",
+                  "note": "Not done. The question was read aloud and the yes or no is heard directly, "
+                  "so do not call this tool again."}  # fmt: skip
+        await action.params.result_callback(
+            result, properties=FunctionCallResultProperties(run_llm=False, on_context_updated=reached_context)
+        )
+        await self.speak(question, append_to_context=False)
 
     def _spawn(self, coro) -> asyncio.Task:
         task = asyncio.create_task(coro)
@@ -398,7 +461,7 @@ class ToolPolicy:
                 action.announced = True
 
     def bot_started(self) -> None:
-        for action in self._unannounced():
+        for action in self._unannounced() + self._awaiting_answer():
             action.await_bot_start = False
 
     def bot_stopped(self) -> None:
@@ -406,7 +469,7 @@ class ToolPolicy:
             if action.announced and not action.await_bot_start:
                 self._open_window(action)
         for action in self._awaiting_answer():
-            if action.announced and not action.answer_clock:
+            if action.announced and not action.answer_clock and not action.await_bot_start:
                 action.answer_clock = True
                 action.task.cancel()
                 action.task = self._spawn(self._confirm_expiry(action, self._cfg["defaults"]["confirm_wait_s"]))
@@ -506,6 +569,8 @@ class ToolPolicy:
                 return Verdict("denied", self.phrases["denied"])
             if not final or (self.plays_audio and not action.announced):
                 continue
+            if self.plays_audio and action.read_back and not action.answer_clock:
+                continue  # the read-back is still playing, and this may be its own echo
             if self._yes_re.search(text) and len(text.split()) <= self._yes_max_words:
                 return self._confirm(action, text)
             # A different request is not a yes, and a later "yes" may not mean this.

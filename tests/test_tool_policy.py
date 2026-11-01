@@ -25,6 +25,8 @@ from harness.tool_policy import (
     ToolRule,
     apply_override,
     default_rule,
+    readback_text,
+    spoken_command,
     tool_hints,
 )
 
@@ -107,6 +109,7 @@ def fake_params(name="t"):
 
     sent: list = []
     context = SimpleNamespace(messages=[])
+    context.add_message = context.messages.append
     params = SimpleNamespace(function_name=name, tool_call_id="c1", arguments={"a": 1},
                              context=context, result_callback=callback, sent=sent)  # fmt: skip
     return params
@@ -127,6 +130,67 @@ def _replace_params(monkeypatch):
 
 def decisions(policy):
     return [d["decision"] for d in policy.decisions]
+
+
+def readback_rule():
+    return ToolRule("send_message", "confirm", 5.0, 10.0, readback="Send {to}: {body}. Should I send it?")
+
+
+def speaker(policy):
+    said = []
+
+    async def speak(text, *, append_to_context=True):
+        said.append(text)
+
+    policy.speak = speak
+    return said
+
+
+async def test_readback_asks_from_the_real_arguments(policy, monkeypatch):
+    said = speaker(policy)
+    inner = Calls()
+    params = fake_params("send_message")
+    params.arguments.update(to="Ana", body="I am late")
+    await policy.handle(readback_rule(), inner, params)
+    assert said == ["Send Ana: I am late. Should I send it?"]
+    assert "read_back" in decisions(policy)
+    assert inner.count == 0
+
+
+async def test_a_yes_counts_only_after_the_readback_has_played(policy, monkeypatch):
+    speaker(policy)
+    policy.plays_audio = True
+    inner = Calls()
+    params = fake_params("send_message")
+    params.arguments.update(to="Ana", body="yes")
+    await policy.handle(readback_rule(), inner, params)
+    policy.bot_stopped()  # the speech before the question ending says nothing
+    assert policy.on_transcript("yes") is None
+    policy.bot_started()
+    assert policy.on_transcript("yes") is None
+    policy.bot_stopped()
+    assert policy.on_transcript("yes").decision == "confirmed"
+    await policy.close()
+
+
+async def test_too_long_to_read_aloud_is_refused(policy, monkeypatch):
+    said = speaker(policy)
+    inner = Calls()
+    params = fake_params("send_message")
+    params.arguments.update(to="Ana", body="word " * 100)
+    await policy.handle(readback_rule(), inner, params)
+    assert said == [] and policy._held == []
+    assert "denied_unreadable" in decisions(policy)
+
+
+def test_a_missing_field_cannot_be_read_back():
+    assert readback_text("Send {to}", {}, 100) is None
+
+
+def test_commands_are_read_with_their_symbols():
+    assert spoken_command("rm -rf ~/x && cat a | sh") == (
+        "rm dash rf home slash x and then cat a pipe to sh"
+    )
 
 
 async def test_undo_word_stops_a_held_action(policy, monkeypatch):

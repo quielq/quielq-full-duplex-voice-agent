@@ -23,6 +23,10 @@ no_words: ["no", "nope", "cancel", "stop", "don't", "do not", "never mind"]
 answer_max_words: 3
 yes_max_words: 6   # a longer reply with "okay" in it is not a yes
 
+# A confirm tool with a `readback` is asked about by the harness, from its real arguments, with
+# no LLM call (ADR-024). Text longer than this is refused, since it cannot be heard in full.
+readback_max_chars: 240
+
 # Fixed phrases: spoken by the harness with no LLM call.
 phrases:
   undone: "Okay, I stopped that. Nothing changed."
@@ -51,7 +55,8 @@ reply_templates:
     next_track: "Playing {now_playing}."
     previous_track: "Playing {now_playing}."
 
-# Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s, report_result.
+# Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s, report_result, readback.
+# readback: fields are the call's arguments, plus command_spoken for shell commands.
 # report_result: true by default. A held tool's success gets one more LLM reply (ADR-023).
 tools:
   cancel_timer:
@@ -61,5 +66,11 @@ tools:
   fetch_content: {timeout_s: 20.0}
   get_weather: {timeout_s: 15.0}
   index_documents: {timeout_s: 60.0}
-  bash: {timeout_s: 30.0}   # the server stops the command at 25 s; longer work goes through serve
-  serve: {timeout_s: 15.0}
+  send_message:
+    readback: "Send {to} this message: {body}. Should I send it?"
+  bash:
+    timeout_s: 30.0   # the server stops the command at 25 s; longer work goes through serve
+    readback: "Run this command: {command_spoken}. Should I run it?"
+  serve:
+    timeout_s: 15.0
+    readback: "{action} the service {name}. {command_spoken}. Should I do that?"
