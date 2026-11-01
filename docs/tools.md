@@ -50,7 +50,7 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | --- | --- | --- | --- |
 | `clock` | `get_time`, `set_timer`, `set_alarm`, `list_timers`, `cancel_timer` | Real | Due timers are not announced aloud yet |
 | `notes` | `add_note`, `list_notes`, `delete_note` | Real, SQLite | |
-| `docs` | `index_documents`, `local_search`, `search_document` | Real, SQLite FTS5 | Put files in `data/documents` |
+| `docs` | `index_documents`, `local_search`, `search_document` | Real, SQLite FTS5 | Put files in `data/documents`, which the agent can read but never write |
 | `workspace` | `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, `serve_status` | Real, confined to `data/workspace` | |
 | `workspace` | `bash`, `serve` | Mock | `ME3_WORKSPACE_LIVE=1` and a working sandbox |
 | `workspace` | `send_file` | Always a mock | Copies to `data/send_outbox` |
