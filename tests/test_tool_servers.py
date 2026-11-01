@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from harness.mcp_tools import _server_env
+from servers import common
 from servers.tasks.docs import server as docs
 from servers.tasks.knowledge import server as knowledge
 from servers.tasks.workspace import server as workspace
@@ -34,6 +35,10 @@ def test_every_backend_defaults_to_a_fake():
     ("weather=open_meteo", lambda: knowledge.get_weather()),
 ])  # fmt: skip
 def test_a_zero_cap_refuses_before_any_network(stage, call, monkeypatch):
+    config = common._providers()
+    for provider in config["providers"].values():
+        provider["daily_cap_usd"] = 0.0
+    monkeypatch.setattr(common, "_providers", lambda: config)  # the real caps change with approvals
     monkeypatch.setenv("ME3_TOOL_STAGES", stage)
     assert "cap is zero" in call()["error"]
 

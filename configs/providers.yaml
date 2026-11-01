@@ -59,7 +59,7 @@ providers:
     daily_cap_usd: 0.00
   tavily:
     env_key: TAVILY_API_KEY
-    daily_cap_usd: 0.00
+    daily_cap_usd: 5.00   # approved Nov 1, 2026
 
 # List prices used by the cost ledger (USD). Recheck on the day a provider is switched on.
 # Sources: docs/architecture.md, "Cost and budget" and "Model comparison under $20".
