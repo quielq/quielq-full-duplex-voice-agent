@@ -937,6 +937,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastmcp" },
+    { name = "httpx" },
     { name = "livekit" },
     { name = "mcp" },
     { name = "pipecat-ai", extra = ["anthropic", "deepgram", "groq", "local", "mcp"] },
@@ -953,6 +954,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=4.1,<5" },
+    { name = "httpx", specifier = ">=0.28,<1" },
     { name = "livekit", specifier = ">=1.2.0" },
     { name = "mcp", specifier = ">=2,<3" },
     { name = "pipecat-ai", extras = ["anthropic", "cartesia", "deepgram", "groq", "local", "mcp", "silero"], specifier = "==1.13.0" },
