@@ -31,7 +31,7 @@ readback_max_chars: 240
 # tools refuse every call until the session ends (ADR-024).
 containment:
   after_critical: 3
-  tools: [bash, serve, write_file, edit_file, send_file, send_message, call_contact]
+  tools: [bash, serve, write_file, edit_file, send_file, open_in_browser, send_message, call_contact]
 
 # Fixed phrases: spoken by the harness with no LLM call.
 phrases:
@@ -86,6 +86,8 @@ tools:
     timeout_s: 30.0   # the server stops the command at 25 s; longer work goes through serve
     guard: shell
     readback: "Run this command: {command_spoken}. Should I run it?"
+  open_in_browser:
+    readback: "Open {path} in your browser. Should I do that?"
   serve:
     timeout_s: 15.0
     guard: shell

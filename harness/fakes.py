@@ -307,6 +307,9 @@ class RuleBasedLLMService(LLMService):
         if "next_track" in tools and re.search(r"next (song|track)|skip", low):
             await self._call(context, "next_track", {})
             return True
+        if "open_in_browser" in tools and "in the browser" in low:
+            await self._call(context, "open_in_browser", {"path": "page.html"})
+            return True
         if "restart_track" in tools and "from the start" in low:
             await self._call(context, "restart_track", {})
             return True

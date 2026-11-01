@@ -1,8 +1,9 @@
 """Workspace MCP server: files, shell, and long-running services in one folder (ADR-021).
 
 Files are real and stay inside $ME3_DATA_DIR/workspace; reads may also use the documents folder.
-``bash`` and ``serve`` are mocks unless ME3_WORKSPACE_LIVE=1, and ``send_file`` is always a
-mock. Live commands pass servers/shell_guard.py and then run in servers/sandbox.py (ADR-024):
+``bash``, ``serve``, and ``open_in_browser`` are mocks unless ME3_WORKSPACE_LIVE=1, and
+``send_file`` is always a mock. ``open_in_browser`` is the one thing that leaves the sandbox
+(ADR-026): it runs no command text, only the system opener on one HTML file. Live commands pass servers/shell_guard.py and then run in servers/sandbox.py (ADR-024):
 with no sandbox on the machine, nothing runs.
 """
 
@@ -17,6 +18,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -38,6 +40,9 @@ BASH_TIMEOUT_S = 25   # under the policy timeout, so the server reports it and k
 MAX_SCAN_BYTES = 2_000_000
 MAX_SEND_BYTES = 10_000_000
 ENV_ALLOWED = ("LANG", "LC_ALL", "TERM")
+BROWSER_FILES = (".html", ".htm")
+BROWSER_ENV = ("HOME", "USER", "LANG", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
+OPENER_TIMEOUT_S = 8   # under the policy timeout
 
 
 def _live() -> bool:
@@ -344,6 +349,34 @@ def send_file(path: Annotated[str, Field(min_length=1, description="File path, r
     copy = outbox / f"{uuid.uuid4().hex[:8]}-{source.name}"
     shutil.copyfile(source, copy)
     return {"mock": True, "sent": False, "saved_as": copy.name, "note": "Saved to the outbox. Nothing left this machine."}
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
+)
+def open_in_browser(
+    path: Annotated[str, Field(min_length=1, description="HTML file, relative to the workspace")],
+) -> dict:
+    """Open an HTML file from the workspace in the user's web browser."""
+    try:
+        target = inside(path, [workspace_dir()])
+    except OutsideRoots as e:
+        return {"error": str(e)}
+    if target.suffix.lower() not in BROWSER_FILES:
+        return {"error": "only HTML files can be opened in the browser"}
+    if not target.is_file():
+        return {"error": f"no file at {path}"}
+    if not _live():
+        return _mock("open_in_browser", path=path)
+    opener = shutil.which("open" if sys.platform == "darwin" else "xdg-open", path=SAFE_PATH)
+    if not opener:
+        return {"error": "this machine has no way to open a browser"}
+    env = {k: os.environ[k] for k in BROWSER_ENV if k in os.environ} | {"PATH": SAFE_PATH}
+    try:
+        subprocess.run([opener, str(target)], env=env, check=True, capture_output=True, timeout=OPENER_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError):
+        return {"error": "the browser could not be opened"}
+    return {"opened": target.name}
 
 
 if __name__ == "__main__":

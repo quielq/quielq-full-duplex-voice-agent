@@ -77,6 +77,8 @@ General tools (ADR-021, ADR-024): weather and fetch are real by default, and `se
 
 `bash` and `serve` are mocks unless `ME3_WORKSPACE_LIVE=1`. Live, they pass `servers/shell_guard.py` and run in `servers/sandbox.py` (`sandbox-exec` on the Mac, `bwrap` on the Pi). With no sandbox they refuse. Never weaken this.
 
+`open_in_browser` is the only tool that leaves the sandbox: one HTML file from the workspace, after a spoken yes, and a mock unless `ME3_WORKSPACE_LIVE=1` (ADR-026). Do not widen it to other file types or to command text without a new ADR.
+
 Messages and calls are mocks unless `ME3_TOOL_STAGES=comms=bridge`, which needs `scripts/mac_phone_bridge.py` running on the Mac, the bridge settings in `.env`, and `data/contacts.yaml`. Calls need a click on the Mac.
 
 How tools work, how to add one, and which guardrails it needs: `docs/tools.md`. Read it before adding or changing a tool.
