@@ -133,6 +133,8 @@ def check_env(cfg: Config) -> Iterator[tuple]:
         yield _warn(".env", "missing, so only fakes can run", "cp .env.example .env")
     in_use = _stage_providers(cfg)
     for name, p in cfg.providers["providers"].items():
+        if not p["env_key"]:
+            continue
         is_set = bool(os.environ.get(p["env_key"], "").strip())
         state = "set" if is_set else "not set"
         if name in in_use and not is_set:

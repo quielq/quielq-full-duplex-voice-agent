@@ -12,6 +12,13 @@ stages:
   tts: fake   # fake | fake_words (fake with word timestamps) | deepgram_aura2 | cartesia
   music: fake # fake (nothing plays) | spotify (demo only, ADR-022)
 
+# Tool backends, kept apart from the voice stages. The servers read these themselves
+# (ME3_TOOL_STAGES overrides per run, e.g. search=ddgs,weather=open_meteo). See ADR-021.
+tool_stages:
+  search: fake    # fake | ddgs | tavily
+  weather: fake   # fake | open_meteo
+  fetch: fake     # fake | http
+
 providers:
   deepgram:
     env_key: DEEPGRAM_API_KEY
@@ -43,6 +50,16 @@ providers:
     env_key: SPOTIFY_REFRESH_TOKEN
     extra_env_keys: [SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET]
     daily_cap_usd: 0.01   # the API is free, so this only keeps the call allowed; 0 switches it off
+  # Free or free-tier, but each is off until a cap above zero is approved (ADR-021).
+  ddgs:
+    env_key: null
+    daily_cap_usd: 0.00
+  open_meteo:
+    env_key: null
+    daily_cap_usd: 0.00
+  tavily:
+    env_key: TAVILY_API_KEY
+    daily_cap_usd: 0.00
 
 # List prices used by the cost ledger (USD). Recheck on the day a provider is switched on.
 # Sources: docs/architecture.md, "Cost and budget" and "Model comparison under $20".
@@ -60,3 +77,6 @@ prices:
   anthropic:
     input_per_token: 0.00000010        # Haiku 5.5, $0.10 per 1M
     output_per_token: 0.00000050       # $0.50 per 1M
+  ddgs_per_search: 0.0                 # no API, no charge
+  open_meteo_per_call: 0.0             # free for non-commercial use, open-meteo.com/en/terms
+  tavily_per_search: 0.008             # 1 credit at pay-as-you-go; first 1,000 a month are free

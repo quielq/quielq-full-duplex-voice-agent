@@ -52,3 +52,9 @@ tools:
   cancel_timer:
     permission: auto
     undo_s: 5.0
+  search: {timeout_s: 15.0}
+  fetch_content: {timeout_s: 20.0}
+  get_weather: {timeout_s: 15.0}
+  index_documents: {timeout_s: 60.0}
+  bash: {timeout_s: 30.0}   # the server stops the command at 25 s; longer work goes through serve
+  serve: {timeout_s: 15.0}

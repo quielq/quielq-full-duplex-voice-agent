@@ -29,12 +29,17 @@ TASK_SERVERS = {
     "comms": "servers.tasks.comms.server",
     "lights": "servers.tasks.lights.server",
     "music": "servers.tasks.music.server",
+    "knowledge": "servers.tasks.knowledge.server",
+    "docs": "servers.tasks.docs.server",
+    "workspace": "servers.tasks.workspace.server",
 }
+SERVER_KEYS = {"servers.tasks.knowledge.server": {"TAVILY_API_KEY"}}  # the only exceptions (ADR-021)
 
 
 def _server_env(data_dir: str | None, module: str = "") -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}  # servers get no keys
-    if module != TASK_SERVERS["music"]:  # the one exception (ADR-022)
+    allowed = SERVER_KEYS.get(module, set())
+    env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY") or k in allowed}
+    if module != TASK_SERVERS["music"]:  # Spotify credentials reach only music (ADR-022)
         env = {k: v for k, v in env.items() if not k.startswith("SPOTIFY_")}
     if data_dir:
         env["ME3_DATA_DIR"] = data_dir
