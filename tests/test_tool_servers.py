@@ -322,3 +322,46 @@ def test_live_serve_starts_logs_and_stops(monkeypatch):
     assert not workspace._alive(pid)
     assert workspace.serve_status()["services"] == []
     assert os.path.isdir(workspace.workspace_dir())
+
+
+def test_weather_retries_a_place_without_city(monkeypatch):
+    asked = []
+
+    def geocode(name):
+        asked.append(name)
+        return [] if name == "Taguig City" else [{"name": "City of Taguig", "latitude": 14.5, "longitude": 121.0}]
+
+    now = {"temperature_2m": 26, "weather_code": 3, "wind_speed_10m": 2}
+    answer = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"current": now, "daily": {}})
+    monkeypatch.setattr(knowledge, "_geocode", geocode)
+    monkeypatch.setattr(knowledge.httpx, "get", lambda *a, **k: answer)
+    out, calls = knowledge._open_meteo("Taguig City", False)
+    assert asked == ["Taguig City", "Taguig"]
+    assert out["place"] == "City of Taguig" and calls == 3
+
+
+def test_an_unknown_place_stays_an_error(monkeypatch):
+    monkeypatch.setattr(knowledge, "_geocode", lambda name: [])
+    assert knowledge._open_meteo("Nowhere City", False) == ({"error": "could not find Nowhere City"}, 2)
+
+
+def test_a_write_reports_where_the_file_went(data):
+    out = workspace.write_file("a.txt", "x")
+    assert out["full_path"] == str(common.workspace_dir() / "a.txt")
+    listed = workspace.list_files()
+    assert listed["workspace_folder"] == str(common.workspace_dir())
+    assert listed["documents_folder"] == str(common.documents_dir())
+
+
+def test_the_mock_player_says_it_is_a_mock(data):
+    from servers.tasks.music.backends import MockBackend
+
+    assert MockBackend().play("Dive")["mock"] is True
+
+
+def test_fetch_retries_a_403_once(monkeypatch):
+    answers = [{"error": knowledge.BLOCKED}, {"text": "page"}]
+    monkeypatch.setenv("ME3_TOOL_STAGES", "fetch=http")
+    monkeypatch.setattr(knowledge, "FETCH_RETRY_S", 0)
+    monkeypatch.setattr(knowledge, "_get", lambda url, page: answers.pop(0))
+    assert knowledge.fetch_content("https://example.com/")["text"] == "page"
