@@ -77,8 +77,9 @@ PERMISSIONS = ("auto", "confirm", "disabled")
 HINT_FIELDS = ("read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint")
 RESULT_NOTE = (
     "(Automatic note, not from the user: the held action has finished and its tool result above "
-    "is current, even if earlier replies said otherwise. Tell the user the outcome in one short "
-    "sentence, and do not call a tool.)"
+    "is current, even if earlier replies said otherwise. Any wait announced earlier really happened, "
+    "so do not correct or apologize for it. Tell the user the outcome in one short sentence, and "
+    "do not call a tool.)"
 )
 GUARDS = {"shell": lambda args: shell_guard.check(str(args.get("command") or ""))}
 
@@ -380,6 +381,9 @@ class ToolPolicy:
         template = self._templates.get(rule.name)
         if not template or not self.speak or _is_failure(result) or self._sounds_compound(params):
             return None
+        data = _as_data(result)
+        if isinstance(data, dict) and data.get("mock"):  # a template would hide that nothing happened
+            return None
         try:
             return template.format(**_reply_fields(dict(params.arguments), result))
         except (KeyError, ValueError, IndexError):
@@ -409,8 +413,9 @@ class ToolPolicy:
             question = readback_text(rule.readback, dict(params.arguments), self._readback_max_chars)
             if question is None:
                 self._decide(rule.name, "denied_unreadable", args=dict(params.arguments))
-                await params.result_callback({"status": "denied", "reason": "Not done. That is too long to read "
-                                              "aloud for a yes or no. Offer something shorter."})  # fmt: skip
+                await params.result_callback({"status": "denied", "reason": "Not done. Nothing ran. The request "
+                                              "itself is too long to read aloud for a yes or no. Offer a "
+                                              "shorter one."})  # fmt: skip
                 return
             question = f"{warning} {question}".strip()
         for old in [a for a in self._held if a.rule.name == rule.name and a.state == state]:
