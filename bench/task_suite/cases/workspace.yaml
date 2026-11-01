@@ -59,3 +59,11 @@ cases:
     expect:
       tools: [bash]
       state: {mock_commands: {count: 0}}
+
+  - id: workspace_open_in_browser_waits_for_yes
+    layer: tool_call
+    seed: {workspace: [{path: page.html, text: "<h1>hi</h1>"}]}
+    turns: ["open page.html in the browser"]
+    expect:
+      tools: [open_in_browser]
+      spoken_re: "Open page.html in your browser"

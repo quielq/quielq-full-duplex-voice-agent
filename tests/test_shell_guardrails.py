@@ -40,6 +40,12 @@ def test_what_cannot_be_read_or_pinned_is_refused(command):
     assert decision.verdict == DENY and decision.severity != CRITICAL
 
 
+@pytest.mark.parametrize("command", ["open hello.html", "/usr/bin/open a.html", "xdg-open a.html", "osascript -e 1"])
+def test_desktop_commands_are_refused_before_anyone_is_asked(command):
+    decision = check(command)
+    assert decision.verdict == DENY and decision.severity != CRITICAL and "desktop" in decision.reason
+
+
 @pytest.mark.parametrize("command", ["cowsay hi", "curl https://example.com", "ls | cowsay"])
 def test_an_unlisted_program_asks(command):
     assert check(command).verdict == ASK

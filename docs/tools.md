@@ -2,7 +2,7 @@
 
 ME3's tools are MCP servers that the voice LLM can call. A spoken request can read a file, search the web, send a message, or run a shell command, so every tool sits behind limits that hold even if the model is wrong or has been fooled. This page explains how a call flows, how to add a tool, and why each guardrail exists.
 
-Decisions and evidence are in ADR-009, ADR-011, ADR-021, ADR-023, and ADR-024.
+Decisions and evidence are in ADR-009, ADR-011, ADR-021, ADR-023, ADR-024, and ADR-026.
 
 ## How a tool call flows
 
@@ -53,11 +53,12 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | `docs` | `index_documents`, `local_search`, `search_document` | Real, SQLite FTS5 | Put files in `data/documents`, which the agent can read but never write |
 | `workspace` | `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, `serve_status` | Real, confined to `data/workspace` | |
 | `workspace` | `bash`, `serve` | Mock | `ME3_WORKSPACE_LIVE=1` and a working sandbox |
+| `workspace` | `open_in_browser` | Mock | `ME3_WORKSPACE_LIVE=1`. Runs outside the sandbox, HTML in the workspace only (ADR-026) |
 | `workspace` | `send_file` | Always a mock | Copies to `data/send_outbox` |
 | `knowledge` | `get_weather` | Real, Open-Meteo, no key | |
 | `knowledge` | `fetch_content` | Real, plain HTTP | |
 | `knowledge` | `search` | Fake | `ME3_TOOL_STAGES=search=tavily` |
-| `music` | `play_music`, `stop_music`, `resume_music`, `next_track`, `previous_track`, `set_volume`, `get_now_playing` | Fake | `--stages music=spotify` |
+| `music` | `play_music`, `stop_music`, `resume_music`, `next_track`, `previous_track`, `restart_track`, `set_volume`, `get_now_playing` | Fake | `--stages music=spotify` |
 | `comms` | `send_message`, `call_contact`, `list_contacts`, `list_sent_messages` | Mock | `ME3_TOOL_STAGES=comms=bridge`, see below |
 | `lights` | `set_light`, `list_lights` | Mock | No hardware yet |
 | `thermostat` | `set_thermostat`, `get_thermostat` | Mock | No hardware yet |
@@ -187,7 +188,7 @@ Two rules sit behind this table:
 3. **Spoken read-back.** The harness reads the real command with its symbols as words, so `rm -rf x | sh` is not heard as `rm rf x sh`. The model does not write this question.
 4. **OS sandbox.** A command can write only in the workspace, read only that, the documents folder, and system files, and has no network. `python3` can reach anything the sandbox allows, and nothing more. That is why the sandbox is the real boundary, and the guard is the polite one.
 
-`serve` may also listen on this machine. Three critical refusals in one session lock `bash`, `serve`, file writes, and messaging until the session ends.
+`serve` may also listen on this machine. Three critical refusals in one session lock `bash`, `serve`, `open_in_browser`, file writes, and messaging until the session ends.
 
 | | Mac | Pi |
 | --- | --- | --- |
@@ -203,6 +204,7 @@ To turn them on: `ME3_WORKSPACE_LIVE=1 uv run python -m harness.bot ...`.
 
 - Damage inside `data/workspace`. Keep nothing there you cannot lose.
 - On the Pi, `serve` has outbound network. Treat a started service as trusted.
+- A page shown by `open_in_browser` runs in your real browser, with network, outside the sandbox. The read-back names the file, not what it contains (ADR-026).
 
 ## Messages and calls through the Mac bridge
 

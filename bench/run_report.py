@@ -51,6 +51,7 @@ class Turn:
     reply_ms: float | None = None
     interrupted: bool = False
     spoke: bool = False
+    cut_off: bool = False  # the user went on talking before a reply was due
 
 
 @dataclass
@@ -104,6 +105,9 @@ def _turns(events: list[dict]) -> list[Turn]:
         if tid == 0:
             continue
         t = turns.setdefault(tid, Turn(tid))
+        if name == "user_turn_start" and tid - 1 in end_of_turn:
+            if (e["t_ns"] - end_of_turn[tid - 1]) / 1e6 < SLOW_REPLY_MS:
+                turns[tid - 1].cut_off = True
         if name in ("asr_final", "user_text"):
             t.heard = f"{t.heard} {e.get('text', '')}".strip()
         elif name == "tool_call_start":
@@ -151,7 +155,7 @@ def find_anomalies(events: list[dict], turns: list[Turn]) -> list[Anomaly]:
         elif name == "tts_cleared" and e.get("timed_out"):
             add("warn", "tts_clear_timeout", tid, f"stale audio clear took {e.get('clear_ms')} ms (ADR-012)")
         elif name == "tool_policy" and e.get("decision") in TOOL_FAILURES:
-            detail = e.get("error", "") or e.get("decision")
+            detail = e.get("error", "") or e.get("result", "") or e.get("decision")
             add("error", "tool_failed", tid, f"{e.get('tool')}: {detail}"[:200])
 
     gaps = [e["max_output_gap_ms"] for e in events
@@ -160,7 +164,7 @@ def find_anomalies(events: list[dict], turns: list[Turn]) -> list[Anomaly]:
         add("warn", "output_gap", None, f"{len(gaps)} s with a speaker output gap, worst {max(gaps)} ms")
 
     for t in turns:
-        if t.heard and not t.spoke and not t.tools:
+        if t.heard and not t.spoke and not t.tools and not t.cut_off:
             add("error", "silent_turn", t.turn, f"heard {t.heard[:60]!r}, said nothing")
         if t.reply_ms is not None and t.reply_ms > SLOW_REPLY_MS:
             add("warn", "slow_reply", t.turn, f"{t.reply_ms:.0f} ms from end of turn to audio")

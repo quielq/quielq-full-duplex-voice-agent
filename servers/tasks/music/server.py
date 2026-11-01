@@ -44,7 +44,7 @@ def get_now_playing() -> dict:
     annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def play_music(query: Annotated[str, Field(min_length=1, description="Song, artist, or mood")]) -> dict:
-    """Search for music and start it from the beginning. To continue paused music, use resume_music."""
+    """Search for music and start it. To continue paused music use resume_music, and to replay the current song use restart_track."""
     return _run(lambda: _backend().play(query))
 
 
@@ -78,6 +78,14 @@ def next_track() -> dict:
 def previous_track() -> dict:
     """Go back to the previous song. Spotify may restart the current song instead."""
     return _run(lambda: _backend().previous())
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
+)
+def restart_track() -> dict:
+    """Play the current song again from its start. Use this for from the start, or start it over."""
+    return _run(lambda: _backend().restart())
 
 
 @mcp.tool(

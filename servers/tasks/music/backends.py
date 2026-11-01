@@ -28,6 +28,7 @@ QUEUE_SIZE = 10  # Spotify's Development Mode search maximum
 TOKEN_MARGIN_S = 30
 START_CHECK_S = 3.0  # with the requests before it, this stays inside the tool's 10 s policy timeout
 START_POLL_S = 0.4
+RESTARTED_MS = 3000  # a song this near its start has restarted
 
 
 class MusicError(RuntimeError):
@@ -64,6 +65,9 @@ class MockBackend:
         return self._continue()
 
     def previous(self) -> dict:
+        return self._continue()
+
+    def restart(self) -> dict:
         return self._continue()
 
     def _continue(self) -> dict:
@@ -263,6 +267,13 @@ class SpotifyBackend:
 
     def previous(self) -> dict:
         return self._skip("/me/player/previous")
+
+    def restart(self) -> dict:
+        position = self._loaded_player().get("progress_ms", 0)
+        self._checked("PUT", "/me/player/seek", params={"position_ms": 0})
+        self._wait_for(lambda s: s.get("progress_ms", position) < max(position, RESTARTED_MS),
+                       "Spotify did not restart the song.")  # fmt: skip
+        return self.resume()  # a seek leaves paused music paused
 
     def _skip(self, path: str) -> dict:
         before = self._loaded_player()

@@ -290,6 +290,60 @@ def test_send_file_goes_only_to_the_outbox(data):
     assert (data / "send_outbox" / result["saved_as"]).read_text() == "hi"
 
 
+def test_open_in_browser_is_a_mock_until_switched_on(data, monkeypatch):
+    calls = []
+    monkeypatch.setattr(workspace.subprocess, "run", lambda *a, **k: calls.append(a))
+    workspace.write_file("a.html", "<h1>hi</h1>")
+    assert workspace.open_in_browser("a.html")["ran"] is False
+    assert calls == []
+
+
+def test_open_in_browser_gets_one_file_and_no_secrets(data, monkeypatch):
+    monkeypatch.setenv("ME3_WORKSPACE_LIVE", "1")
+    monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "hidden")
+    seen = {}
+
+    def run(argv, env, **kw):
+        seen.update(argv=argv, env=env, shell=kw.get("shell", False))
+
+    monkeypatch.setattr(workspace.subprocess, "run", run)
+    workspace.write_file("a b.HTML", "<h1>hi</h1>")
+    assert workspace.open_in_browser("a b.HTML") == {"opened": "a b.HTML"}
+    assert Path(seen["argv"][0]).name in ("open", "xdg-open") and len(seen["argv"]) == 2
+    assert seen["argv"][1].endswith("/workspace/a b.HTML")
+    assert "hidden" not in seen["env"].values() and seen["shell"] is False
+
+
+@pytest.mark.parametrize(("path", "error"), [
+    ("note.txt", "only HTML"), ("run.command", "only HTML"), ("missing.html", "no file"), ("../secret.html", "outside"),
+])  # fmt: skip
+def test_open_in_browser_refuses_all_but_workspace_html(data, monkeypatch, path, error):
+    monkeypatch.setenv("ME3_WORKSPACE_LIVE", "1")
+    monkeypatch.setattr(workspace.subprocess, "run", lambda *a, **k: pytest.fail("the opener ran"))
+    workspace.write_file("note.txt", "hi")
+    workspace.write_file("run.command", "hi")
+    assert error in workspace.open_in_browser(path)["error"]
+
+
+def test_open_in_browser_refuses_a_symlink_out_of_the_workspace(data, tmp_path_factory, monkeypatch):
+    monkeypatch.setenv("ME3_WORKSPACE_LIVE", "1")
+    outside = tmp_path_factory.mktemp("outside") / "page.html"
+    outside.write_text("hi")
+    (common.workspace_dir() / "link.html").symlink_to(outside)
+    assert "outside" in workspace.open_in_browser("link.html")["error"]
+
+
+def test_a_failed_opener_is_an_error(data, monkeypatch):
+    monkeypatch.setenv("ME3_WORKSPACE_LIVE", "1")
+
+    def fail(argv, **kw):
+        raise workspace.subprocess.CalledProcessError(1, argv)
+
+    monkeypatch.setattr(workspace.subprocess, "run", fail)
+    workspace.write_file("a.html", "hi")
+    assert "could not be opened" in workspace.open_in_browser("a.html")["error"]
+
+
 def test_live_bash_gets_no_secrets(monkeypatch):
     monkeypatch.setenv("ME3_WORKSPACE_LIVE", "1")
     monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "hidden")
