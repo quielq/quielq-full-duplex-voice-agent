@@ -37,7 +37,8 @@ class MusicError(RuntimeError):
 class MockBackend:
     """A player state in $ME3_DATA_DIR/music.json, and no audio plays."""
 
-    DEFAULT = {"playing": False, "query": "", "now_playing": "", "volume": 50}
+    DEFAULT = {"playing": False, "query": "", "now_playing": "", "volume": 50, "mock": True,
+               "note": "This is a mock player and no audio plays. Tell the user so."}  # fmt: skip
 
     def _load(self) -> dict:
         p = data_dir() / "music.json"
