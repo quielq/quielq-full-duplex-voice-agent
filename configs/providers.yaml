@@ -16,8 +16,8 @@ stages:
 # (ME3_TOOL_STAGES overrides per run, e.g. search=ddgs,weather=open_meteo). See ADR-021.
 tool_stages:
   search: fake    # fake | ddgs | tavily
-  weather: fake   # fake | open_meteo
-  fetch: fake     # fake | http
+  weather: open_meteo   # fake | open_meteo. Approved Nov 1, 2026, ADR-024
+  fetch: http           # fake | http. Approved Nov 1, 2026, ADR-024
 
 providers:
   deepgram:
@@ -56,7 +56,7 @@ providers:
     daily_cap_usd: 0.00
   open_meteo:
     env_key: null
-    daily_cap_usd: 0.00
+    daily_cap_usd: 0.01   # the API is free, so this only keeps the call allowed; 0 switches it off
   tavily:
     env_key: TAVILY_API_KEY
     daily_cap_usd: 5.00   # approved Nov 1, 2026

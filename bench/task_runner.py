@@ -33,6 +33,7 @@ import yaml
 from harness.bot import run_bot
 from harness.config import Config, load_config
 from harness.mcp_tools import TASK_SERVERS
+from servers.common import FAKE_TOOL_STAGES
 
 CASES_DIR = Path(__file__).parent / "task_suite" / "cases"
 LAYERS = ("next_reply", "tool_call", "conversation")
@@ -364,6 +365,7 @@ def main() -> None:
     ap.add_argument("--reply-templates", action="store_true", help="skip the second LLM call (ADR-020)")
     ap.add_argument("--out", type=Path, help="also write the report as JSON here")
     args = ap.parse_args()
+    os.environ.setdefault("ME3_TOOL_STAGES", FAKE_TOOL_STAGES)
 
     cfg = load_config("mac")
     cfg.providers["stages"] = {"stt": "fake", "llm": "fake", "tts": "fake"}

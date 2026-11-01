@@ -40,6 +40,7 @@ reply_templates:
   compound_words: ["and", "then", "also", "plus", "after", "before", "all", "every", "both", "everything", "lights"]
   templates:
     get_time: "It's {spoken_time}."
+    get_weather: "It's {summary}."   # a forecast has no summary, so it keeps the LLM
     set_timer: "Timer set for {spoken_duration}."
     add_note: "Noted."
     set_thermostat: "Thermostat set to {target_c:g} degrees."

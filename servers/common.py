@@ -53,6 +53,9 @@ class ToolCallLog(Middleware):
                 f.write(json.dumps(rec, default=str) + "\n")
 
 
+FAKE_TOOL_STAGES = "search=fake,weather=fake,fetch=fake"  # tests and the task suite spend nothing
+
+
 def tool_stage(name: str) -> str:
     """Which backend a tool uses (ADR-021). Read here so a server needs no harness import."""
     for item in filter(None, os.environ.get("ME3_TOOL_STAGES", "").split(",")):

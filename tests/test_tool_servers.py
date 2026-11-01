@@ -19,14 +19,60 @@ from servers.tasks.workspace import server as workspace
 def data(tmp_path, monkeypatch):
     monkeypatch.setenv("ME3_DATA_DIR", str(tmp_path))
     monkeypatch.delenv("ME3_WORKSPACE_LIVE", raising=False)
-    monkeypatch.delenv("ME3_TOOL_STAGES", raising=False)
     return tmp_path
 
 
-def test_every_backend_defaults_to_a_fake():
+def test_fakes_answer_under_the_test_stages():
     assert knowledge.search("pi")["fake"]
     assert knowledge.fetch_content("https://example.com")["fake"]
     assert knowledge.get_weather()["fake"]
+
+
+def test_search_stays_fake_while_weather_and_fetch_are_real_by_default(monkeypatch):
+    monkeypatch.delenv("ME3_TOOL_STAGES")
+    assert [common.tool_stage(s) for s in ("search", "weather", "fetch")] == ["fake", "open_meteo", "http"]
+
+
+class FakeStream:
+    def __init__(self, address):
+        self.address = address
+
+    def get_extra_info(self, name):
+        return (self.address, 443) if name == "server_addr" else None
+
+
+@pytest.mark.parametrize("address,public", [("93.184.216.34", True), ("127.0.0.1", False), ("10.0.0.5", False)])
+def test_the_connected_address_is_checked(address, public):
+    assert knowledge.connected_to_public(FakeStream(address)) is public
+
+
+def test_fetch_refuses_when_a_name_rebinds_to_a_private_address(monkeypatch):
+    class Reply:
+        extensions = {"network_stream": FakeStream("127.0.0.1")}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(knowledge, "public_url", lambda u: None)
+    monkeypatch.setattr(knowledge.httpx, "stream", lambda *a, **k: Reply())
+    assert "private" in knowledge._get("https://example.com/")["error"]
+
+
+def test_an_unreadable_page_is_an_answer_not_a_crash(monkeypatch):
+    def broken(url):
+        raise RuntimeError("bad pdf")
+
+    monkeypatch.setenv("ME3_TOOL_STAGES", "fetch=http")
+    monkeypatch.setattr(knowledge, "_get", broken)
+    assert "fetch failed" in knowledge.fetch_content("https://example.com/x.pdf")["error"]
+
+
+def test_every_weather_code_has_words():
+    documented = [0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99]
+    assert set(documented) <= set(knowledge.WEATHER_CODES)
 
 
 @pytest.mark.parametrize("stage,call", [
@@ -55,6 +101,7 @@ def test_fetch_refuses_a_redirect_to_a_private_address(monkeypatch):
     class Reply:
         is_redirect = True
         headers = {"location": "http://127.0.0.1/admin"}
+        extensions = {"network_stream": FakeStream("93.184.216.34")}
 
         def __enter__(self):
             return self
