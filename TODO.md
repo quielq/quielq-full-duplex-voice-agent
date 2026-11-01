@@ -98,7 +98,7 @@ Waiting phrase (Nov 2):
 ## Task servers
 
 - [x] `music` mock
-- [ ] `music` real backend (Spotify, demo only)
+- [x] `music` real backend (Spotify, demo only, ADR-022)
 - [x] `lights` mock
 - [ ] `lights` real backend (check whether the Xiaomi bulb can be controlled locally)
 - [x] `notes` (SQLite) (bc171bd)
