@@ -51,6 +51,7 @@ def test_no_result_ever_carries_a_key_value(cfg, monkeypatch):
 
 def test_a_selected_provider_with_a_zero_cap_fails(cfg):
     cfg.providers["stages"]["llm"] = "anthropic"
+    cfg.providers["providers"]["anthropic"]["daily_cap_usd"] = 0.0
     assert statuses(check_config(cfg))["stage llm"] == "fail"
 
 
@@ -72,6 +73,8 @@ def test_spend_at_the_cap_fails_and_near_it_warns(cfg):
     path = cfg.path("data_dir") / "cost_ledger.jsonl"
     from bench.cost_ledger import CostLedger
 
+    cfg.providers["providers"]["groq"]["daily_cap_usd"] = 0.5
+    cfg.providers["providers"]["deepgram"]["daily_cap_usd"] = 0.5
     ledger = CostLedger(path, {"groq": 0.5, "deepgram": 0.5})
     ledger.record("groq", "x", 1, 0.5)
     ledger.record("deepgram", "x", 1, 0.45)

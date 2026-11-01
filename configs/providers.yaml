@@ -14,7 +14,7 @@ stages:
 providers:
   deepgram:
     env_key: DEEPGRAM_API_KEY
-    daily_cap_usd: 0.50   # approved Oct 21, 2026; free credit, list price
+    daily_cap_usd: 5.00   # approved Nov 1, 2026
     stt_model: flux-general-en
     flux:                        # null keeps Deepgram's default; override per run with --flux
       eot_threshold: null        # 0.5 to 1.0, default 0.7
@@ -24,20 +24,20 @@ providers:
     tts_sample_rate: 16000   # 24000 arrives slower than real time on this link (ADR-014)
   groq:
     env_key: GROQ_API_KEY
-    daily_cap_usd: 0.50   # approved Oct 21, 2026; free tier, list price
+    daily_cap_usd: 5.00   # approved Nov 1, 2026
     model: openai/gpt-oss-20b
   cartesia:
     env_key: CARTESIA_API_KEY
-    daily_cap_usd: 0.10   # approved Oct 31, 2026, for the delivery comparison
+    daily_cap_usd: 5.00   # approved Nov 1, 2026
     voice_id: db6b0ed5-d5d3-463d-ae85-518a07d3c2b4   # Skylar, public voice
     tts_sample_rate: 24000   # matches the output, so nothing resamples
   anthropic:
     env_key: ANTHROPIC_API_KEY
-    daily_cap_usd: 0.0
+    daily_cap_usd: 5.00   # approved Nov 1, 2026
     model: claude-haiku-5-5
   openrouter:
     env_key: OPENROUTER_API_KEY
-    daily_cap_usd: 0.0
+    daily_cap_usd: 5.00   # approved Nov 1, 2026
 
 # List prices used by the cost ledger (USD). Recheck on the day a provider is switched on.
 # Sources: docs/architecture.md, "Cost and budget" and "Model comparison under $20".
