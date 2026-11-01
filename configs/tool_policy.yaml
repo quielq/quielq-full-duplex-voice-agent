@@ -62,6 +62,7 @@ reply_templates:
     resume_music: "Resuming {now_playing}."
     next_track: "Playing {now_playing}."
     previous_track: "Playing {now_playing}."
+    restart_track: "Starting {now_playing} again."
 
 # Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s, report_result, readback, guard.
 # readback: fields are the call's arguments, plus command_spoken for shell commands.

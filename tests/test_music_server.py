@@ -209,12 +209,37 @@ def test_a_skip_that_changes_nothing_is_an_error(fake, backend):
         backend.next()
 
 
+def test_restart_seeks_to_zero_and_keeps_the_song(fake, backend):
+    fake.replies["/me/player"] = [httpx.Response(200, json=PLAYING | {"progress_ms": 60000}),
+                                  httpx.Response(200, json=PLAYING | {"progress_ms": 50}),
+                                  httpx.Response(200, json=PLAYING | {"progress_ms": 60})]  # fmt: skip
+    assert backend.restart()["now_playing"] == "Valentine by Laufey"
+    seek = next(c for c in fake.calls if c.url.path.endswith("/seek"))
+    assert seek.method == "PUT" and seek.url.params["position_ms"] == "0"
+    assert "/search" not in fake.routes()
+
+
+def test_restart_plays_a_paused_song(fake, backend):
+    fake.replies["/me/player"] = [httpx.Response(200, json=PAUSED),
+                                  httpx.Response(200, json=PAUSED | {"progress_ms": 0}),
+                                  httpx.Response(200, json=PAUSED | {"progress_ms": 0}),
+                                  httpx.Response(200, json=PLAYING)]  # fmt: skip
+    assert backend.restart()["playing"] is True
+    assert "/me/player/play" in fake.routes()
+
+
+def test_a_restart_that_does_not_move_is_an_error(fake, backend):
+    fake.replies["/me/player"] = httpx.Response(200, json=PLAYING | {"progress_ms": 60000})
+    with pytest.raises(MusicError, match="did not restart"):
+        backend.restart()
+
+
 async def test_mock_pauses_resumes_and_skips():
     async with Client(mcp) as c:
         assert (await c.call_tool("resume_music", {})).structured_content == {"error": "Nothing has been played yet."}
         await c.call_tool("play_music", {"query": "jazz"})
         await c.call_tool("stop_music", {})
-        for tool in ("resume_music", "next_track", "previous_track"):
+        for tool in ("resume_music", "next_track", "previous_track", "restart_track"):
             r = (await c.call_tool(tool, {})).structured_content
             assert r["playing"] is True and r["now_playing"] == "jazz"
 

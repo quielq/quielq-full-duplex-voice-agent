@@ -57,7 +57,7 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | `knowledge` | `get_weather` | Real, Open-Meteo, no key | |
 | `knowledge` | `fetch_content` | Real, plain HTTP | |
 | `knowledge` | `search` | Fake | `ME3_TOOL_STAGES=search=tavily` |
-| `music` | `play_music`, `stop_music`, `resume_music`, `next_track`, `previous_track`, `set_volume`, `get_now_playing` | Fake | `--stages music=spotify` |
+| `music` | `play_music`, `stop_music`, `resume_music`, `next_track`, `previous_track`, `restart_track`, `set_volume`, `get_now_playing` | Fake | `--stages music=spotify` |
 | `comms` | `send_message`, `call_contact`, `list_contacts`, `list_sent_messages` | Mock | `ME3_TOOL_STAGES=comms=bridge`, see below |
 | `lights` | `set_light`, `list_lights` | Mock | No hardware yet |
 | `thermostat` | `set_thermostat`, `get_thermostat` | Mock | No hardware yet |

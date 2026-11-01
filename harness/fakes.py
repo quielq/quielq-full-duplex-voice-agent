@@ -307,6 +307,9 @@ class RuleBasedLLMService(LLMService):
         if "next_track" in tools and re.search(r"next (song|track)|skip", low):
             await self._call(context, "next_track", {})
             return True
+        if "restart_track" in tools and "from the start" in low:
+            await self._call(context, "restart_track", {})
+            return True
         if "previous_track" in tools and re.search(r"previous (song|track)", low):
             await self._call(context, "previous_track", {})
             return True
