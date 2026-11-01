@@ -533,7 +533,9 @@ class ToolPolicy:
         action.state = "committing"
         result = await self._call(action.rule, action.inner, action.params)
         failed = _is_failure(result)
-        self._finish(action, "commit_failed" if failed else "committed", {"status": "failed" if failed else "done", "result": result})  # fmt: skip
+        exited = _exit_failure(result)
+        self._finish(action, "commit_failed" if failed or exited else "committed",
+                     {"status": "failed" if failed or exited else "done", "result": result}, result=str(result)[:300])  # fmt: skip
         if failed and self.speak:
             await self.speak(self.phrases["failed"])
         elif not failed and action.rule.report_result and self.report:
@@ -678,6 +680,13 @@ def _is_failure(result: Any) -> bool:
     if isinstance(data, dict):
         return "error" in data
     return isinstance(result, str) and result.startswith(("Error calling mcp tool", "Sorry, could not"))
+
+
+def _exit_failure(result: Any) -> bool:
+    """A command that ran and failed. The model reads its output and explains, so this is not
+    the fixed apology in _is_failure."""
+    data = _as_data(result)
+    return isinstance(data, dict) and bool(data.get("returncode"))
 
 
 class PolicyGate(FrameProcessor):

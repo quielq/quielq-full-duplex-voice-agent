@@ -492,6 +492,26 @@ async def test_timeout_counts_the_call_only(policy, monkeypatch):
     assert spoken == [policy.phrases["failed"]]  # the user was told it would happen
 
 
+async def test_a_command_that_exits_nonzero_is_logged_failed_and_explained(policy, monkeypatch):
+    _replace_params(monkeypatch)
+    spoken, reports = [], []
+
+    async def speak(text):
+        spoken.append(text)
+
+    async def report(text):
+        reports.append(text)
+
+    policy.speak, policy.report = speak, report
+    inner = Calls(result='{"returncode": 1, "stdout": "", "stderr": "no such app"}')
+    await policy.handle(ToolRule("t", "auto", 0.01, 1.0), inner, fake_params())
+    policy.reply_ended()
+    await policy.settled()
+    failed = [d for d in policy.decisions if d["decision"] == "commit_failed"]
+    assert failed and "no such app" in failed[0]["result"]
+    assert spoken == [] and len(reports) == 1  # the model has the error, so it can say what went wrong
+
+
 async def test_interrupted_write_finishes_and_context_tells_the_truth(policy, monkeypatch):
     _replace_params(monkeypatch)
     inner, params = Calls(delay_s=0.05), fake_params()
