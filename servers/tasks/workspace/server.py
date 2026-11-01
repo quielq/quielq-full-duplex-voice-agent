@@ -113,7 +113,8 @@ def list_files(
     found.sort(reverse=True)
     files = [{"path": name, "bytes": size, "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime))}
              for mtime, size, name in found[:max_results]]  # fmt: skip
-    return {"files": files, "truncated": len(found) > max_results}
+    return {"files": files, "truncated": len(found) > max_results, "workspace_folder": str(workspace_dir()),
+            "documents_folder": str(documents_dir())}  # fmt: skip
 
 
 @mcp.tool(
@@ -124,7 +125,7 @@ def write_file(
     content: str,
     mode: Annotated[Literal["write", "append"], Field(description="write replaces the file")] = "write",
 ) -> dict:
-    """Write a file in the workspace, creating folders as needed."""
+    """Write a file in the workspace, creating folders as needed. The documents folder is read-only."""
     try:
         target = inside(path, [workspace_dir()])
     except OutsideRoots as e:
@@ -132,7 +133,7 @@ def write_file(
     target.parent.mkdir(parents=True, exist_ok=True)
     with open(target, "w" if mode == "write" else "a") as f:
         f.write(content)
-    return {"path": path, "bytes": target.stat().st_size}
+    return {"path": path, "full_path": str(target), "bytes": target.stat().st_size}
 
 
 @mcp.tool(
