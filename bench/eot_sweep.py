@@ -21,6 +21,7 @@ import array
 import asyncio
 import json
 import os
+import re
 import statistics
 import subprocess
 import tempfile
@@ -63,17 +64,24 @@ def trailing_pad_s(path: Path) -> float:
     return 0.0
 
 
-def clip_row(events: list[dict], pad_s: float) -> dict:
-    """One clip's result. A turn ending before the speech did, or more than once, is a cut."""
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z']+", re.sub(r"\[\[.*?\]\]", "", text).lower())
+
+
+def clip_row(events: list[dict], pad_s: float, text: str) -> dict:
+    """One clip's result. A cut is a turn that ended before the speech did, ended more than
+    once, or left the clip's last word unheard because the run stopped on a reply to a fragment.
+    """
     speech_end = next(e["t_ns"] for e in events if e["event"] == "injection_speech_end") - int(pad_s * 1e9)
     ends = [e["t_ns"] for e in events if e["event"] == "end_of_turn"]
     audio = next((e["t_ns"] for e in events if e["event"] == "tts_first_byte" and e["t_ns"] >= speech_end), None)
     finals = [e for e in events if e["event"] == "asr_final"]
+    heard = _words(" ".join(e["text"] for e in finals))
     count = lambda name: sum(e["event"] == name for e in events)  # noqa: E731
     return {
         "eot_ms": round((ends[-1] - speech_end) / 1e6) if ends else None,
         "reply_ms": round((audio - speech_end) / 1e6) if audio else None,
-        "cut": len(ends) > 1 or any(t < speech_end for t in ends),
+        "cut": len(ends) > 1 or any(t < speech_end for t in ends) or heard[-1:] != _words(text)[-1:],
         "transcript": " ".join(e["text"] for e in finals),
         "triggers": [e.get("trigger") for e in finals],
         "eager": count("eager_eot"),
@@ -108,7 +116,7 @@ async def run_clip(args, name: str, value, kind: str, text: str, wav: Path, work
     events = [json.loads(line) for line in Path(result.events_path).read_text().splitlines()]
     return {
         name: value, "kind": kind, "text": text, "run_id": result.run_id,
-        "cost_usd": round(result.session_usd, 5), **clip_row(events, trailing_pad_s(wav)),
+        "cost_usd": round(result.session_usd, 5), **clip_row(events, trailing_pad_s(wav), text),
     }  # fmt: skip
 
 

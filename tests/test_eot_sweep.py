@@ -15,7 +15,7 @@ def test_wait_counts_from_the_last_loud_sample():
         _ev("llm_request", 2310),
         _ev("tts_first_byte", 2900),
     ]
-    row = clip_row(events, pad_s=0.5)
+    row = clip_row(events, pad_s=0.5, text="what time is it")
     assert row["eot_ms"] == 1300
     assert row["reply_ms"] == 1900
     assert not row["cut"]
@@ -24,8 +24,19 @@ def test_wait_counts_from_the_last_loud_sample():
 
 def test_turn_ending_inside_the_pause_is_a_cut():
     events = [_ev("end_of_turn", 800), _ev("injection_speech_end", 2000), _ev("end_of_turn", 3000)]
-    assert clip_row(events, pad_s=0.0)["cut"]
-    assert clip_row([_ev("injection_speech_end", 2000), _ev("end_of_turn", 2500), _ev("end_of_turn", 2900)], 0.0)["cut"]
+    assert clip_row(events, pad_s=0.0, text="")["cut"]
+    twice = [_ev("injection_speech_end", 2000), _ev("end_of_turn", 2500), _ev("end_of_turn", 2900)]
+    assert clip_row(twice, 0.0, "")["cut"]
+
+
+def test_run_that_stopped_on_a_fragment_is_a_cut():
+    events = [
+        _ev("injection_speech_end", 2000),
+        _ev("asr_final", 2100, text="Set a timer for", trigger="model"),
+        _ev("end_of_turn", 2100),
+    ]
+    assert clip_row(events, 0.0, "Set a timer for [[slnc 900]] five minutes.")["cut"]
+    assert not clip_row(events, 0.0, "Set a timer for")["cut"]
 
 
 def test_withdrawn_calls_count_as_llm_calls():
@@ -36,7 +47,7 @@ def test_withdrawn_calls_count_as_llm_calls():
         _ev("end_of_turn", 2500),
         _ev("llm_request", 2500),
     ]
-    row = clip_row(events, pad_s=0.0)
+    row = clip_row(events, pad_s=0.0, text="")
     assert (row["eager"], row["withdrawn"], row["llm_calls"]) == (1, 1, 2)
 
 
