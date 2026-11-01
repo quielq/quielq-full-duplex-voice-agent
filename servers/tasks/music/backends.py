@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -20,9 +23,11 @@ from servers.common import REPO_ROOT, data_dir
 
 API_URL = "https://api.spotify.com/v1"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
-TIMEOUT_S = 2.5  # a call makes up to four requests, inside the tool's 10 s policy timeout
+TIMEOUT_S = 2.5
 QUEUE_SIZE = 10  # Spotify's Development Mode search maximum
 TOKEN_MARGIN_S = 30
+START_CHECK_S = 3.0  # with the requests before it, this stays inside the tool's 10 s policy timeout
+START_POLL_S = 0.4
 
 
 class MusicError(RuntimeError):
@@ -75,12 +80,39 @@ def pick_device(devices: list[dict]) -> dict:
     raise MusicError("No Spotify device is open. Open the Spotify app and try again.")
 
 
-class SpotifyBackend:
-    """Controls a Spotify app over the Web API. The audio stays in that app."""
+def play_in_mac_app(uri: str) -> None:
+    """Start a track in this Mac's Spotify app. The URI is an argument, never script text."""
+    script = ["on run argv", 'tell application "Spotify" to play track (item 1 of argv)', "end run"]
+    args = [part for line in script for part in ("-e", line)]
+    try:
+        subprocess.run(["osascript", *args, uri], capture_output=True, timeout=TIMEOUT_S, check=True)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise MusicError("I could not start the Spotify app on this Mac.") from e
 
-    def __init__(self, client: httpx.Client | None = None, ledger: CostLedger | None = None):
+
+def _is_playing(state: dict, uris: list[str]) -> bool:
+    item = state.get("item") or {}
+    # Spotify can swap a track for a regional copy, and then linked_from has the asked-for URI.
+    played = {item.get("uri"), (item.get("linked_from") or {}).get("uri")}
+    return bool(state.get("is_playing")) and not played.isdisjoint(uris)
+
+
+class SpotifyBackend:
+    """Controls a Spotify app over the Web API. The audio stays in that app.
+
+    `local_play` starts a track on this computer, because the Web API accepts a play for the
+    Mac app and leaves it stopped (ADR-022). Nothing counts as playing until the player says so.
+    """
+
+    def __init__(
+        self,
+        client: httpx.Client | None = None,
+        ledger: CostLedger | None = None,
+        local_play: Callable[[str], None] | None = None,
+    ):
         self._client = client or httpx.Client(timeout=TIMEOUT_S)
         self._ledger = ledger or _ledger()
+        self._local_play = local_play
         self._token = ""
         self._expires = 0.0
 
@@ -158,12 +190,13 @@ class SpotifyBackend:
         if not tracks:
             raise MusicError(f"Spotify found nothing for {query}.")
         device = pick_device(self._checked("GET", "/me/player/devices").json().get("devices", []))
-        self._checked(
-            "PUT",
-            "/me/player/play",
-            params={"device_id": device["id"]},
-            json={"uris": [t["uri"] for t in tracks]},
-        )
+        uris = [t["uri"] for t in tracks]
+        if self._local_play and device.get("type") == "Computer":
+            uris = uris[:1]  # the Mac app takes one track, so a queue needs the Web API
+            self._local_play(uris[0])
+        else:
+            self._checked("PUT", "/me/player/play", params={"device_id": device["id"]}, json={"uris": uris})
+        self._confirm_started(uris)
         return {
             "playing": True,
             "query": query,
@@ -171,6 +204,16 @@ class SpotifyBackend:
             "volume": device.get("volume_percent"),
             "device": device.get("name", ""),
         }
+
+    def _confirm_started(self, uris: list[str]) -> None:
+        deadline = time.monotonic() + START_CHECK_S
+        while True:
+            r = self._checked("GET", "/me/player")
+            if r.status_code == 200 and r.content and _is_playing(r.json(), uris):
+                return
+            if time.monotonic() >= deadline:
+                raise MusicError("Spotify accepted that, but nothing started playing.")
+            time.sleep(START_POLL_S)
 
     def stop(self) -> dict:
         r = self._request("PUT", "/me/player/pause")
@@ -194,5 +237,5 @@ def build_backend(choice: str):
     if choice == "fake":
         return MockBackend()
     if choice == "spotify":
-        return SpotifyBackend()
+        return SpotifyBackend(local_play=play_in_mac_app if sys.platform == "darwin" else None)
     raise ValueError(f"unknown music backend {choice!r}")

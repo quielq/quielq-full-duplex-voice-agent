@@ -11,13 +11,14 @@ from fastmcp import Client
 
 from bench.cost_ledger import CostLedger
 from harness.mcp_tools import _server_env
-from servers.tasks.music import server
-from servers.tasks.music.backends import MusicError, SpotifyBackend, pick_device
+from servers.tasks.music import backends, server
+from servers.tasks.music.backends import MusicError, SpotifyBackend, build_backend, pick_device
 from servers.tasks.music.server import mcp
 
 MAC = {"id": "mac", "name": "Mac", "type": "Computer", "is_active": False, "volume_percent": 40}
 SPEAKER = {"id": "spk", "name": "Speaker", "type": "Speaker", "is_active": False}
 TRACK = {"name": "Valentine", "uri": "spotify:track:1", "artists": [{"name": "Laufey"}]}
+PLAYING = {"is_playing": True, "item": TRACK}
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +27,8 @@ def _env(tmp_path, monkeypatch):
     monkeypatch.setenv("SPOTIFY_CLIENT_ID", "cid")
     monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "sec")
     monkeypatch.setenv("SPOTIFY_REFRESH_TOKEN", "rt")
+    monkeypatch.setattr(backends, "START_CHECK_S", 0.02)
+    monkeypatch.setattr(backends, "START_POLL_S", 0.005)
     server._backend.cache_clear()
     yield
     server._backend.cache_clear()
@@ -73,11 +76,93 @@ def backend(fake, tmp_path):
 
 def test_play_queues_results_on_the_computer_and_names_the_track(fake, backend):
     fake.replies["/search"] = httpx.Response(200, json={"tracks": {"items": [TRACK, None, TRACK]}})
+    fake.replies["/me/player"] = httpx.Response(200, json=PLAYING)
     result = backend.play("jazz")
     assert result["now_playing"] == "Valentine by Laufey" and result["playing"] is True
     play = next(c for c in fake.calls if c.url.path.endswith("/me/player/play"))
     assert play.url.params["device_id"] == "mac"
     assert len(json.loads(play.content)["uris"]) == 2
+
+
+def test_an_accepted_play_that_never_starts_is_an_error(fake, backend):
+    """The Nov 1 failure: play returned 204 and the Mac app stayed stopped."""
+    fake.replies["/me/player"] = httpx.Response(200, json={"is_playing": False, "item": None})
+    with pytest.raises(MusicError, match="nothing started"):
+        backend.play("jazz")
+
+
+def test_no_player_session_after_a_play_is_an_error(fake, backend):
+    with pytest.raises(MusicError, match="nothing started"):
+        backend.play("jazz")
+
+
+def test_the_old_track_still_playing_is_an_error(fake, backend):
+    other = TRACK | {"uri": "spotify:track:old"}
+    fake.replies["/me/player"] = httpx.Response(200, json={"is_playing": True, "item": other})
+    with pytest.raises(MusicError, match="nothing started"):
+        backend.play("jazz")
+
+
+def test_a_slow_start_is_still_a_success(fake, backend):
+    fake.replies["/me/player"] = [httpx.Response(204), httpx.Response(200, json=PLAYING)]
+    assert backend.play("jazz")["playing"] is True
+
+
+def test_a_relinked_track_counts_as_started(fake, backend):
+    item = TRACK | {"uri": "spotify:track:regional", "linked_from": {"uri": TRACK["uri"]}}
+    fake.replies["/me/player"] = httpx.Response(200, json={"is_playing": True, "item": item})
+    assert backend.play("jazz")["playing"] is True
+
+
+def _local_backend(fake, tmp_path, started: list[str]) -> SpotifyBackend:
+    ledger = CostLedger(tmp_path / "ledger.jsonl", {"spotify": 0.01})
+    client = httpx.Client(transport=httpx.MockTransport(fake))
+    return SpotifyBackend(client, ledger, local_play=started.append)
+
+
+def test_a_computer_plays_through_the_local_app_not_the_web_api(fake, tmp_path):
+    fake.replies["/me/player"] = httpx.Response(200, json=PLAYING)
+    started: list[str] = []
+    assert _local_backend(fake, tmp_path, started).play("jazz")["playing"] is True
+    assert started == [TRACK["uri"]]
+    assert "/me/player/play" not in fake.routes()
+
+
+def test_an_active_speaker_still_uses_the_web_api(fake, tmp_path):
+    active = SPEAKER | {"is_active": True}
+    fake.replies["/me/player/devices"] = httpx.Response(200, json={"devices": [MAC, active]})
+    fake.replies["/me/player"] = httpx.Response(200, json=PLAYING)
+    started: list[str] = []
+    _local_backend(fake, tmp_path, started).play("jazz")
+    assert started == [] and "/me/player/play" in fake.routes()
+
+
+def test_the_local_app_is_checked_too(fake, tmp_path):
+    with pytest.raises(MusicError, match="nothing started"):
+        _local_backend(fake, tmp_path, []).play("jazz")
+
+
+def test_the_uri_reaches_osascript_as_an_argument(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(backends.subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd))
+    backends.play_in_mac_app('spotify:track:1" & quit')
+    assert seen["cmd"][-1] == 'spotify:track:1" & quit'
+    assert not any("track:1" in part for part in seen["cmd"][:-1])
+
+
+def test_a_failed_osascript_is_a_spoken_error(monkeypatch):
+    def fail(cmd, **kw):
+        raise backends.subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(backends.subprocess, "run", fail)
+    with pytest.raises(MusicError, match="Spotify app"):
+        backends.play_in_mac_app("spotify:track:1")
+
+
+@pytest.mark.parametrize(("platform", "local"), [("darwin", True), ("linux", False)])
+def test_only_a_mac_gets_local_playback(monkeypatch, platform, local):
+    monkeypatch.setattr(backends.sys, "platform", platform)
+    assert (build_backend("spotify")._local_play is not None) is local
 
 
 def test_device_order_prefers_active_then_computer():

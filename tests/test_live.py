@@ -16,7 +16,7 @@ import pytest
 
 from harness.bot import run_bot
 from harness.config import load_config
-from servers.tasks.music.backends import SpotifyBackend
+from servers.tasks.music.backends import build_backend
 
 pytestmark = pytest.mark.skipif(os.environ.get("ME3_LIVE") != "1", reason="set ME3_LIVE=1 to spend")
 
@@ -36,7 +36,7 @@ def spoken_request(tmp_path_factory):
 def test_live_spotify_plays_then_stops():
     """Free, and it really plays: open the Spotify app first."""
     load_config("mac")  # loads .env
-    backend = SpotifyBackend()
+    backend = build_backend("spotify")
     assert backend.play("jazz")["now_playing"]
     time.sleep(2)
     assert backend.now_playing()["playing"] is True
