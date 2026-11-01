@@ -3,6 +3,7 @@
 import json
 from types import SimpleNamespace
 
+from pipecat.frames.frames import ProposedUserStoppedSpeakingFrame
 from websockets.protocol import State
 
 from bench.cost_ledger import CostLedger
@@ -37,11 +38,19 @@ def _forced_stt(tmp_path, monkeypatch, **flux):
 def _strategy():
     calls = []
 
-    async def force_end():
-        calls.append(1)
+    class Force:
+        cancelled = 0
+
+        async def __call__(self):
+            calls.append(1)
+
+        def cancel(self):
+            Force.cancelled += 1
 
     analyzer = SimpleNamespace(clear=lambda: None)
-    return ForcedEndTurnStopStrategy(turn_analyzer=analyzer, force_end=force_end), calls
+    s = ForcedEndTurnStopStrategy(turn_analyzer=analyzer, force_end=Force())
+    s._vad_stopped = True
+    return s, calls
 
 
 def test_flux_cannot_end_or_predict_the_turn(tmp_path, monkeypatch):
@@ -52,13 +61,41 @@ def test_flux_cannot_end_or_predict_the_turn(tmp_path, monkeypatch):
     assert not stt.eager_end_of_turn_enabled
 
 
-async def test_force_sends_only_with_an_open_turn(tmp_path, monkeypatch):
+async def test_force_sends_with_an_open_turn(tmp_path, monkeypatch):
     stt = _forced_stt(tmp_path, monkeypatch)
-    assert not await stt.force_end_turn()  # noise: Flux never started a turn
-    assert stt._websocket.sent == []
     stt._user_is_speaking = True
     assert await stt.force_end_turn()
     assert stt._websocket.sent == [{"type": "ForceEndTurn"}]
+
+
+async def test_force_waits_for_a_late_start_of_turn(tmp_path, monkeypatch):
+    stt = _forced_stt(tmp_path, monkeypatch)
+    assert not await stt.force_end_turn()
+    assert stt._websocket.sent == []
+    await stt._handle_start_of_turn("")
+    await stt._handle_start_of_turn("")
+    assert stt._websocket.sent == [{"type": "ForceEndTurn"}]
+
+
+async def test_noise_does_not_end_the_next_turn(tmp_path, monkeypatch):
+    stt = _forced_stt(tmp_path, monkeypatch)
+    await stt.force_end_turn()  # Flux never opens a turn for this
+    stt.cancel_force()  # the next VAD start
+    await stt._handle_start_of_turn("")
+    assert stt._websocket.sent == []
+
+
+async def test_flux_proposals_never_reach_the_turn_controller(tmp_path, monkeypatch):
+    stt = _forced_stt(tmp_path, monkeypatch)
+    pushed = []
+
+    async def push(frame, direction=None):
+        pushed.append(type(frame))
+
+    stt.push_frame = push
+    await stt._handle_start_of_turn("")
+    await stt.broadcast_frame(ProposedUserStoppedSpeakingFrame)
+    assert pushed == []
 
 
 async def test_events_say_whether_it_was_sent(tmp_path, monkeypatch):
@@ -84,9 +121,19 @@ async def test_user_resuming_rearms_the_force():
     s._turn_complete = True
     await s._maybe_trigger_user_turn_stopped()
     await s._discard_pending_end_of_turn()  # VAD saw speech again
+    assert type(s._force_end).cancelled == 1
     s._turn_complete = True
+    s._vad_stopped = True
     await s._maybe_trigger_user_turn_stopped()
     assert calls == [1, 1]
+
+
+async def test_no_force_without_a_vad_stop():
+    s, calls = _strategy()
+    s._turn_complete = True
+    s._vad_stopped = False  # the state the stock strategy leaves after a turn
+    await s._maybe_trigger_user_turn_stopped()
+    assert calls == []
 
 
 async def test_finalized_transcript_needs_no_force():
