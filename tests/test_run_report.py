@@ -61,6 +61,20 @@ def test_a_turn_answered_by_the_policy_is_not_silent():
     assert "silent_turn" not in codes(events)
 
 
+def _unanswered(next_turn_at_ms):
+    return [ev("user_turn_start", 1), ev("asr_final", 1, 1, text="make a file"), ev("end_of_turn", 1, 2),
+            ev("user_turn_start", 2, next_turn_at_ms), ev("asr_final", 2, next_turn_at_ms + 1, text="and open it"),
+            ev("first_audio_out", 2, next_turn_at_ms + 2), ev("run_end", 2, next_turn_at_ms + 3)]  # fmt: skip
+
+
+def test_a_turn_the_user_carried_on_from_is_not_silent():
+    assert "silent_turn" not in codes(_unanswered(800))
+
+
+def test_a_long_wait_with_no_reply_is_still_silent():
+    assert "silent_turn" in codes(_unanswered(20_000))
+
+
 def test_a_turn_with_no_transcript_is_a_phantom():
     assert "phantom_turn" in codes([*GOOD, ev("user_turn_start", 2, 960)])
 
