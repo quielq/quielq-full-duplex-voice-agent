@@ -9,6 +9,9 @@ Held actions never keep a tool call open. The handler answers the LLM at once ("
 outcome then replaces that tool message in the context, so the LLM sees one current truth
 with no new message role and no async-tool text in the system prompt.
 
+The undo window opens when the user has heard about it, not when the tool is held, so a slow
+reply cannot use it up (ADR-017). If that never happens the action is dropped, not run.
+
 Only the commit step is protected. An interruption cannot touch a held action (only a
 transcript can), and once a write has started it finishes even if the user barges in; the
 real result then replaces the "CANCELLED" that Pipecat writes for the cancelled handler.
@@ -128,6 +131,9 @@ class HeldAction:
     task: asyncio.Task | None = None
     outcome: dict | None = None
     in_context: bool = False
+    announced: bool = False  # the reply or phrase telling the user is on its way
+    await_bot_start: bool = False  # a fixed phrase: speech already playing does not count
+    window_open: bool = False
 
 
 @dataclass
@@ -168,6 +174,8 @@ class ToolPolicy:
         self._background: set[asyncio.Task] = set()
         # Set by the bot once the pipeline exists; speaks a fixed phrase.
         self.speak: Callable[[str], Awaitable[None]] | None = None
+        # Set by the bot. Text mode has no playback, so a finished reply counts as heard.
+        self.plays_audio = False
 
     def _decide(self, tool: str, decision: str, **fields: Any) -> None:
         rec = {"tool": tool, "decision": decision, **fields}
@@ -250,7 +258,7 @@ class ToolPolicy:
                 "Their yes or no is heard directly, so do not call this tool again.",
             }
         else:
-            action.task = self._spawn(self._undo_window(action))
+            action.task = self._spawn(self._announce_expiry(action))
             result = {
                 "status": "waiting_for_undo",
                 "runs_in_seconds": rule.undo_s,
@@ -275,6 +283,39 @@ class ToolPolicy:
     async def _confirm_expiry(self, action: HeldAction) -> None:
         await asyncio.sleep(self._cfg["defaults"]["confirm_wait_s"])
         self._finish(action, "denied_timeout", {"status": "not_done", "reason": "no answer"})
+
+    async def _announce_expiry(self, action: HeldAction) -> None:
+        await asyncio.sleep(self._cfg["defaults"]["announce_wait_s"])
+        self._finish(action, "dropped_unannounced", {"status": "not_done", "reason": "the user was never told"})  # fmt: skip
+        if self.speak:
+            await self.speak(self.phrases["failed"])
+
+    def _open_window(self, action: HeldAction) -> None:
+        if action.task:
+            action.task.cancel()
+        action.window_open = True
+        action.task = self._spawn(self._undo_window(action))
+        self._decide(action.rule.name, "undo_window_open", undo_s=action.rule.undo_s)
+
+    def _unannounced(self) -> list[HeldAction]:
+        return [a for a in self._held if a.state == "undo" and not a.window_open]
+
+    def reply_ended(self) -> None:
+        """An LLM reply with text has ended, so a held action in the context has been announced."""
+        for action in self._unannounced():
+            if action.in_context:
+                action.announced = True
+                if not self.plays_audio:
+                    self._open_window(action)
+
+    def bot_started(self) -> None:
+        for action in self._unannounced():
+            action.await_bot_start = False
+
+    def bot_stopped(self) -> None:
+        for action in self._unannounced():
+            if action.announced and not action.await_bot_start:
+                self._open_window(action)
 
     async def _undo_window(self, action: HeldAction) -> None:
         await asyncio.sleep(action.rule.undo_s)
@@ -386,13 +427,18 @@ class ToolPolicy:
         undo_s = action.rule.undo_s
         if undo_s > 0:
             action.state = "undo"
-            action.task = self._spawn(self._undo_window(action))
+            action.announced = True
+            if self.plays_audio:
+                action.await_bot_start = True
+                action.task = self._spawn(self._announce_expiry(action))
+            else:
+                self._open_window(action)
             return Verdict("confirmed", self.phrases["confirmed_undo"].format(undo_s=f"{undo_s:g}"))
         action.state = "committing"
         action.task = self._spawn(self._commit(action))
         return Verdict("confirmed", self.phrases["confirmed_now"])
 
-    async def settled(self, timeout_s: float = 30.0) -> None:
+    async def settled(self, timeout_s: float = 60.0) -> None:
         """Wait out undo windows and commits. Unanswered confirmations do not hold a run open."""
         async with asyncio.timeout(timeout_s):
             while any(a.state != "confirm" for a in self._held):

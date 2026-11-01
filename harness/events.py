@@ -84,6 +84,8 @@ class TurnEventObserver(BaseObserver):
         self.reply_done = asyncio.Event()
         # Set by the bot when the waiting phrase is on (harness/filler.py).
         self.filler = None
+        # Set by the bot: the undo window opens on these signals (harness/tool_policy.py).
+        self.policy = None
 
     def _first(self, name: str, **fields) -> None:
         if name not in self._firsts:
@@ -123,6 +125,8 @@ class TurnEventObserver(BaseObserver):
             log.emit("llm_end")
             if self._response_has_text:
                 self.reply_done.set()
+                if self.policy:
+                    self.policy.reply_ended()
         elif isinstance(frame, FunctionCallInProgressFrame):
             log.emit("tool_call_start", name=frame.function_name, args=frame.arguments)
         elif isinstance(frame, FunctionCallResultFrame):
@@ -143,8 +147,12 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, BotStartedSpeakingFrame):
             is_filler = self.filler is not None and self.filler.claim_bot_start()
             log.emit("filler_audio_out" if is_filler else "first_audio_out")
+            if self.policy:
+                self.policy.bot_started()
         elif isinstance(frame, BotStoppedSpeakingFrame):
             log.emit("audio_silent")
+            if self.policy:
+                self.policy.bot_stopped()
         elif isinstance(frame, InterruptionFrame):
             log.emit("interruption")
         elif isinstance(frame, ErrorFrame):

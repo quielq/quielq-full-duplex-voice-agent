@@ -42,7 +42,7 @@ What the installed package does (pipecat-ai 1.13.0):
 
 * The undo and confirm waits are outside the path to the first reply, so latency reports need no correction for them, which settles that point from ADR-009.
 * The tool message in the context changes after the LLM has seen it. This is deliberate: the LLM always sees the current truth.
-* The undo window starts when the tool returns, so the bot's own sentence uses part of the 5 s.
+* The undo window starts when the tool returns, so the bot's own sentence uses part of the 5 s. Superseded by ADR-017: it now opens when the announcement ends.
 * "cancel my other timer" during a window also undoes the held action. That is the safe direction.
 * The status is not called `pending`, because a successful `set_timer` already returns `status: pending` for a timer that is counting down. The runner caught this.
 * Not verified live: a timeout on a real slow MCP call (tested with a stand-in handler), and Flux interim transcripts through `PolicyGate`.

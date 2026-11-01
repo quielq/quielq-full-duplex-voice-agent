@@ -146,16 +146,82 @@ async def test_window_ends_and_the_tool_runs(policy, monkeypatch):
     inner, params = Calls(), fake_params()
     await policy.handle(ToolRule("t", "auto", 0.02, 1.0), inner, params)
     assert policy.on_transcript("what time is it") is None  # other speech changes nothing
+    policy.reply_ended()
     await policy.settled()
     assert inner.count == 1
     assert json.loads(params.context.messages[0]["content"])["status"] == "done"
-    assert decisions(policy) == ["hold_undo", "committed"]
+    assert decisions(policy) == ["hold_undo", "undo_window_open", "committed"]
+
+
+async def test_slow_reply_does_not_use_up_the_window(policy, monkeypatch):
+    _replace_params(monkeypatch)
+    policy.plays_audio = True
+    inner, params = Calls(), fake_params()
+    await policy.handle(ToolRule("t", "auto", 0.02, 1.0), inner, params)
+    await asyncio.sleep(0.06)  # three windows pass with nothing said yet
+    assert inner.count == 0
+    policy.bot_stopped()  # the waiting phrase ending is not the announcement
+    await asyncio.sleep(0.06)
+    assert inner.count == 0
+    policy.reply_ended()  # generated, still playing
+    await asyncio.sleep(0.06)
+    assert inner.count == 0
+    policy.bot_stopped()
+    assert policy.on_transcript("cancel").decision == "undone"
+    await asyncio.sleep(0.04)
+    assert inner.count == 0
+
+
+async def test_window_closes_after_the_announcement(policy, monkeypatch):
+    _replace_params(monkeypatch)
+    policy.plays_audio = True
+    inner, params = Calls(), fake_params()
+    await policy.handle(ToolRule("t", "auto", 0.02, 1.0), inner, params)
+    policy.reply_ended()
+    policy.bot_stopped()
+    await policy.settled()
+    assert inner.count == 1
+
+
+async def test_never_announced_means_never_run(policy, monkeypatch):
+    _replace_params(monkeypatch)
+    policy._cfg["defaults"]["announce_wait_s"] = 0.01
+    spoken = []
+
+    async def speak(text):
+        spoken.append(text)
+
+    policy.speak = speak
+    inner, params = Calls(), fake_params()
+    await policy.handle(ToolRule("t", "auto", 0.01, 1.0), inner, params)
+    await policy.settled()
+    await asyncio.sleep(0.01)
+    assert inner.count == 0
+    assert "dropped_unannounced" in decisions(policy)
+    assert json.loads(params.context.messages[0]["content"])["status"] == "not_done"
+    assert spoken == [policy.phrases["failed"]]
+
+
+async def test_confirm_phrase_opens_the_window_when_it_ends(policy, monkeypatch):
+    _replace_params(monkeypatch)
+    policy.plays_audio = True
+    inner, params = Calls(), fake_params()
+    await policy.handle(ToolRule("t", "confirm", 0.02, 1.0), inner, params)
+    policy.on_transcript("yes")
+    policy.bot_stopped()  # the question being cut off, not the phrase
+    await asyncio.sleep(0.06)
+    assert inner.count == 0
+    policy.bot_started()
+    policy.bot_stopped()
+    await policy.settled()
+    assert inner.count == 1
 
 
 async def test_cancel_after_the_window_is_too_late(policy, monkeypatch):
     _replace_params(monkeypatch)
     inner, params = Calls(delay_s=0.1), fake_params()
     await policy.handle(ToolRule("t", "auto", 0.01, 1.0), inner, params)
+    policy.reply_ended()
     await asyncio.sleep(0.05)  # committing now
     assert policy.on_transcript("cancel") is None
     await policy.settled()
@@ -215,6 +281,7 @@ async def test_timeout_counts_the_call_only(policy, monkeypatch):
     policy.speak = speak
     inner, params = Calls(delay_s=1.0), fake_params()
     await policy.handle(ToolRule("t", "auto", 0.02, 0.05), inner, params)
+    policy.reply_ended()
     t0 = time.monotonic()
     await policy.settled()
     assert time.monotonic() - t0 < 0.5
@@ -286,7 +353,7 @@ async def test_cancel_timer_runs_after_the_window(cfg, tmp_path, transport):
     assert "unless you say cancel" in r.spoken_text
     assert timers(data) == {}
     done = [e["decision"] for e in policy_events(r) if e["tool"] == "cancel_timer"]
-    assert done[-2:] == ["hold_undo", "committed"]
+    assert done[-3:] == ["hold_undo", "undo_window_open", "committed"]
     tool_messages = [m for m in r.context_messages if m.get("role") == "tool"]
     assert '"done"' in tool_messages[-1]["content"]  # the LLM sees what happened, not the hold
 
@@ -356,6 +423,23 @@ async def test_spoken_cancel_works_in_both_barge_in_modes(cfg, tmp_path, audio, 
     assert "abc12345" in timers(data), r.policy_decisions
     assert any(e["decision"] == "undone" for e in policy_events(r))
     assert sum(1 for m in r.context_messages if m.get("role") == "user") == 1  # "cancel" cost no LLM call
+
+
+async def test_window_opens_when_the_bot_stops_speaking(cfg, tmp_path, audio):
+    data = tmp_path / "data"
+    seed_timer(data)
+    cfg.providers["stages"]["tts"] = "fake_words"
+    cfg.tool_policy["tools"]["cancel_timer"]["undo_s"] = 0.2
+    r = await run_bot(cfg, input_mode="wav", segments=[Segment(audio["request"])],
+                      stt_script=["cancel my timer"], data_dir=str(data),
+                      handle_sigint=False, reply_timeout_s=30)  # fmt: skip
+    assert timers(data) == {}, r.policy_decisions
+    events = [json.loads(line) for line in r.events_path.read_text().splitlines()]
+    order = [e.get("decision") or e["event"] for e in events]
+    hold = order.index("hold_undo")
+    opened = order.index("undo_window_open")
+    assert "audio_silent" in order[hold:opened]  # the bot finished before the clock started
+    assert "committed" in order[opened:]
 
 
 async def test_get_time_runs_at_once_and_the_reply_uses_the_tool(cfg, tmp_path):

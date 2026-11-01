@@ -246,6 +246,8 @@ async def run_bot(
              stages=cfg.providers["stages"])  # fmt: skip
 
     policy = ToolPolicy(cfg.tool_policy, on_event=log.emit)
+    policy.plays_audio = input_mode != "text"
+    turn_obs.policy = policy
 
     addressing = _addressing(cfg, log)
     stayed_silent = False

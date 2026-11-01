@@ -11,6 +11,7 @@ defaults:
   undo_s: 5.0            # destructive tools wait this long; "cancel" stops them
   timeout_s: 10.0        # for the tool call itself, never counting the undo or confirm wait
   confirm_wait_s: 20.0   # no answer by then means no
+  announce_wait_s: 30.0  # the undo window opens once the user has heard about it; if that never happens, drop it
 
 # Words matched on interim and final transcripts while something is held.
 undo_words: ["cancel", "stop", "undo", "wait", "no", "pause"]   # quoted: bare no is a YAML boolean
