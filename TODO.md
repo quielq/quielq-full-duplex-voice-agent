@@ -12,6 +12,7 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 - [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
 - [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first)
 - [ ] Buy Cartesia Pro ($5), approve a cartesia cap (suggested $1.00/day), and pick a default English voice
+- [ ] Choose the LLM default: 120b is more accurate, 20b is faster to first token (ADR-017)
 - [ ] Try the live mic with headphones: `uv run python -m harness.bot --stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2`
 - [x] Confirm the deadline: Nov 7 holds (Oct 31)
 - [ ] Check Thursday's command list in Google Classroom
@@ -46,6 +47,8 @@ Tool policy (Nov 1):
 - [x] Startup check for duplicate tool names; log every policy decision (2b0d52b, 679207a)
 - [x] Protect only the commit step, never block the mic (2b0d52b)
 - [x] Check `waiting_for_undo` and `needs_confirmation` handling on a real LLM (Groq `gpt-oss-20b`, one run: 23 of 24, ADR-011)
+
+- [x] Start the undo window when the announcement finishes, not when the tool is held (ADR-017, fake-tested)
 
 Test layers (Nov 1 onward):
 
@@ -104,7 +107,9 @@ Waiting phrase (Nov 2):
 
 - [x] Loudness gate with 400 ms of pre-roll, off by default, synthetic audio only (ADR-016)
 - [ ] Check Flux with gaps in the audio before enabling the gate with it (ADR-016)
-- [ ] Run `bench/task_suite/cases/addressing.yaml` on Groq, then tune the IDLE word rules on a recorded room
+- [x] Run `bench/task_suite/cases/addressing.yaml` on Groq (ADR-017)
+- [ ] Relax `addr_short_follow_up_in_active`: it expects "thanks" and a real model says "you're welcome" (ADR-017)
+- [ ] Tune the IDLE word rules on a recorded room
 - [x] ACTIVE/IDLE conversation states (ADR-016)
 - [x] `stay_silent` tool (ADR-016)
 - [x] `require_wake_after_idle` fallback switch (ADR-016)
