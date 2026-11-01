@@ -9,6 +9,7 @@ An interpreter on the list can still do anything, which is why servers/sandbox.p
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from servers.vendor.onit_command_policy import ALLOW, ASK, CRITICAL, DEFAULT_ALLOWED_COMMANDS, DENY, Decision, evaluate_command
 
@@ -17,6 +18,9 @@ __all__ = ["ALLOW", "ASK", "CRITICAL", "DENY", "Decision", "check"]
 # A yes can run something off the list, so these stay off it: the sandbox has no network
 # for them, and a refusal costs less than a command that fails after a spoken yes.
 ALLOWED = DEFAULT_ALLOWED_COMMANDS - {"curl", "wget", "gh", "onit", "openssl", "kill", "nvidia-smi", "nvcc"}
+
+# These reach for the desktop, which the sandbox closes off, so a yes could only end in a failure.
+NEEDS_DESKTOP = frozenset({"open", "xdg-open", "osascript"})
 
 # Refused whatever the parser says, and as critical. From OnIt's bash server.
 CATASTROPHIC = [
@@ -42,4 +46,8 @@ def check(command: str) -> Decision:
     for pattern, what in CATASTROPHIC:
         if pattern.search(command):
             return Decision(DENY, f"Blocked: {what}.", severity=CRITICAL)
-    return evaluate_command(command, ALLOWED, ask_scope=frozenset({"command"}))
+    decision = evaluate_command(command, ALLOWED, ask_scope=frozenset({"command"}))
+    if decision.verdict == ASK and NEEDS_DESKTOP.intersection(Path(s).name for s in decision.subjects):
+        reason = "The shell has no desktop. Use open_in_browser for an HTML file. Nothing here opens other apps."
+        return Decision(DENY, reason, subjects=decision.subjects)
+    return decision
