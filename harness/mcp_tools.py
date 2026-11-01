@@ -32,8 +32,10 @@ TASK_SERVERS = {
 }
 
 
-def _server_env(data_dir: str | None) -> dict[str, str]:
+def _server_env(data_dir: str | None, module: str = "") -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}  # servers get no keys
+    if module != TASK_SERVERS["music"]:  # the one exception (ADR-022)
+        env = {k: v for k, v in env.items() if not k.startswith("SPOTIFY_")}
     if data_dir:
         env["ME3_DATA_DIR"] = data_dir
     return env
@@ -75,7 +77,7 @@ async def http_server(module: str, data_dir: str | None = None) -> AsyncIterator
     proc = subprocess.Popen(
         [sys.executable, "-m", module, "--transport", "http", "--port", str(port)],
         cwd=REPO_ROOT,
-        env=_server_env(data_dir),
+        env=_server_env(data_dir, module),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -112,7 +114,7 @@ async def server_client(
             command=sys.executable,
             args=["-m", module],
             cwd=str(REPO_ROOT),
-            env=_server_env(data_dir),
+            env=_server_env(data_dir, module),
         )
         yield MCPClient(server_params=params)
     elif transport == "http":
