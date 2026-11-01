@@ -1,6 +1,6 @@
 # ME3 to-do list
 
-Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Oct 31, 2026.
+Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 1, 2026.
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
@@ -69,7 +69,9 @@ Waiting phrase (Nov 2):
 
 ## Latency (about 2.8 s now, target p50 under 1.0 s)
 
-- [ ] Tune Flux end of turn: its `eot_threshold` setting and eager end of turn (`EagerUserTurnStrategies`) (ADR-005)
+- [x] Tune Flux end of turn: `eot_threshold` stays 0.7, timeout unchanged, eager stays off (ADR-018)
+- [ ] Spike `ForceEndTurn` with Smart Turn: the wait on complete sentences has a floor of about 1.0 s that Flux settings do not move, and 0.7 cuts half of the clips with a long pause (ADR-018)
+- [ ] Check mid-sentence pauses on the live mic: `say` pauses may be harsher than a person (ADR-018)
 - [ ] Add Deepgram Nova-3 so Smart Turn can be A/B tested against Flux fairly
 - [ ] Cut the gap after a tool call (two LLM round trips per tool turn); try streaming the confirmation
 - [ ] Measure from real audio, not framework events: full `latency_probe`, p50/p90/p95 over 30+ runs
@@ -91,7 +93,7 @@ Waiting phrase (Nov 2):
 - [ ] Reconnect logic for MCP sessions that expire after 30 minutes idle
 - [ ] Due timers announce themselves through `voice-speak`
 
-## Task servers (only `clock` exists)
+## Task servers
 
 - [x] `music` mock
 - [ ] `music` real backend (Spotify, demo only)

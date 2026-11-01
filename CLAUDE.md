@@ -57,6 +57,7 @@ uv run python -m bench.latency_probe logs/events-<id>.jsonl
 uv run python -m bench.interruption_test --tts fake_words [--barge-in duck]   # step 4 and 5
 uv run python -m bench.voice_bridge_probe                 # step 6, MCP hop cost
 uv run python -m bench.task_runner --repeat 5             # task suite on fakes, no spend
+uv run python -m bench.eot_sweep --grid eot_threshold=0.7  # end-of-turn sweep on fakes, no spend (ADR-018)
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
 ```
 
