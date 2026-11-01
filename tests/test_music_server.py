@@ -17,8 +17,11 @@ from servers.tasks.music.server import mcp
 
 MAC = {"id": "mac", "name": "Mac", "type": "Computer", "is_active": False, "volume_percent": 40}
 SPEAKER = {"id": "spk", "name": "Speaker", "type": "Speaker", "is_active": False}
-TRACK = {"name": "Valentine", "uri": "spotify:track:1", "artists": [{"name": "Laufey"}]}
+ALBUM = {"uri": "spotify:album:1"}
+TRACK = {"name": "Valentine", "uri": "spotify:track:1", "artists": [{"name": "Laufey"}], "album": ALBUM}
+OTHER = TRACK | {"name": "Bewitched", "uri": "spotify:track:2"}
 PLAYING = {"is_playing": True, "item": TRACK}
+PAUSED = {"is_playing": False, "item": TRACK, "progress_ms": 40000}
 
 
 @pytest.fixture(autouse=True)
@@ -114,17 +117,17 @@ def test_a_relinked_track_counts_as_started(fake, backend):
     assert backend.play("jazz")["playing"] is True
 
 
-def _local_backend(fake, tmp_path, started: list[str]) -> SpotifyBackend:
+def _local_backend(fake, tmp_path, started: list[tuple[str, str]]) -> SpotifyBackend:
     ledger = CostLedger(tmp_path / "ledger.jsonl", {"spotify": 0.01})
     client = httpx.Client(transport=httpx.MockTransport(fake))
-    return SpotifyBackend(client, ledger, local_play=started.append)
+    return SpotifyBackend(client, ledger, local_play=lambda uri, context: started.append((uri, context)))
 
 
 def test_a_computer_plays_through_the_local_app_not_the_web_api(fake, tmp_path):
     fake.replies["/me/player"] = httpx.Response(200, json=PLAYING)
-    started: list[str] = []
+    started: list[tuple[str, str]] = []
     assert _local_backend(fake, tmp_path, started).play("jazz")["playing"] is True
-    assert started == [TRACK["uri"]]
+    assert started == [(TRACK["uri"], ALBUM["uri"])]
     assert "/me/player/play" not in fake.routes()
 
 
@@ -132,7 +135,7 @@ def test_an_active_speaker_still_uses_the_web_api(fake, tmp_path):
     active = SPEAKER | {"is_active": True}
     fake.replies["/me/player/devices"] = httpx.Response(200, json={"devices": [MAC, active]})
     fake.replies["/me/player"] = httpx.Response(200, json=PLAYING)
-    started: list[str] = []
+    started: list[tuple[str, str]] = []
     _local_backend(fake, tmp_path, started).play("jazz")
     assert started == [] and "/me/player/play" in fake.routes()
 
@@ -142,12 +145,78 @@ def test_the_local_app_is_checked_too(fake, tmp_path):
         _local_backend(fake, tmp_path, []).play("jazz")
 
 
-def test_the_uri_reaches_osascript_as_an_argument(monkeypatch):
+def test_the_uris_reach_osascript_as_arguments(monkeypatch):
     seen = {}
     monkeypatch.setattr(backends.subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd))
-    backends.play_in_mac_app('spotify:track:1" & quit')
-    assert seen["cmd"][-1] == 'spotify:track:1" & quit'
-    assert not any("track:1" in part for part in seen["cmd"][:-1])
+    backends.play_in_mac_app('spotify:track:1" & quit', "spotify:album:1")
+    assert seen["cmd"][-2:] == ['spotify:track:1" & quit', "spotify:album:1"]
+    assert not any("track:1" in part or "album:1" in part for part in seen["cmd"][:-2])
+
+
+def test_a_slow_osascript_leaves_the_decision_to_the_start_check(monkeypatch):
+    """Nov 1: the call passed its time limit while the app did start the song."""
+
+    def slow(cmd, **kw):
+        raise backends.subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    monkeypatch.setattr(backends.subprocess, "run", slow)
+    backends.play_in_mac_app("spotify:track:1", "spotify:album:1")
+
+
+def test_resume_continues_without_a_new_search_or_track(fake, backend):
+    fake.replies["/me/player"] = [httpx.Response(200, json=PAUSED), httpx.Response(200, json=PLAYING)]
+    assert backend.resume()["now_playing"] == "Valentine by Laufey"
+    assert "/search" not in fake.routes()
+    play = next(c for c in fake.calls if c.url.path.endswith("/me/player/play"))
+    assert play.content == b""
+
+
+def test_resume_while_playing_sends_no_play(fake, backend):
+    fake.replies["/me/player"] = httpx.Response(200, json=PLAYING)
+    assert backend.resume()["playing"] is True
+    assert "/me/player/play" not in fake.routes()
+
+
+def test_resume_that_never_starts_is_an_error(fake, backend):
+    fake.replies["/me/player"] = httpx.Response(200, json=PAUSED)
+    with pytest.raises(MusicError, match="did not resume"):
+        backend.resume()
+
+
+@pytest.mark.parametrize("action", ["resume", "next", "previous"])
+def test_with_nothing_loaded_the_controls_are_errors(fake, backend, action):
+    with pytest.raises(MusicError, match="Nothing has been played"):
+        getattr(backend, action)()
+
+
+@pytest.mark.parametrize(("action", "route"), [("next", "/me/player/next"), ("previous", "/me/player/previous")])
+def test_skipping_names_the_new_track(fake, backend, action, route):
+    after = {"is_playing": True, "item": OTHER, "progress_ms": 100}
+    fake.replies["/me/player"] = [httpx.Response(200, json=PLAYING), httpx.Response(200, json=after)]
+    assert getattr(backend, action)()["now_playing"] == "Bewitched by Laufey"
+    assert route in fake.routes()
+
+
+def test_previous_that_restarts_the_track_is_a_success(fake, backend):
+    restarted = PAUSED | {"is_playing": True, "progress_ms": 50}
+    fake.replies["/me/player"] = [httpx.Response(200, json=PAUSED), httpx.Response(200, json=restarted)]
+    assert backend.previous()["now_playing"] == "Valentine by Laufey"
+
+
+def test_a_skip_that_changes_nothing_is_an_error(fake, backend):
+    fake.replies["/me/player"] = httpx.Response(200, json=PLAYING | {"progress_ms": 1000})
+    with pytest.raises(MusicError, match="did not change"):
+        backend.next()
+
+
+async def test_mock_pauses_resumes_and_skips():
+    async with Client(mcp) as c:
+        assert (await c.call_tool("resume_music", {})).structured_content == {"error": "Nothing has been played yet."}
+        await c.call_tool("play_music", {"query": "jazz"})
+        await c.call_tool("stop_music", {})
+        for tool in ("resume_music", "next_track", "previous_track"):
+            r = (await c.call_tool(tool, {})).structured_content
+            assert r["playing"] is True and r["now_playing"] == "jazz"
 
 
 def test_a_failed_osascript_is_a_spoken_error(monkeypatch):
@@ -156,7 +225,7 @@ def test_a_failed_osascript_is_a_spoken_error(monkeypatch):
 
     monkeypatch.setattr(backends.subprocess, "run", fail)
     with pytest.raises(MusicError, match="Spotify app"):
-        backends.play_in_mac_app("spotify:track:1")
+        backends.play_in_mac_app("spotify:track:1", "spotify:album:1")
 
 
 @pytest.mark.parametrize(("platform", "local"), [("darwin", True), ("linux", False)])

@@ -56,6 +56,21 @@ class MockBackend:
     def stop(self) -> dict:
         return self._save(self._load() | {"playing": False})
 
+    def resume(self) -> dict:
+        return self._continue()
+
+    def next(self) -> dict:
+        return self._continue()
+
+    def previous(self) -> dict:
+        return self._continue()
+
+    def _continue(self) -> dict:
+        state = self._load()
+        if not state["now_playing"]:
+            raise MusicError("Nothing has been played yet.")
+        return self._save(state | {"playing": True})
+
     def set_volume(self, level: int) -> dict:
         return self._save(self._load() | {"volume": level})
 
@@ -80,21 +95,37 @@ def pick_device(devices: list[dict]) -> dict:
     raise MusicError("No Spotify device is open. Open the Spotify app and try again.")
 
 
-def play_in_mac_app(uri: str) -> None:
-    """Start a track in this Mac's Spotify app. The URI is an argument, never script text."""
-    script = ["on run argv", 'tell application "Spotify" to play track (item 1 of argv)', "end run"]
-    args = [part for line in script for part in ("-e", line)]
+def play_in_mac_app(uri: str, context: str) -> None:
+    """Start a track inside its album in this Mac's Spotify app. Both URIs are arguments, never script text."""
+    tell = 'tell application "Spotify" to play track (item 1 of argv) in context (item 2 of argv)'
+    args = [part for line in ("on run argv", tell, "end run") for part in ("-e", line)]
     try:
-        subprocess.run(["osascript", *args, uri], capture_output=True, timeout=TIMEOUT_S, check=True)
+        subprocess.run(["osascript", *args, uri, context], capture_output=True, timeout=TIMEOUT_S, check=True)
+    except subprocess.TimeoutExpired:
+        pass  # a slow app can still start, so the start check decides
     except (OSError, subprocess.SubprocessError) as e:
         raise MusicError("I could not start the Spotify app on this Mac.") from e
 
 
-def _is_playing(state: dict, uris: list[str]) -> bool:
+def _track_uris(state: dict) -> set[str | None]:
     item = state.get("item") or {}
     # Spotify can swap a track for a regional copy, and then linked_from has the asked-for URI.
-    played = {item.get("uri"), (item.get("linked_from") or {}).get("uri")}
-    return bool(state.get("is_playing")) and not played.isdisjoint(uris)
+    return {item.get("uri"), (item.get("linked_from") or {}).get("uri")} - {None}
+
+
+def _is_playing(state: dict, uris: list[str]) -> bool:
+    return bool(state.get("is_playing")) and not _track_uris(state).isdisjoint(uris)
+
+
+def _summary(state: dict) -> dict:
+    device = state.get("device") or {}
+    item = state.get("item")
+    return {
+        "playing": bool(state.get("is_playing")),
+        "now_playing": _title(item) if item else "",
+        "volume": device.get("volume_percent"),
+        "device": device.get("name", ""),
+    }
 
 
 class SpotifyBackend:
@@ -169,19 +200,19 @@ class SpotifyBackend:
             raise MusicError(f"Spotify refused that, with status {r.status_code}.")
         return r
 
-    def now_playing(self) -> dict:
+    def _player(self) -> dict:
         r = self._checked("GET", "/me/player")
-        if r.status_code == 204 or not r.content:
-            return {"playing": False, "now_playing": "", "volume": None, "device": ""}
-        state = r.json()
-        device = state.get("device") or {}
-        item = state.get("item")
-        return {
-            "playing": bool(state.get("is_playing")),
-            "now_playing": _title(item) if item else "",
-            "volume": device.get("volume_percent"),
-            "device": device.get("name", ""),
-        }
+        return r.json() if r.status_code == 200 and r.content else {}
+
+    def _loaded_player(self) -> dict:
+        state = self._player()
+        if not state.get("item"):
+            raise MusicError("Nothing has been played yet.")
+        return state
+
+    def now_playing(self) -> dict:
+        state = self._player()
+        return _summary(state) if state else {"playing": False, "now_playing": "", "volume": None, "device": ""}
 
     def play(self, query: str) -> dict:
         found = self._checked("GET", "/search", params={"q": query, "type": "track", "limit": QUEUE_SIZE})
@@ -192,8 +223,8 @@ class SpotifyBackend:
         device = pick_device(self._checked("GET", "/me/player/devices").json().get("devices", []))
         uris = [t["uri"] for t in tracks]
         if self._local_play and device.get("type") == "Computer":
-            uris = uris[:1]  # the Mac app takes one track, so a queue needs the Web API
-            self._local_play(uris[0])
+            uris = uris[:1]  # the album supplies what comes next
+            self._local_play(uris[0], tracks[0]["album"]["uri"])
         else:
             self._checked("PUT", "/me/player/play", params={"device_id": device["id"]}, json={"uris": uris})
         self._confirm_started(uris)
@@ -205,15 +236,42 @@ class SpotifyBackend:
             "device": device.get("name", ""),
         }
 
-    def _confirm_started(self, uris: list[str]) -> None:
+    def _wait_for(self, ready: Callable[[dict], bool], failure: str) -> dict:
         deadline = time.monotonic() + START_CHECK_S
         while True:
-            r = self._checked("GET", "/me/player")
-            if r.status_code == 200 and r.content and _is_playing(r.json(), uris):
-                return
+            state = self._player()
+            if ready(state):
+                return state
             if time.monotonic() >= deadline:
-                raise MusicError("Spotify accepted that, but nothing started playing.")
+                raise MusicError(failure)
             time.sleep(START_POLL_S)
+
+    def _confirm_started(self, uris: list[str]) -> None:
+        self._wait_for(lambda s: _is_playing(s, uris), "Spotify accepted that, but nothing started playing.")
+
+    def resume(self) -> dict:
+        state = self._loaded_player()
+        if not state.get("is_playing"):  # Spotify can refuse a play with no body while already playing
+            uris = list(_track_uris(state))
+            self._checked("PUT", "/me/player/play")
+            state = self._wait_for(lambda s: _is_playing(s, uris), "Spotify did not resume the music.")
+        return _summary(state)
+
+    def next(self) -> dict:
+        return self._skip("/me/player/next")
+
+    def previous(self) -> dict:
+        return self._skip("/me/player/previous")
+
+    def _skip(self, path: str) -> dict:
+        before = self._loaded_player()
+        uris, position = _track_uris(before), before.get("progress_ms", 0)
+
+        def moved(state: dict) -> bool:  # previous can restart the same track, so position counts
+            return bool(state.get("item")) and (_track_uris(state) != uris or state.get("progress_ms", 0) < position)
+
+        self._checked("POST", path)
+        return _summary(self._wait_for(moved, "Spotify did not change the track."))
 
     def stop(self) -> dict:
         r = self._request("PUT", "/me/player/pause")
