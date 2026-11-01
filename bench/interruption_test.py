@@ -12,7 +12,7 @@ Reported per run:
 * heard_words: words whose audio fully played before the interruption (from the
   played seconds and a per-character pacing estimate for real TTS);
 * committed_words: words in the assistant message that went into the context;
-* overcommit_words: committed minus heard (0 or 1 means truncation works);
+* overcommit_words: committed minus heard (the word in progress plus one released early);
 * stop_ms: barge-in speech onset to the last voiced output sample.
 """
 
@@ -59,6 +59,11 @@ def _events(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
+def fully_heard_words(text: str, heard_chars: float) -> int:
+    """Words that ended at or before this many characters of playback."""
+    return sum(word.end() <= heard_chars for word in re.finditer(r"\S+", text))
+
+
 def analyse(result, full_text: str, tts: str) -> dict:
     out = result.output
     story_ctx = next(iter(out.generated_s), None)  # first TTS context is the story
@@ -77,9 +82,7 @@ def analyse(result, full_text: str, tts: str) -> dict:
     # of 850 characters per audio minute (review: 750 to 900) as an estimate.
     sec_per_char = 0.060 if tts.startswith("fake") else 60 / 850
     heard_chars = played / sec_per_char if sec_per_char else 0.0
-    heard_words = len(full_text[: int(heard_chars)].split())
-    if heard_chars < len(full_text) and not full_text[int(heard_chars) : int(heard_chars) + 1].isspace():
-        heard_words -= 1  # last word was cut mid-way, so it was not fully heard
+    heard_words = fully_heard_words(full_text, heard_chars)
 
     after_barge = [e for e in ev if barge and e["t_ns"] >= barge["t_ns"]]
     # Measure from the first loud sample of the barge-in, not the start of the file.

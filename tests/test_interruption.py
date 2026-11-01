@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from bench.interruption_test import run
+from bench.interruption_test import fully_heard_words, run
 
 pytestmark = pytest.mark.skipif(not shutil.which("say"), reason="macOS `say` not available")
 
@@ -33,3 +33,12 @@ async def test_without_word_timestamps_partial_sentence_is_not_committed():
     with tempfile.TemporaryDirectory() as d:
         r = await run("fake", 2.5, Path(d))
     assert r["committed_words"] == 0, r
+
+
+def test_heard_words_counts_only_finished_words():
+    text = "alone on a small rock"
+    assert fully_heard_words(text, 3) == 0  # cut inside the first word
+    assert fully_heard_words(text, 5) == 1  # ends exactly here
+    assert fully_heard_words(text, 8) == 2  # the space after "on"
+    assert fully_heard_words(text, 9) == 2  # the first letter of "a" is playing, "on" is finished
+    assert fully_heard_words(text, 21) == 5
