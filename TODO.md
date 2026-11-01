@@ -8,6 +8,7 @@ Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). St
 
 ## Waiting on Quiel
 
+- [ ] Decide reply templates: enable, or remeasure on 20b when its daily tokens return (ADR-020)
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
 - [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first)
@@ -74,7 +75,7 @@ Waiting phrase (Nov 2):
 - [ ] Optional: try a shorter Smart Turn `stop_secs` with `flux_forced`, whose worst waits reach 5.7 s (ADR-019)
 - [ ] Check mid-sentence pauses on the live mic: `say` pauses may be harsher than a person (ADR-018)
 - [ ] Add Deepgram Nova-3 so Smart Turn can be A/B tested against Flux fairly
-- [ ] Cut the gap after a tool call (two LLM round trips per tool turn); try streaming the confirmation
+- [x] Build reply templates to skip the second LLM call: off by default, saved 296 ms against a 300 ms bar on 120b (ADR-020)
 - [ ] Measure from real audio, not framework events: full `latency_probe`, p50/p90/p95 over 30+ runs
 
 ## Barge-in
