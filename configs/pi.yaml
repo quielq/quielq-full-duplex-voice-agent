@@ -1,13 +1,15 @@
-# Phase 2 profile: Raspberry Pi 5 with a speakerphone. Not exercised yet (Phase 2 waits for a go).
-# Keep keys identical to mac.yaml so the move is a config change.
+# Phase 2 profile: Raspberry Pi 5 with a separate USB mic and USB speaker (ADR-029). Not exercised
+# yet (Phase 2 waits for a go). Keep keys identical to mac.yaml so the move is a config change.
 
 profile: pi
 
 audio:
-  input_device: null    # set to the speakerphone (or the PipeWire echo-cancel source) name
+  # Set these to name substrings from `uv run python -m harness.audio_io`. A device showing
+  # "16k in=no" or "24k out=no" is raw hardware: use the pipewire or default device.
+  input_device: null
   output_device: null
-  allow_speakers: false   # only built-in laptop speakers are refused; a speakerphone passes
-  echo_cancel: false      # WebRTC AEC in the harness (ADR-013); off when hardware or PipeWire cancels
+  allow_speakers: false   # only built-in laptop speakers are refused
+  echo_cancel: true       # WebRTC AEC (ADR-013): a separate speaker and mic have none of their own
   echo_delay_ms: 50       # hint to WebRTC; not measured on the Pi
   in_sample_rate: 16000
   out_sample_rate: 24000
