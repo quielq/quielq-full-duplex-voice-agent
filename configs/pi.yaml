@@ -11,7 +11,7 @@ audio:
   output_device: pipewire
   allow_speakers: false   # only built-in laptop speakers are refused
   echo_cancel: true       # WebRTC AEC (ADR-013): a separate speaker and mic have none of their own
-  echo_delay_ms: 50       # hint to WebRTC; not measured on the Pi
+  echo_delay_ms: 30       # hint to WebRTC; measured lag 30 ms on the Pi (ADR-029)
   in_sample_rate: 16000
   out_sample_rate: 24000
 

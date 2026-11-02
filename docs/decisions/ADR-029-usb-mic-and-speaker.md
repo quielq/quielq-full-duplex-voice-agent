@@ -13,6 +13,18 @@ The review plans a hardware-AEC speakerphone for Phase 2. Quiel will use a separ
 - `local_transport` refuses a named device that cannot run at our rate, with a message that names the fix. A raw USB device often offers only 44.1 or 48 kHz, and the `pipewire` or `default` device resamples.
 - `python -m harness.audio_io` now shows whether each device supports our rates.
 
+## Measurements
+
+`bench/echo_probe.py` on the Pi on Nov 2, 2026, USB mic and Dell AC511 SoundBar through PipeWire, no cloud calls, speaker at 84%, nobody talking. The mic is hot, at about -10 dB.
+
+| Run | Result |
+|---|---|
+| Clean recording, 25 s | 8 raw onsets to 0 at hints 0 and 30 ms. Measured lag 30 ms. PASS |
+| `--talker`, hint 30 ms | One of two talkers caught, 1.45 s after it began, plus a false onset at 3.78 s. FAIL |
+| `--transport --repeat 10`, 250 s | Playback stretch 1.00, no write over 100 ms. 18 onsets against 75 raw, 3.07 s of speech against 233.86 s. 307 reference underruns. Level after cancelling about -52 dB early and -37 to -48 dB later |
+
+The talker comes from the same speaker, so it stands in for a person, and the real barge-in test is live. The long run shows no runaway drift, but the blips mean the live echo test is still open. Temperature went from 59 to 75 C over these runs, so the Pi needs a check on cooling.
+
 ## Alternatives
 
 - **Buy a speakerphone:** the most reliable echo result, but not the hardware chosen.
