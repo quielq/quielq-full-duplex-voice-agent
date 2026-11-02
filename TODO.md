@@ -1,42 +1,88 @@
 # ME3 to-do list
 
-Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 1, 2026.
+Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 2, 2026.
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
-Status as of Oct 31: Gate 1 closed live (Flux, Groq, Aura-2, stdio and HTTP). Steps 5 and 6 done. Step 4 done except the Cartesia arm. No commits since Oct 21, so the build plan was redrawn (see "Replan, Oct 31" in `docs/architecture.md`).
+Status as of Nov 2: the agent works on the live mic with Flux, Haiku 5.5, Cartesia, and Spotify (last run `20261102-013828-01e81b`, 17 turns). The robot face is built and tested on fakes only (ADR-027). Haiku built a small website from one request in a text run (ADR-028). All-time spend is $1.92. Feature freeze is Nov 5 and the deadline is Nov 7. Order from here: run a website job by voice with the face on, then the Pi port.
 
 ## Waiting on Quiel
 
-- [ ] Decide reply templates: enable, or remeasure on 20b when its daily tokens return (ADR-020)
-- [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
-- [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
-- [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first)
-- [ ] Buy Cartesia Pro ($5), approve a cartesia cap (suggested $1.00/day), and pick a default English voice
-- [ ] Choose the LLM default: 120b is more accurate, 20b is faster to first token (ADR-017)
-- [ ] Try the live mic with headphones: `uv run python -m harness.bot --stages stt=deepgram_flux,llm=groq,tts=deepgram_aura2`
-- [x] Confirm the deadline: Nov 7 holds (Oct 31)
-- [ ] Check Thursday's command list in Google Classroom
+- [ ] Give the go for step 7, the Pi port, after the face and a voice-driven job are proven on the Mac
+- [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first). The replan has no slot for them, and leaving them out is the recommendation
+- [ ] Decide whether to build `delegate` if Haiku cannot finish a website job with the existing tools
 - [ ] Decide the patent and privacy question before Nov 7 (repo stays private until then)
-- [ ] Later purchases: Anthropic ($5) and OpenRouter ($5) for the model comparison; Spotify developer app (free) for `music`
+- [ ] Decide reply templates: enable or leave off. Measured on Groq 120b only, not on Haiku (ADR-020)
+- [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
+- [ ] Approve a first real message and call through the phone bridge (ADR-024)
+- [ ] Approve generating the real waiting phrase clips (paid TTS call)
+- [ ] Later purchase: OpenRouter ($5), only if the model comparison goes ahead
+- [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
+- [x] Confirm the deadline: Nov 7 holds (Oct 31)
+- [x] Approve a Cartesia cap and voice: $5.00/day, public Skylar voice (Nov 1)
+- [x] Choose the LLM: Haiku 5.5, replacing the 20b and 120b choice (ADR-025)
+- [x] Try the live mic: Flux, Haiku, and Cartesia, five mic runs on Nov 1 and 2
+- [x] Set up the Spotify developer app (ADR-022) and fund Anthropic (ADR-025)
+- [x] Buy Cartesia Pro (confirmed Nov 2)
+- [x] Command list: follow the tools and servers already requested, no separate list to check (Nov 2)
+- [x] Pi audio hardware: separate USB mic and USB speaker, not a speakerphone (ADR-029)
+
+## Robot face (ADR-027)
+
+- [x] Browser page with the four expressions from the artwork, plus listening, thinking, working, asking, and muted (`--ui`, `harness/ui.py`, `harness/ui_page.html`)
+- [x] Blink, talking mouth, current step, captions, and a sad face when the agent is down
+- [x] Lights, thermostat, music, and timers panel, with a touch mute button
+- [x] Layout checked at 800x480 on the Mac with `uv run python -m harness.ui --demo`
+- [ ] Try it on the live mic and judge the timing of the expressions by ear and eye
+- [ ] Confirm the display's resolution: 800x480 was assumed, and a 1024x600 or 1280x720 panel needs a look
+- [ ] Chromium kiosk start on the Pi, and CPU cost of the page next to the agent
+- [ ] Decide what `open_in_browser` does on the Pi: it covers the face, and touch has no way back
+- [ ] Optional: touch control of lights and thermostat (needs an ADR, it must not get around the tool policy)
+
+## Multi-stage jobs (ADR-028)
+
+- [x] `write_file` and `edit_file` run at once and keep replaced versions in `.versions`
+- [x] Anthropic `max_tokens` raised to 8,192 so a whole page fits in one call
+- [x] System prompt: plan first, work to the end, check, then offer to open it
+- [x] Due timers and alarms are said aloud (`harness/timer_watch.py`, fakes only)
+- [x] Live command with the real shell and Tavily search (`docs/tools.md`)
+- [x] Run a website job on Haiku in text: passed once, $0.0061, 19 s, and the page rendered (ADR-028)
+- [ ] Run a website job by voice with `--ui`, and fix what it finds
+- [ ] Repeat the website job and try a larger site, to learn how reliable it is
+- [ ] Try a job that uses `bash` and `serve`: each step asks for a yes, so check it is bearable
+- [ ] Decide how a long silent job should sound: the waiting phrase is built, with no real clips yet
+- [ ] Prune `.versions` if it grows
+
+## Check after the Nov 2 live run
+
+- [ ] Run a live session on the fixes made after the last mic run: `restart_track`, no preamble before tools, clarifying unclear fragments, desktop commands refused in `bash` (tests only so far)
+- [ ] Run `open_in_browser` with `ME3_WORKSPACE_LIVE=1` and a spoken yes (ADR-026)
+- [ ] Look into `tts_starved` at about 0.02x and the speaker output gaps (worst 3.3 s), both flagged on all three long mic runs. Not yet known whether they are real or a false reading
+- [ ] Look into the `phantom_turn` in run `20261102-000823-8958d3`
 
 ## Finish the first spike
 
-- [ ] Step 4, Cartesia arm: run `bench/interruption_test.py --tts cartesia` and confirm it truncates like `fake_words` (ADR-006)
+- [ ] Step 4, Cartesia arm: run `bench/interruption_test.py --tts cartesia` and confirm it truncates like `fake_words` (ADR-006). One live truncation is recorded in ADR-015, but the bench has not run on Cartesia
 - [ ] Step 7, Pi port (needs a go):
   - [ ] `scripts/pi_setup.sh` and a smoke test (portaudio19-dev, onnxruntime aarch64 wheels)
-  - [ ] Speakerphone plus PipeWire echo-cancel (`scripts/pipewire_aec.conf`)
-  - [ ] Speaker echo test once a speakerphone is in hand, on the Mac first: 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works
+  - [ ] `bwrap` sandbox and `xdg-open` on the Pi (ADR-024, ADR-026)
+  - [ ] WebRTC AEC from `livekit` on the Pi, if used: wheels, CPU cost (ADR-013)
+  - [ ] Set `audio.input_device` and `audio.output_device` in `pi.yaml`, and check rates with `harness.audio_io` (ADR-029)
+  - [ ] Echo test on the USB mic and speaker: 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
+  - [ ] Spotify playback on the Pi (ADR-022)
   - [ ] CPU and temperature logging
   - [ ] Smart Turn timing on one Pi core
   - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
 
-- [ ] Exercise the ADR-012 socket replacement against live Deepgram (fake-tested only)
-- [ ] Choppy Aura-2 speech: delivery swings between 2.25x and 0.43x real time, not caused by sample rate (ADR-014)
-- [ ] Check Cartesia delivery from the Philippines before relying on it for final runs (ADR-014)
+- [x] Check Cartesia delivery from the Philippines: smooth by ear, and used for all live runs since (ADR-015)
 - [x] Spoken fallback on LLM errors such as Groq rejecting `set_timer` with 0 seconds (`harness/recovery.py`, fake-tested)
 - [x] Give the agent a real clock (`get_time`, daaf377)
-- [ ] Live speaker test with `--echo-cancel`: no self-interruption, then a real barge-in, and check the first-speech blip and barge-in delay (ADR-013)
+- [ ] Live speaker test with `--echo-cancel`: one run passed with no self-echo and a real barge-in (ADR-015). Still to check: the first-speech blip, and repeat it across runs (ADR-013)
+
+Set aside because Cartesia replaced Aura-2 as the live TTS (ADR-015), and worth doing only if Aura-2 comes back:
+
+- [ ] Exercise the ADR-012 socket replacement against live Deepgram (fake-tested only)
+- [ ] Choppy Aura-2 speech: delivery swings between 2.25x and 0.43x real time, not caused by sample rate (ADR-014)
 
 ## ADR-009 additions (approved)
 
@@ -68,7 +114,9 @@ Waiting phrase (Nov 2):
 - [x] Once per turn, interruptible, kept out of the LLM context, never for `stay_silent` or in IDLE (e2f977b; the IDLE and `stay_silent` hooks wait for those features)
 - [x] `filler_audio_out` event and a `latency_probe` stage; log how often it plays (e2f977b; reply audio after a clip is an estimate)
 
-## Latency (about 2.8 s now, target p50 under 1.0 s)
+## Latency (target p50 under 1.0 s)
+
+Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by framework events: p50 1.84 s, or 1.08 s when no tool ran first and 2.31 s when one did. Worst 5.7 s. These start at end of turn, so they leave out the end-of-turn wait.
 
 - [x] Tune Flux end of turn: `eot_threshold` stays 0.7, timeout unchanged, eager stays off (ADR-018)
 - [x] Spike `ForceEndTurn` with Smart Turn: built as `turn.stop: flux_forced`, failed the 300 ms rule on questions, stays off (ADR-019)
@@ -77,6 +125,8 @@ Waiting phrase (Nov 2):
 - [ ] Add Deepgram Nova-3 so Smart Turn can be A/B tested against Flux fairly
 - [x] Build reply templates to skip the second LLM call: off by default, saved 296 ms against a 300 ms bar on 120b (ADR-020)
 - [ ] Measure from real audio, not framework events: full `latency_probe`, p50/p90/p95 over 30+ runs
+- [ ] Try Anthropic prompt caching: the tool schemas repeat on every call, so it may cut cost and first token (ADR-025)
+- [ ] Shorten the gap after tool calls, the largest remaining cost on tool turns
 
 ## Barge-in
 
@@ -93,7 +143,7 @@ Waiting phrase (Nov 2):
 - [ ] Missing tools: `append_text`, `pause`, `resume`, `interrupt(kind)`, `status`
 - [ ] Wire `VoiceEventFrame`s into pipeline actions (ADR-008)
 - [ ] Reconnect logic for MCP sessions that expire after 30 minutes idle
-- [ ] Due timers announce themselves through `voice-speak`
+- [x] Due timers announce themselves (done in the bot instead, `harness/timer_watch.py`)
 
 ## Task servers
 
@@ -104,7 +154,12 @@ Waiting phrase (Nov 2):
 - [x] `notes` (SQLite) (bc171bd)
 - [x] `thermostat` mock (bc171bd)
 - [x] `comms` mock (bc171bd)
-- [x] `knowledge`, `docs`, `workspace` on fakes and mocks (ADR-021). Live backends need a cap above zero
+- [x] `knowledge`, `docs`, `workspace` on fakes and mocks (ADR-021)
+- [x] Weather and fetch real by default, Tavily search per run, all used on the live mic (ADR-024)
+- [x] File tools, and `bash` and `serve` behind the guard and sandbox, on the Mac (ADR-024)
+- [x] `open_in_browser` for workspace HTML (ADR-026, live run still to do, see above)
+- [x] `comms` phone bridge built, dry run only (ADR-024, real send waits on approval)
+- [x] Read-back from real arguments for open world destructive tools (ADR-024)
 - [ ] `delegate` (onit in a per-task sandbox, with a token cap)
 
 ## No-wake-word addressing
@@ -113,16 +168,18 @@ Waiting phrase (Nov 2):
 - [ ] Check Flux with gaps in the audio before enabling the gate with it (ADR-016)
 - [x] Run `bench/task_suite/cases/addressing.yaml` on Groq (ADR-017)
 - [ ] Relax `addr_short_follow_up_in_active`: it expects "thanks" and a real model says "you're welcome" (ADR-017)
+- [ ] Fix side talk on Haiku before enabling addressing: it answered both `addr_side_talk` cases (ADR-025)
 - [ ] Tune the IDLE word rules on a recorded room
 - [x] ACTIVE/IDLE conversation states (ADR-016)
 - [x] `stay_silent` tool (ADR-016)
 - [x] `require_wake_after_idle` fallback switch (ADR-016)
 - [x] Mute switch in software (`kill -USR1`, log line); a hardware button and light wait for the Pi
-- [ ] Privacy baseline (no stored audio, notice to the room, opt-outs, consent record)
+- [ ] Privacy baseline (no stored audio, notice to the room, opt-outs, consent record). The display now shows transcripts to the room
 
 ## Model comparison and benchmark
 
-- [ ] 40 tool-calling turns plus 20 non-addressed utterances, 5 repeats each, against the decision rule: Groq 20b and 120b first through `bench/task_runner.py`, other candidates after purchases are approved
+- [ ] Repeat the Haiku task suite: 61 of 64 is one repeat with fake tools, so flakiness is unknown (ADR-025)
+- [ ] 40 tool-calling turns plus 20 non-addressed utterances, 5 repeats each, against the decision rule, through `bench/task_runner.py`. Haiku is the baseline, other candidates after purchases are approved
 - [ ] Full-Duplex-Bench adapter (v1/v1.5, then v3)
 - [ ] Our own task suite and team-recorded clips (including self-corrections)
 - [ ] Acoustic stop-latency measurement
@@ -130,7 +187,7 @@ Waiting phrase (Nov 2):
 
 ## Reliability and operations
 
-- [ ] Network-loss detection with pre-synthesised fallback phrases
+- [ ] Network-loss detection (the fallback phrases are cached in `harness/phrase_cache.py`, nothing detects the loss yet)
 - [ ] Provider failover per stage, reconnect with backoff, health log
 - [ ] systemd services with restart on failure, auto-start on boot, a watchdog
 - [x] Spoken notice when the daily cap is hit, skipped when TTS is the capped provider
@@ -142,6 +199,7 @@ Waiting phrase (Nov 2):
 - [ ] Recheck Pipecat deprecations on every upgrade (ADR-003)
 - [ ] Recheck prices on the day each provider goes live (several are promotional)
 - [ ] Not yet researched: UP Diliman IP policy, Data Privacy Act details, most providers' terms on data use
+- [ ] Delete old merged branches. `music-spotify` shows 4 unmerged commits, whose titles match work already on main, so compare before deleting
 
 ## Done
 

@@ -2,7 +2,7 @@
 
 ME3's tools are MCP servers that the voice LLM can call. A spoken request can read a file, search the web, send a message, or run a shell command, so every tool sits behind limits that hold even if the model is wrong or has been fooled. This page explains how a call flows, how to add a tool, and why each guardrail exists.
 
-Decisions and evidence are in ADR-009, ADR-011, ADR-021, ADR-023, ADR-024, and ADR-026.
+Decisions and evidence are in ADR-009, ADR-011, ADR-021, ADR-023, ADR-024, ADR-026, and ADR-028.
 
 ## How a tool call flows
 
@@ -48,7 +48,7 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 
 | Server | Tools | Default | To make it real |
 | --- | --- | --- | --- |
-| `clock` | `get_time`, `set_timer`, `set_alarm`, `list_timers`, `cancel_timer` | Real | Due timers are not announced aloud yet |
+| `clock` | `get_time`, `set_timer`, `set_alarm`, `list_timers`, `cancel_timer` | Real. The bot says when one is due (`harness/timer_watch.py`) | |
 | `notes` | `add_note`, `list_notes`, `delete_note` | Real, SQLite | |
 | `docs` | `index_documents`, `local_search`, `search_document` | Real, SQLite FTS5 | Put files in `data/documents`, which the agent can read but never write |
 | `workspace` | `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, `serve_status` | Real, confined to `data/workspace` | |
@@ -140,7 +140,7 @@ Start from the worst thing a wrong call could do. The model can be mistaken, can
 | --- | --- | --- |
 | Only reads | `readOnly` true | Runs at once |
 | Writes, safe to repeat or easy to fix | `readOnly` false, `destructive` false | Runs at once |
-| Destroys something local | `destructive` true, `openWorld` false | 5 s undo window |
+| Destroys something local | `destructive` true, `openWorld` false | 5 s undo window. `write_file` and `edit_file` skip it and keep the old version instead (ADR-028) |
 | Reaches people or the outside | `destructive` true, `openWorld` true | Read-back, yes, then undo window |
 | Has missing hints | | Spoken confirmation |
 | Runs code | Same as the row above | Guard, sandbox, and off behind a flag |
@@ -174,6 +174,22 @@ Two rules sit behind this table:
 
 - **Tool output is data.** Text from a page or file can reach the model, so a limit that depends on the model behaving is not a limit. `RESULT_NOTE` in ADR-023 is fixed text for the same reason.
 - **Fail closed.** No sandbox means no command. An unreadable command is refused. An unanswered question means no. A dropped undo announcement means the action does not run.
+
+## Multi-stage jobs
+
+A job like "plan and build a website" is one spoken request followed by many tool calls. The system prompt tells the model to say one sentence, write `plan.md` in a folder for the job, work through the steps without asking to continue, check the result, and offer to open it.
+
+Three things make that work (ADR-028):
+
+- `write_file` and `edit_file` run at once, so a file exists for the next step. The server copies anything it replaces to `data/workspace/.versions`, and the result names the copy.
+- The LLM can write 8,192 tokens in one reply, and `write_file` can append for a longer file.
+- For a real job, turn on the tools that are mocks or fakes by default:
+
+```bash
+ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --echo-cancel --ui
+```
+
+Each `bash`, `serve`, and `open_in_browser` call still asks for a spoken yes. That is deliberate: those are the tools that can do real harm.
 
 ## Bash and serve
 
@@ -256,5 +272,6 @@ Most of this needs no change, because tools are HTTP clients and Python.
 | Files, notes, documents, clock | `.env` and `data/contacts.yaml` copied by hand. Neither is in git |
 | Tool policy, read-back, containment | Bridge URL and `--allow-from`, as above |
 | | Spotify runs on the Mac app only for now (ADR-022) |
+| | `open_in_browser` covers the robot face in kiosk mode, and there is no way back by touch yet (ADR-027) |
 
 The sandbox and the bridge are chosen at run time, so one branch serves both machines. Nothing has run on a Pi yet.

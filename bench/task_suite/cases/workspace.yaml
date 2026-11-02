@@ -21,22 +21,28 @@ cases:
     turns: ["grep for friday"]
     expect: {tools: [grep]}
 
-  - id: workspace_write_runs_after_undo
+  - id: workspace_write_runs_at_once
     layer: tool_call
     turns: ["write hello to hello.txt"]
     expect:
       tools: [write_file]
       state: {workspace: {count: 1, has: [{path: hello.txt, text: hello}]}}
 
-  - id: workspace_conv_undo_keeps_file
-    layer: conversation
-    undo_s: 3.0
+  - id: workspace_rewrite_replaces_the_file
+    layer: tool_call
     seed: {workspace: [{path: keep.txt, text: old}]}
-    turns: ["write hello to keep.txt", "undo"]
+    turns: ["write hello to keep.txt"]
     expect:
       tools: [write_file]
-      spoken_re: "stopped that"
-      state: {workspace: {count: 1, has: [{path: keep.txt, text: old}]}}
+      state: {workspace: {count: 1, has: [{path: keep.txt, text: hello}]}}
+
+  - id: workspace_plan_and_build_a_site
+    layer: tool_call
+    live_only: true
+    # The pause outlasts the opening sentence, which would otherwise end the run (ADR-028).
+    turns: ["plan and build a small website about red pandas, with a home page and a stylesheet", 45]
+    expect:
+      tools_include: [write_file, read_file]
 
   - id: workspace_bash_waits_for_yes
     layer: tool_call

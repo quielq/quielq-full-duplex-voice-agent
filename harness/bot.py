@@ -68,11 +68,14 @@ from harness.phrase_cache import load_phrase
 from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
 from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
 from harness.recovery import LLMErrorRecovery
+from harness.timer_watch import TimerWatch
 from harness.tool_policy import PolicyGate, ToolPolicy
+from harness.ui import UiServer, UiState
 
 SYSTEM_PROMPT = (
     "You are a hands-free voice assistant. Replies are spoken aloud, so keep them to one or "
-    "two short sentences with no lists or formatting. Use the tools when a request needs them. "
+    "two short sentences with no lists or formatting. That limit is for speech, not for what "
+    "you write into files. Use the tools when a request needs them. "
     "Users never know ids: find an id with a list tool, and never ask for one. "
     "If no tool can do what was asked, say so; never claim you did it. "
     "If a tool result says waiting_for_undo or needs_confirmation, it has not happened yet: say so "
@@ -82,6 +85,11 @@ SYSTEM_PROMPT = (
     "To read a web page use fetch_content, never bash: bash has no network access. "
     "To show an HTML file use open_in_browser, never bash: bash has no desktop. "
     "Call a tool straight away, with no words before it. "
+    "The one exception is a job of several steps, such as planning and building a website: say in "
+    "one short sentence what you will make, then keep calling tools until it is finished, without "
+    "asking whether to continue. Give the job its own folder and write a short plan.md there "
+    "first. Keep each file under about 300 lines, and use append mode for a longer one. Check the "
+    "result with read_file, then say in one sentence that it is done and offer to open it. "
     "Requests come from speech recognition, so words may be misheard: act on the likely meaning "
     "without remarking on it. If a short fragment could mean different things, ask in a few words "
     "and do not act on it. "
@@ -265,6 +273,15 @@ async def run_bot(
     policy.plays_audio = input_mode != "text"
     turn_obs.policy = policy
 
+    ui_cfg = cfg.profile["ui"]
+    ui: UiServer | None = None
+    if ui_cfg["enabled"]:
+        ui = UiServer(UiState(Path(data_dir) if data_dir else cfg.path("data_dir")), ui_cfg["host"], ui_cfg["port"])
+        log.listeners.append(ui.state.on_event)
+        turn_obs.on_text = ui.state.on_text
+        await ui.start()
+        logger.info(f"robot face at http://{ui_cfg['host']}:{ui_cfg['port']}")
+
     addressing = _addressing(cfg, log)
     stayed_silent = False
 
@@ -402,20 +419,26 @@ async def run_bot(
                 logger.warning("MIC MUTED" if muted else "mic live")
 
             asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, toggle_mute)
+            if ui:
+                ui.on_mute = toggle_mute
 
         runner = WorkerRunner(handle_sigint=handle_sigint)
         await runner.add_workers(worker)
         finisher = None
         if input_mode != "mic":
             finisher = asyncio.create_task(finish_after_reply())
+        clock_file = (Path(data_dir) if data_dir else cfg.path("data_dir")) / "clock.json"
+        timers = asyncio.create_task(TimerWatch(clock_file, speak, log.emit).run())
         try:
             await runner.run()
         finally:
-            if finisher:
-                finisher.cancel()
+            for task in filter(None, (finisher, timers)):
+                task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await finisher
+                    await task
             await policy.close()
+            if ui:
+                await ui.stop()
 
     await cost_obs.flush_tts()
     log.emit("run_end", session_usd=round(cost_obs.session_usd, 6))
@@ -451,6 +474,7 @@ def main() -> None:
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
     ap.add_argument("--reply-templates", action="store_true", help="skip the second LLM call (ADR-020)")
     ap.add_argument("--echo-cancel", action="store_true", help="WebRTC AEC, for live runs on speakers")
+    ap.add_argument("--ui", action="store_true", help="serve the robot face (harness/ui.py, ADR-027)")
     ap.add_argument("--servers", default="", help=f"task servers, default all: {','.join(TASK_SERVERS)}")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
@@ -477,6 +501,9 @@ def main() -> None:
         cfg.tool_policy["reply_templates"]["enabled"] = True
     if args.echo_cancel:
         cfg.profile["audio"]["echo_cancel"] = True
+
+    if args.ui:
+        cfg.profile["ui"]["enabled"] = True
 
     names = list(filter(None, args.servers.split(",")))
     if unknown := set(names) - set(TASK_SERVERS):

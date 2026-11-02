@@ -44,6 +44,7 @@ providers:
     env_key: ANTHROPIC_API_KEY
     daily_cap_usd: 5.00   # approved Nov 1, 2026
     model: claude-haiku-5-5
+    max_tokens: 8192   # Pipecat's 4096 can cut off a whole file inside a write_file call (ADR-028)
   openrouter:
     env_key: OPENROUTER_API_KEY
     daily_cap_usd: 5.00   # approved Nov 1, 2026

@@ -96,7 +96,7 @@ def build_llm(providers_cfg: dict, ledger: CostLedger, *, system_instruction: st
         return AnthropicLLMService(
             api_key=key,
             settings=AnthropicLLMService.Settings(
-                model=p["model"], system_instruction=system_instruction
+                model=p["model"], max_tokens=p["max_tokens"], system_instruction=system_instruction
             ),
         )
     raise ValueError(f"unknown llm stage {choice!r}")

@@ -38,6 +38,32 @@ def resolve_device(name: str | None, kind: str) -> int | None:
     raise RuntimeError(f"no {kind} audio device matching {name!r}; run python -m harness.audio_io")
 
 
+def supports_rate(index: int, kind: str, rate: int) -> bool:
+    """Whether a device opens at ``rate``. A raw USB device often offers only 44.1 or 48 kHz."""
+    import pyaudio
+
+    pa = pyaudio.PyAudio()
+    try:
+        if kind == "input":
+            pa.is_format_supported(rate, input_device=index, input_channels=1, input_format=pyaudio.paInt16)
+        else:
+            pa.is_format_supported(rate, output_device=index, output_channels=1, output_format=pyaudio.paInt16)
+        return True
+    except ValueError:
+        return False
+    finally:
+        pa.terminate()
+
+
+def check_rate(index: int | None, kind: str, rate: int) -> None:
+    """Refuse a named device that cannot run at our rate, before the audio thread fails on it."""
+    if index is not None and not supports_rate(index, kind, rate):
+        raise RuntimeError(
+            f"{kind} device {index} does not support {rate} Hz. Use the 'pipewire' or 'default' "
+            "device, which resample, instead of the raw hardware device."
+        )
+
+
 def is_builtin_speaker(name: str) -> bool:
     lowered = name.lower()
     return "macbook" in lowered and "speakers" in lowered
@@ -69,6 +95,9 @@ def local_transport(
 ) -> LocalAudioTransport:
     """``canceller`` replaces the default EchoCanceller when ``echo_cancel`` is on."""
     output_index = resolve_device(audio_cfg.get("output_device"), "output")
+    input_index = resolve_device(audio_cfg.get("input_device"), "input")
+    check_rate(input_index, "input", audio_cfg["in_sample_rate"])
+    check_rate(output_index, "output", audio_cfg["out_sample_rate"])
     echo_cancel = audio_cfg["echo_cancel"]
     check_echo_risk(
         output_device_name(output_index), allow_speakers=audio_cfg["allow_speakers"] or echo_cancel
@@ -92,7 +121,7 @@ def local_transport(
         audio_out_enabled=True,
         audio_in_sample_rate=audio_cfg["in_sample_rate"],
         audio_out_sample_rate=audio_cfg["out_sample_rate"],
-        input_device_index=resolve_device(audio_cfg.get("input_device"), "input"),
+        input_device_index=input_index,
         output_device_index=output_index,
     )
     return LocalAudioTransport(params)
@@ -100,4 +129,8 @@ def local_transport(
 
 if __name__ == "__main__":
     for d in list_devices():
-        print(f"{d['index']:>3}  in={d['maxInputChannels']} out={d['maxOutputChannels']}  {d['name']}")
+        index, name = int(d["index"]), d["name"]
+        mic = d["maxInputChannels"] > 0 and supports_rate(index, "input", 16000)
+        speaker = d["maxOutputChannels"] > 0 and supports_rate(index, "output", 24000)
+        print(f"{index:>3}  in={d['maxInputChannels']} out={d['maxOutputChannels']}  "
+              f"16k in={'yes' if mic else 'no'} 24k out={'yes' if speaker else 'no'}  {name}")  # fmt: skip
