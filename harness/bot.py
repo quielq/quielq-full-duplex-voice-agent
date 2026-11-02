@@ -70,6 +70,7 @@ from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
 from harness.recovery import LLMErrorRecovery
 from harness.timer_watch import TimerWatch
 from harness.tool_policy import PolicyGate, ToolPolicy
+from harness.ui import UiServer, UiState
 
 SYSTEM_PROMPT = (
     "You are a hands-free voice assistant. Replies are spoken aloud, so keep them to one or "
@@ -272,6 +273,15 @@ async def run_bot(
     policy.plays_audio = input_mode != "text"
     turn_obs.policy = policy
 
+    ui_cfg = cfg.profile["ui"]
+    ui: UiServer | None = None
+    if ui_cfg["enabled"]:
+        ui = UiServer(UiState(Path(data_dir) if data_dir else cfg.path("data_dir")), ui_cfg["host"], ui_cfg["port"])
+        log.listeners.append(ui.state.on_event)
+        turn_obs.on_text = ui.state.on_text
+        await ui.start()
+        logger.info(f"robot face at http://{ui_cfg['host']}:{ui_cfg['port']}")
+
     addressing = _addressing(cfg, log)
     stayed_silent = False
 
@@ -409,6 +419,8 @@ async def run_bot(
                 logger.warning("MIC MUTED" if muted else "mic live")
 
             asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, toggle_mute)
+            if ui:
+                ui.on_mute = toggle_mute
 
         runner = WorkerRunner(handle_sigint=handle_sigint)
         await runner.add_workers(worker)
@@ -425,6 +437,8 @@ async def run_bot(
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
             await policy.close()
+            if ui:
+                await ui.stop()
 
     await cost_obs.flush_tts()
     log.emit("run_end", session_usd=round(cost_obs.session_usd, 6))
@@ -460,6 +474,7 @@ def main() -> None:
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
     ap.add_argument("--reply-templates", action="store_true", help="skip the second LLM call (ADR-020)")
     ap.add_argument("--echo-cancel", action="store_true", help="WebRTC AEC, for live runs on speakers")
+    ap.add_argument("--ui", action="store_true", help="serve the robot face (harness/ui.py, ADR-027)")
     ap.add_argument("--servers", default="", help=f"task servers, default all: {','.join(TASK_SERVERS)}")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
@@ -486,6 +501,9 @@ def main() -> None:
         cfg.tool_policy["reply_templates"]["enabled"] = True
     if args.echo_cancel:
         cfg.profile["audio"]["echo_cancel"] = True
+
+    if args.ui:
+        cfg.profile["ui"]["enabled"] = True
 
     names = list(filter(None, args.servers.split(",")))
     if unknown := set(names) - set(TASK_SERVERS):

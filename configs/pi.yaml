@@ -60,6 +60,12 @@ recovery:
   llm_error_phrase: "Sorry, I had trouble with that. Could you say it again?"
   cap_phrase: "I've hit today's spending limit, so I'm stopping now."
 
+ui:
+  # Robot face and device panel in a browser (harness/ui.py, ADR-027). Also on with --ui.
+  enabled: false
+  host: 127.0.0.1   # this machine only; the mute button has no login
+  port: 8770
+
 paths:
   logs_dir: logs
   data_dir: data

@@ -44,6 +44,7 @@ class EventLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._f = open(self.path, "a", buffering=1)
         self.turn_id = 0
+        self.listeners: list = []   # called with each event as it is logged (harness/ui.py)
 
     def emit(self, event: str, **fields: Any) -> dict:
         rec = {
@@ -54,6 +55,8 @@ class EventLog:
             **fields,
         }
         self._f.write(json.dumps(rec, default=str) + "\n")
+        for listener in self.listeners:
+            listener(rec)
         return rec
 
     def next_turn(self) -> int:
@@ -88,6 +91,8 @@ class TurnEventObserver(BaseObserver):
         self.filler = None
         # Set by the bot: the undo window opens on these signals (harness/tool_policy.py).
         self.policy = None
+        # Set by the bot when the face is on: reply text as it streams (harness/ui.py).
+        self.on_text = None
 
     def _first(self, name: str, **fields) -> None:
         if name not in self._firsts:
@@ -129,6 +134,8 @@ class TurnEventObserver(BaseObserver):
             self._response_has_text = True
             self.llm_text.append(frame.text)
             self._first("llm_first_token")
+            if self.on_text:
+                self.on_text(frame.text)
         elif isinstance(frame, LLMFullResponseEndFrame):
             log.emit("llm_end")
             if self._response_has_text:
