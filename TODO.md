@@ -1,14 +1,14 @@
 # ME3 to-do list
 
-Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 2, 2026.
+Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 3, 2026.
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
-Status as of Nov 2: the agent works on the live mic with Flux, Haiku 5.5, Cartesia, and Spotify (last run `20261102-013828-01e81b`, 17 turns). The robot face is built and tested on fakes only (ADR-027). Haiku built a small website from one request in a text run (ADR-028). All-time spend is $1.92. Feature freeze is Nov 5 and the deadline is Nov 7. Order from here: run a website job by voice with the face on, then the Pi port.
+Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page. Last run `20261102-123315-a8d32d`, 29 transcripts. This work is on `build/pi-port`, not merged. Feature freeze is Nov 5 and the deadline is Nov 7.
 
 ## Waiting on Quiel
 
-- [ ] Give the go for step 7, the Pi port, after the face and a voice-driven job are proven on the Mac
+- [x] Give the go for step 7, the Pi port (Nov 2)
 - [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first). The replan has no slot for them, and leaving them out is the recommendation
 - [ ] Decide whether to build `delegate` if Haiku cannot finish a website job with the existing tools
 - [ ] Decide the patent and privacy question before Nov 7 (repo stays private until then)
@@ -33,11 +33,27 @@ Status as of Nov 2: the agent works on the live mic with Flux, Haiku 5.5, Cartes
 - [x] Blink, talking mouth, current step, captions, and a sad face when the agent is down
 - [x] Lights, thermostat, music, and timers panel, with a touch mute button
 - [x] Layout checked at 800x480 on the Mac with `uv run python -m harness.ui --demo`
-- [ ] Try it on the live mic and judge the timing of the expressions by ear and eye
-- [ ] Confirm the display's resolution: 800x480 was assumed, and a 1024x600 or 1280x720 panel needs a look
+- [x] Try it on the live mic: used on the Pi through three live sessions, Nov 2
+- [x] Confirm the display's resolution: 800x480 on DSI-2 (`wlr-randr`, Nov 2)
 - [ ] Chromium kiosk start on the Pi, and CPU cost of the page next to the agent
 - [ ] Decide what `open_in_browser` does on the Pi: it covers the face, and touch has no way back
 - [ ] Optional: touch control of lights and thermostat (needs an ADR, it must not get around the tool policy)
+
+## Pi port, found on Nov 2 (ADR-029, ADR-030, ADR-031)
+
+- [ ] Cooling: the Pi reached 84 C on Nov 2 and has throttled since boot. A fan clashes with the display mounting, so find what fits, and check whether open page tabs drive the heat
+- [ ] Power: `throttled=0xf0000` includes under-voltage, so check the supply
+- [ ] Barge-in over the bot's speech and the 60 s echo test, live on the Pi. The clean bench talker test failed before the mic gain was lowered
+- [ ] Confirm the two `open_in_browser` runs on Nov 2 showed the pages on screen. The tool committed, but nobody checked
+- [ ] Install the boot service with `scripts/pi_setup.sh --service`, and add `--spotify-player` to `bot.env`
+- [ ] Find why the bot takes about 2 minutes to exit after its pipeline stops
+- [ ] Show on the face when TTS has failed. A spent Cartesia account left the bot silent, because the spoken recovery phrases need TTS too
+- [ ] The cost ledger showed far less on Cartesia than the credits used, so check its price against the real balance
+- [ ] Keep the 50% mic gain in `scripts/pi_setup.sh` or the docs: it is a PipeWire setting on this Pi only
+- [ ] `play` in the first 20 s after start says the player is not connected: wait for it, or say so better
+- [ ] Decide what to do with VCM and raspotify on the Pi: VCM is stopped and disabled, raspotify still runs
+- [ ] Merge `build/pi-port` into main
+- [ ] Enhancement, parked: music lyrics reach the transcript and can trigger tools. In `20261102-123315-a8d32d`, a lyric was followed by `stop_music`. Options: lower the music while speech is detected, or add the music to the echo canceller's reference through a PipeWire virtual sink
 
 ## Multi-stage jobs (ADR-028)
 
@@ -47,7 +63,7 @@ Status as of Nov 2: the agent works on the live mic with Flux, Haiku 5.5, Cartes
 - [x] Due timers and alarms are said aloud (`harness/timer_watch.py`, fakes only)
 - [x] Live command with the real shell and Tavily search (`docs/tools.md`)
 - [x] Run a website job on Haiku in text: passed once, $0.0061, 19 s, and the page rendered (ADR-028)
-- [ ] Run a website job by voice with `--ui`, and fix what it finds
+- [x] Run a website job by voice with `--ui`: Flappy Bird and a UP AI page on the Pi, Nov 2. Their quality is not checked
 - [ ] Repeat the website job and try a larger site, to learn how reliable it is
 - [ ] Try a job that uses `bash` and `serve`: each step asks for a yes, so check it is bearable
 - [ ] Decide how a long silent job should sound: the waiting phrase is built, with no real clips yet
@@ -65,14 +81,15 @@ Status as of Nov 2: the agent works on the live mic with Flux, Haiku 5.5, Cartes
 - [ ] Step 4, Cartesia arm: run `bench/interruption_test.py --tts cartesia` and confirm it truncates like `fake_words` (ADR-006). One live truncation is recorded in ADR-015, but the bench has not run on Cartesia
 - [ ] Step 7, Pi port (needs a go):
   - [x] Write `scripts/pi_setup.sh`, the `me3-bot` service, the kiosk launcher, and `docs/quickstart-pi.md` (ADR-030), not run on a Pi
-  - [ ] Run the setup and a smoke test on the Pi (portaudio19-dev, onnxruntime aarch64 wheels)
-  - [ ] `bwrap` sandbox and `xdg-open` on the Pi (ADR-024, ADR-026)
-  - [ ] WebRTC AEC from `livekit` on the Pi, if used: wheels, CPU cost (ADR-013)
-  - [ ] Set `audio.input_device` and `audio.output_device` in `pi.yaml`, and check rates with `harness.audio_io` (ADR-029)
+  - [x] Run the setup and tests on the Pi: Bookworm, not Trixie, 450 passed, and the `say` failures fixed
+  - [x] `bwrap` sandbox passes the doctor, and `xdg-open` opened a page by hand (ADR-024, ADR-026)
+  - [ ] Live `bash` and `serve` inside `bwrap` on the Pi
+  - [x] WebRTC AEC from `livekit` on the Pi: 0.34 ms per 20 ms block (ADR-029)
+  - [x] Set the audio devices in `pi.yaml` to `pipewire` (ADR-029)
   - [ ] Echo test on the USB mic and speaker: 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
-  - [ ] Spotify on the Pi: no local player, keep the phone as the active device (ADR-022, ADR-030)
+  - [x] Spotify on the Pi: plays in the face with `--spotify-player` (ADR-031)
   - [x] CPU, temperature, memory, and throttling logging (`system_stats` events, doctor `pi` section), not run on a Pi
-  - [ ] Smart Turn timing on a Pi (doctor `models`; the Mac gives 40 ms)
+  - [x] Smart Turn timing on a Pi: 158 ms a decision, over the 120 ms budget, so stay on Flux
   - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
 
 - [x] Check Cartesia delivery from the Philippines: smooth by ear, and used for all live runs since (ADR-015)
