@@ -36,6 +36,8 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 
 ## Layout and commands
 
+Running the full agent on the Mac: `docs/quickstart-mac.md`.
+
 ```
 harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py
 servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (not built)
