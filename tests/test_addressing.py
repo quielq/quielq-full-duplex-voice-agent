@@ -3,6 +3,7 @@
 import asyncio
 import json
 import math
+import shutil
 import struct
 
 import pytest
@@ -221,6 +222,8 @@ def wav_run(tmp_path, script, *, gate):
     from bench.interruption_test import _say
     from harness.file_input import Segment
 
+    if not shutil.which("say"):
+        pytest.skip("macOS `say` not available")
     cfg = cfg_for(tmp_path)
     cfg.profile["addressing"] |= {"enabled": True}
     cfg.profile["addressing"]["gate"]["enabled"] = gate

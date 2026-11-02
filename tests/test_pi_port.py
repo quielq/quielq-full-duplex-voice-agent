@@ -94,7 +94,9 @@ def test_face_stays_on_this_machine():
 async def test_stats_loop_emits_and_can_be_cancelled():
     events = []
     task = asyncio.create_task(system_stats.SystemStats(lambda name, **f: events.append((name, f)), 0.01).run())
-    await asyncio.sleep(0.05)
+    async with asyncio.timeout(5):
+        while not events:
+            await asyncio.sleep(0.01)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
