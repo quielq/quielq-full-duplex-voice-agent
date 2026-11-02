@@ -64,14 +64,15 @@ Status as of Nov 2: the agent works on the live mic with Flux, Haiku 5.5, Cartes
 
 - [ ] Step 4, Cartesia arm: run `bench/interruption_test.py --tts cartesia` and confirm it truncates like `fake_words` (ADR-006). One live truncation is recorded in ADR-015, but the bench has not run on Cartesia
 - [ ] Step 7, Pi port (needs a go):
-  - [ ] `scripts/pi_setup.sh` and a smoke test (portaudio19-dev, onnxruntime aarch64 wheels)
+  - [x] Write `scripts/pi_setup.sh`, the `me3-bot` service, the kiosk launcher, and `docs/quickstart-pi.md` (ADR-030), not run on a Pi
+  - [ ] Run the setup and a smoke test on the Pi (portaudio19-dev, onnxruntime aarch64 wheels)
   - [ ] `bwrap` sandbox and `xdg-open` on the Pi (ADR-024, ADR-026)
   - [ ] WebRTC AEC from `livekit` on the Pi, if used: wheels, CPU cost (ADR-013)
   - [ ] Set `audio.input_device` and `audio.output_device` in `pi.yaml`, and check rates with `harness.audio_io` (ADR-029)
   - [ ] Echo test on the USB mic and speaker: 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
-  - [ ] Spotify playback on the Pi (ADR-022)
-  - [ ] CPU and temperature logging
-  - [ ] Smart Turn timing on one Pi core
+  - [ ] Spotify on the Pi: no local player, keep the phone as the active device (ADR-022, ADR-030)
+  - [x] CPU, temperature, memory, and throttling logging (`system_stats` events, doctor `pi` section), not run on a Pi
+  - [ ] Smart Turn timing on a Pi (doctor `models`; the Mac gives 40 ms)
   - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
 
 - [x] Check Cartesia delivery from the Philippines: smooth by ear, and used for all live runs since (ADR-015)

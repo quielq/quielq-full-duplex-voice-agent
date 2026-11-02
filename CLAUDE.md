@@ -36,7 +36,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 
 ## Layout and commands
 
-Running the full agent on the Mac: `docs/quickstart-mac.md`.
+Running the full agent on the Mac: `docs/quickstart-mac.md`. The Pi port order: `docs/quickstart-pi.md`.
 
 ```
 harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py
@@ -94,4 +94,4 @@ Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by de
 
 Reply templates skip the second LLM call on simple tools, off by default (`--reply-templates`, ADR-020). `flux_forced` is built and off (ADR-019).
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `delegate`, real voice servers and the audio side channel, the model comparison, anything on the Pi. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `delegate`, real voice servers and the audio side channel, the model comparison. Pi scripts are built and have not run on a Pi (ADR-030): the service stays on fakes until `~/.config/me3/bot.env` names live stages. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.
