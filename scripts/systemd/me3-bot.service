@@ -1,0 +1,17 @@
+# Installed by scripts/pi_setup.sh --service, which fills in @REPO@ and @UV@ (ADR-030).
+[Unit]
+Description=ME3 voice agent
+After=pipewire.service wireplumber.service network-online.target
+Wants=pipewire.service wireplumber.service
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+WorkingDirectory=@REPO@
+EnvironmentFile=%h/.config/me3/bot.env
+ExecStart=@UV@ run python -m harness.bot --profile pi --ui $ME3_BOT_ARGS
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
