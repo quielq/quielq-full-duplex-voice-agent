@@ -13,6 +13,6 @@ until curl -fs -o /dev/null "$url"; do sleep 1; done
 
 while true; do
   "$browser" "$url" --kiosk --noerrdialogs --disable-infobars --no-first-run \
-    --password-store=basic --ozone-platform-hint=auto
+    --password-store=basic --ozone-platform=wayland
   sleep 2
 done
