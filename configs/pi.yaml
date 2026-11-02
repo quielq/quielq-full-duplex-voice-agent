@@ -4,10 +4,11 @@
 profile: pi
 
 audio:
-  # Set these to name substrings from `uv run python -m harness.audio_io`. A device showing
-  # "16k in=no" or "24k out=no" is raw hardware: use the pipewire or default device.
-  input_device: null
-  output_device: null
+  # Name substrings from `uv run python -m harness.audio_io`. The raw devices show "16k in=no"
+  # or "24k out=no", so use pipewire, which resamples. Its defaults are the USB Microphone and
+  # the Dell AC511 SoundBar, set in `wpctl status`.
+  input_device: pipewire
+  output_device: pipewire
   allow_speakers: false   # only built-in laptop speakers are refused
   echo_cancel: true       # WebRTC AEC (ADR-013): a separate speaker and mic have none of their own
   echo_delay_ms: 50       # hint to WebRTC; not measured on the Pi
