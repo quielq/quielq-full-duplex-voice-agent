@@ -1,6 +1,6 @@
 # ME3 voice agent: rules for every session
 
-ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman MEng AI). Phase 1 runs on a MacBook Air with headphones; Phase 2 runs on a Raspberry Pi 5 with a speakerphone. Only VAD, Smart Turn, and audio I/O run locally; ASR, TTS, and the LLM are cloud APIs.
+ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman MEng AI). Phase 1 runs on a MacBook Air with headphones; Phase 2 runs on a Raspberry Pi 5 with a separate USB mic and USB speaker and a 7-inch touch display. Only VAD, Smart Turn, and audio I/O run locally; ASR, TTS, and the LLM are cloud APIs.
 
 `docs/architecture.md` is the source of truth for design. If an instruction and the review disagree, say so and follow the review unless Quiel says otherwise. Decisions that depart from it go in `docs/decisions/ADR-NNN-title.md` (context, decision, alternatives, consequences, source URL).
 
@@ -30,12 +30,14 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - Headline latency comes from audio timestamps. Pipecat metrics frames are attribution only.
 - Python 3.13 on both machines, managed by uv (ADR-002).
 - Duck-then-decide is custom: scale output by about 0.3 on speech onset, decide within about 0.5 s using the allowlist (stop, wait, no, cancel, pause). Duck within 100 ms with Silero `start_secs` of about 0.064 to 0.1.
-- Pipecat has no AEC. Phase 1 uses headphones. Phase 2: hardware-AEC speakerphone, then PipeWire echo-cancel (WebRTC), then an RMS gate. `--echo-cancel` adds WebRTC AEC in the harness for speaker tests (ADR-013).
+- Pipecat has no AEC. Phase 1 uses headphones. Phase 2 uses a separate USB mic and speaker with no hardware AEC, so `pi.yaml` turns on WebRTC AEC in the harness (ADR-013, ADR-029); PipeWire echo-cancel, then an RMS gate, are the fallbacks. `--echo-cancel` adds it on the Mac for speaker tests.
+- `write_file` and `edit_file` have no undo window, because a multi-step job needs each file at once. The server keeps replaced versions in `data/workspace/.versions` (ADR-028). Do not extend this to any tool that leaves the workspace.
+- The robot face (`--ui`, ADR-027) reads the event log and stays on 127.0.0.1. It displays devices and only controls the mic mute, so nothing on screen can bypass the tool policy.
 
 ## Layout and commands
 
 ```
-harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O
+harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py
 servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (not built)
 bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
@@ -48,7 +50,8 @@ uv run pytest -q                                          # tests, all fakes, no
 uv run python -m harness.bot --input text --mcp stdio     # scripted turn, no audio
 uv run python -m harness.bot --input wav --wav x.wav      # wav through VAD and Smart Turn
 uv run python -m harness.bot                              # live mic (headphones)
-uv run python -m harness.audio_io                         # list audio devices by name
+uv run python -m harness.audio_io                         # list audio devices by name, with rate support
+uv run python -m harness.ui --demo                        # robot face at http://127.0.0.1:8770, no bot, no spend
 uv run python -m bench.doctor [--quick] [--offline]       # health check, no spend; run this first when anything is wrong
 uv run python -m bench.run_report [--live] [<run id>]     # timeline and anomalies for one run
 uv run python -m bench.run_report --list 20               # one line per recent run
@@ -64,8 +67,10 @@ ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends 
 Live runs use this command (Haiku 5.5, ADR-025; Groq's rate limits stop long runs). Defaults stay fake.
 
 ```
-uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel
+uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui
 ```
+
+Add `ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily` in front for multi-stage jobs such as building a website (`docs/tools.md`).
 
  The bot starts all nine task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=anthropic --all-servers` needs `ME3_LIVE=1`.
 
