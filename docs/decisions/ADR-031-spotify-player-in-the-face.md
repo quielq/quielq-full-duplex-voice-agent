@@ -12,6 +12,8 @@ Run on the Pi on Nov 2, 2026, `20261102-113457-c40ee0`, using raspotify, music a
 
 Player run on the Pi on Nov 2, 2026, `20261102-120127-3f5a77`, fake voice stages: the page reported `ready`, Spotify listed `ME3`, the real `play` path started a track, and about 83 s played through Chromium into the SoundBar at volume 50 with no player errors. Temperature stayed at 52 to 58 C and peak load was 2.39, with the face open. The volume reading lagged the change by some seconds.
 
+Live run with the player, `20261102-120439-d0e741`, mic gain lowered to 50%, music at 50%: three commands spoken over the music were all heard correctly, and `stop_music` stopped it. The mic sat near -22 dB. Temperature stayed at 54 to 59 C. Replies to the commands began about 1.8 to 2.1 s after the transcript. This was one short run with one voice at a normal level.
+
 ## Decision
 
 - The face page loads Spotify's Web Playback SDK and registers as a Spotify device named `ME3`.

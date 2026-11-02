@@ -24,6 +24,19 @@
       player.addListener(name, ({ message }) => report(name, message));
     }
     player.addListener("autoplay_failed", () => report("autoplay_failed"));
+    player.addListener("player_state_changed", (state) => {
+      const track = state?.track_window?.current_track;
+      if (!track) return;
+      const artist = track.artists?.[0]?.name;
+      fetch("/api/spotify-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playing: !state.paused,
+          now_playing: artist ? `${track.name} by ${artist}` : track.name,
+        }),
+      }).catch(() => {});
+    });
     player.connect();
     document.addEventListener("pointerdown", () => player.activateElement(), { once: true });
   };

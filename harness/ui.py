@@ -224,6 +224,7 @@ class UiServer:
         app.router.add_get("/spotify-player.js", self._player_script)
         app.router.add_get("/api/spotify-token", self._token)
         app.router.add_post("/api/spotify-status", self._player_status)
+        app.router.add_post("/api/spotify-track", self._player_track)
         return app
 
     async def _page(self, _request: web.Request) -> web.FileResponse:
@@ -273,6 +274,15 @@ class UiServer:
         body = await request.json()
         if self.on_player_status:
             self.on_player_status(str(body.get("state", ""))[:40], str(body.get("detail", ""))[:200])
+        return web.json_response({})
+
+    async def _player_track(self, request: web.Request) -> web.Response:
+        """What the player itself says it is playing, so track changes show without a tool call."""
+        self._same_site_only(request)
+        if self.spotify_token is None:
+            raise web.HTTPNotFound()
+        body = await request.json()
+        self.state.music = {"playing": bool(body.get("playing")), "now_playing": str(body.get("now_playing", ""))[:200]}
         return web.json_response({})
 
     async def _mute(self, request: web.Request) -> web.Response:

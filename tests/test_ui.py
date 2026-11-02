@@ -242,6 +242,19 @@ async def test_the_player_reports_into_the_log(tmp_path):
         await client.close()
 
 
+async def test_the_player_sets_what_the_panel_shows(tmp_path):
+    server, client = await _player_server(tmp_path)
+    try:
+        await client.post("/api/spotify-track", json={"playing": True, "now_playing": "Let It Snow by Beegie Adair"})
+        assert server.state.snapshot()["music"] == {"playing": True, "now_playing": "Let It Snow by Beegie Adair"}
+        await client.post("/api/spotify-track", json={"playing": False, "now_playing": "Let It Snow by Beegie Adair"})
+        assert server.state.music["playing"] is False
+        evil = await client.post("/api/spotify-track", json={}, headers={"Origin": "https://evil.example"})
+        assert evil.status == 403
+    finally:
+        await client.close()
+
+
 def test_the_player_script_is_only_loaded_on_request():
     page = PAGE.read_text()
     assert "sdk.scdn.co" not in page and "s.spotify_player" in page
