@@ -25,7 +25,7 @@ from harness.config import REPO_ROOT
 LOGS_DIR = REPO_ROOT / "logs"
 
 # Hidden from the timeline unless --all: frequent, and summarized in the anomalies instead.
-NOISY = {"audio_hop", "echo_window", "gain_applied", "tool_policy", "first_audio_out_acoustic"}
+NOISY = {"audio_hop", "echo_window", "gain_applied", "tool_policy", "first_audio_out_acoustic", "system_stats"}
 
 SLOW_REPLY_MS = 2000  # end of turn to audio
 OUTPUT_GAP_MS = 300  # a hole in speech that people hear

@@ -22,6 +22,7 @@ import importlib.metadata
 import io
 import json
 import os
+import platform
 import re
 import shutil
 import socket
@@ -42,12 +43,19 @@ from bench.run_report import all_logs, build_report
 from harness.config import PROFILES, REPO_ROOT, Config, load_config
 from harness.mcp_tools import TASK_SERVERS
 from harness.providers import STAGE_PROVIDER
+from harness.system_stats import read_mem_mb, read_temp_c, read_throttled
 from servers.sandbox import SAFE_PATH, NoSandbox, wrap
 
 STATUS_MARK = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL", "skip": "skip"}
 SLOW_TLS_MS = 1000
 HANDSHAKES = 5
 SPEND_WARN_FRACTION = 0.8
+HOT_C = 75.0
+LOW_MEM_MB = 500
+SMART_TURN_RUNS = 5
+SMART_TURN_BUDGET_MS = 120   # the top of the review's estimate for a Pi core
+AEC_BLOCKS = 200
+AEC_BUDGET_MS = 5.0          # a quarter of real time, since it shares the core with Silero
 TOTAL_SPEND_ALERT_USD = 10.0
 
 PROVIDER_HOSTS = {
@@ -319,7 +327,13 @@ def check_spend(cfg: Config) -> Iterator[tuple]:
 
 
 def check_audio(cfg: Config) -> Iterator[tuple]:
-    from harness.audio_io import is_builtin_speaker, list_devices, output_device_name, resolve_device
+    from harness.audio_io import (
+        is_builtin_speaker,
+        list_devices,
+        output_device_name,
+        resolve_device,
+        supports_rate,
+    )
 
     audio = cfg.profile["audio"]
     try:
@@ -333,11 +347,17 @@ def check_audio(cfg: Config) -> Iterator[tuple]:
     yield _ok("output devices", ", ".join(outputs)) if outputs else _fail("output devices", "none")
     try:
         index = resolve_device(audio.get("output_device"), "output")
-        resolve_device(audio.get("input_device"), "input")
+        input_index = resolve_device(audio.get("input_device"), "input")
         output = output_device_name(index)
     except (RuntimeError, OSError) as e:
         yield _fail("configured devices", str(e), "uv run python -m harness.audio_io")
         return
+    if cfg.name == "pi" and not (audio.get("input_device") and audio.get("output_device")):
+        yield _warn("device names", "pi.yaml uses the default devices", "set them from harness.audio_io (ADR-029)")
+    if index is not None and not supports_rate(index, "output", audio["out_sample_rate"]):
+        yield _fail("output rate", f"{output} cannot run at {audio['out_sample_rate']} Hz", "use the pipewire device")
+    if input_index is not None and not supports_rate(input_index, "input", audio["in_sample_rate"]):
+        yield _fail("input rate", f"mic cannot run at {audio['in_sample_rate']} Hz", "use the pipewire device")
     if is_builtin_speaker(output):
         yield _warn("output", f"{output}: live runs are refused without --echo-cancel", "plug in headphones")
     else:
@@ -377,6 +397,27 @@ def tls_handshake_ms(host: str) -> float:
         with ssl.create_default_context().wrap_socket(raw, server_hostname=host):
             pass
     return (time.perf_counter() - start) * 1000
+
+
+def check_pi(cfg: Config, machine: str | None = None) -> Iterator[tuple]:
+    """The Pi's own health: hot or under-powered boards stall audio with no error (step 7)."""
+    if not sys.platform.startswith("linux"):
+        yield _skip("Pi hardware", "not Linux")
+        return
+    machine = machine or platform.machine()
+    yield _ok("architecture", machine) if machine == "aarch64" else _warn("architecture", machine, "use 64-bit Pi OS")
+    if (temp := read_temp_c()) is not None:
+        hot = temp >= HOT_C
+        yield _warn("temperature", f"{temp} C", "add cooling") if hot else _ok("temperature", f"{temp} C")
+    if mem := read_mem_mb():
+        low = mem[1] < LOW_MEM_MB
+        detail = f"{mem[1]} of {mem[0]} MB free"
+        yield _warn("memory", detail, "close other programs") if low else _ok("memory", detail)
+    throttled = read_throttled()
+    if throttled:
+        yield _warn("throttling", hex(throttled), "check the power supply and cooling")
+    elif throttled == 0:
+        yield _ok("throttling", "none since boot")
 
 
 def check_sandbox(cfg: Config) -> Iterator[tuple]:
@@ -460,8 +501,27 @@ def check_models(cfg: Config) -> Iterator[tuple]:
         else _warn("Silero VAD", f"{per_frame:.1f} ms per frame of {budget:.0f} ms")  # fmt: skip
 
     start = time.perf_counter()
-    LocalSmartTurnAnalyzerV3()
-    yield _ok("Smart Turn v3", f"load {(time.perf_counter() - start):.2f} s")
+    turn = LocalSmartTurnAnalyzerV3()
+    loaded = time.perf_counter()
+    turn._predict_endpoint(np.zeros(16000 * 8, dtype=np.float32))  # the first run is not typical
+    timed = time.perf_counter()
+    for _ in range(SMART_TURN_RUNS):
+        turn._predict_endpoint(np.zeros(16000 * 8, dtype=np.float32))
+    per_run = (time.perf_counter() - timed) / SMART_TURN_RUNS * 1000
+    detail = f"load {(loaded - start):.2f} s, {per_run:.0f} ms per decision"
+    yield _ok("Smart Turn v3", detail) if per_run < SMART_TURN_BUDGET_MS else _warn("Smart Turn v3", detail, "keep Flux")
+
+    from harness.echo_cancel import EchoCanceller
+
+    canceller = EchoCanceller(16000, 16000, cfg.profile["audio"]["echo_delay_ms"])
+    block = bytes(16000 * 2 * 20 // 1000)
+    start = time.perf_counter()
+    for _ in range(AEC_BLOCKS):
+        canceller.add_reference(block)
+        canceller.process(block)
+    per_block = (time.perf_counter() - start) / AEC_BLOCKS * 1000
+    detail = f"{per_block:.2f} ms per 20 ms block"
+    yield _ok("WebRTC AEC", detail) if per_block < AEC_BUDGET_MS else _warn("WebRTC AEC", detail, "try PipeWire echo-cancel")
 
 
 def check_scripted_turn(cfg: Config) -> Iterator[tuple]:
@@ -521,6 +581,7 @@ CHECKS: dict[str, tuple[Callable[[Config], Iterator[tuple]], str]] = {
     "visibility": (check_visibility, "network"),
     "network": (check_reachability, "network"),
     "sandbox": (check_sandbox, "fast"),
+    "pi": (check_pi, "fast"),
     "mcp": (check_mcp, "slow"),
     "models": (check_models, "slow"),
     "turn": (check_scripted_turn, "slow"),

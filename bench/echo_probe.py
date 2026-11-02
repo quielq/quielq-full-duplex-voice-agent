@@ -9,6 +9,12 @@ faces identical audio. No cloud calls, and audio stays in memory (never saved).
     uv run python -m bench.echo_probe --talker   # plus a second voice over it
     uv run python -m bench.echo_probe --transport   # through the real Pipecat transport
 
+On the Pi, `say` does not exist. Make the clips on the Mac, copy the folder over, and use them.
+They are synthetic speech, and *.wav stays out of git. --repeat makes a long run for clock drift.
+
+    uv run python -m bench.echo_probe --make-speech data/echo_speech     # on the Mac
+    uv run python -m bench.echo_probe --profile pi --speech data/echo_speech --repeat 10
+
 PASS: Silero fires on the raw mic and not on the cancelled mic. With --talker it must
 also fire on each talker and nowhere else. The talker comes from the same speakers, so
 it stands in for a person, and the real barge-in test is live.
@@ -51,6 +57,9 @@ BARGE_TEXT = "Wait, stop, cancel that please."
 BARGE_VOICE = "Daniel"
 BARGE_AT_S = (8.0, 16.0)
 GRACE_S = 0.5  # an onset can land just after the talker stops
+FAR_CLIP = "far.wav"
+TALKER_CLIP = "talker.wav"
+MAC_DEVICES = ("MacBook Air Microphone", "MacBook Air Speakers")
 
 
 def synthesize(text: str, *voice: str) -> bytes:
@@ -60,6 +69,24 @@ def synthesize(text: str, *voice: str) -> bytes:
         subprocess.run(args, check=True)
         with wave.open(str(path)) as w:
             return w.readframes(w.getnframes())
+
+
+def make_speech(folder: Path) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    clips = {FAR_CLIP: synthesize(STORY), TALKER_CLIP: synthesize(BARGE_TEXT, "-v", BARGE_VOICE)}
+    for name, audio in clips.items():
+        with wave.open(str(folder / name), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(OUT_RATE)
+            w.writeframes(audio)
+
+
+def read_clip(path: Path) -> bytes:
+    with wave.open(str(path)) as w:
+        if (w.getnchannels(), w.getsampwidth(), w.getframerate()) != (1, 2, OUT_RATE):
+            raise SystemExit(f"{path} must be mono 16 bit at {OUT_RATE} Hz; use --make-speech")
+        return w.readframes(w.getnframes())
 
 
 def mix_talker(far: bytes, talker: bytes) -> tuple[bytes, list[tuple[float, float]]]:
@@ -333,22 +360,35 @@ async def evaluate_transport(far: bytes, cfg, delay_ms: int, in_name: str, out_n
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", default="mac")
-    ap.add_argument("--input-device", default="MacBook Air Microphone")
-    ap.add_argument("--output-device", default="MacBook Air Speakers")
+    ap.add_argument("--input-device", help="default: the profile's, or the MacBook's on the mac profile")
+    ap.add_argument("--output-device")
     ap.add_argument("--talker", action="store_true", help="add a voice the canceller must keep")
     ap.add_argument("--delay-ms", type=int, default=50, help="delay hint for --talker")
     ap.add_argument("--transport", action="store_true", help="through the real Pipecat transport")
+    ap.add_argument("--make-speech", type=Path, help="write the clips to this folder and stop (Mac)")
+    ap.add_argument("--speech", type=Path, help="use clips from this folder instead of `say`")
+    ap.add_argument("--repeat", type=int, default=1, help="play the speech this many times")
     args = ap.parse_args()
+    if args.make_speech:
+        make_speech(args.make_speech)
+        return
     cfg = load_config(args.profile)
     vad_cfg = cfg.profile["vad"]
-    far = synthesize(STORY)
+    audio = cfg.profile["audio"]
+    macbook = MAC_DEVICES if args.profile == "mac" else (None, None)
+    args.input_device = args.input_device or audio["input_device"] or macbook[0]
+    args.output_device = args.output_device or audio["output_device"] or macbook[1]
+    far = (read_clip(args.speech / FAR_CLIP) if args.speech else synthesize(STORY)) * args.repeat
     if args.transport:
         report = asyncio.run(
             evaluate_transport(far, cfg, args.delay_ms, args.input_device, args.output_device)
         )
         print(json.dumps(report, indent=2))
         return
-    played, windows = mix_talker(far, synthesize(BARGE_TEXT, "-v", BARGE_VOICE)) if args.talker else (far, [])
+    talker = read_clip(args.speech / TALKER_CLIP) if args.speech else None
+    if args.talker and talker is None:
+        talker = synthesize(BARGE_TEXT, "-v", BARGE_VOICE)
+    played, windows = mix_talker(far, talker) if args.talker else (far, [])
     near = play_and_record(
         played, resolve_device(args.input_device, "input"), resolve_device(args.output_device, "output")
     )
