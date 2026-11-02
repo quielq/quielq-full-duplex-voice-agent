@@ -66,6 +66,7 @@ ui:
   enabled: false
   host: 127.0.0.1   # this machine only; the mute button has no login
   port: 8770
+  spotify_player: false   # play Spotify in the page (ADR-031); also on with --spotify-player
 
 paths:
   logs_dir: logs

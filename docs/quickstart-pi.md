@@ -86,4 +86,4 @@ To see what it is doing:
 journalctl --user -u me3-bot -f
 ```
 
-Spotify has no player here. Keep your phone as the active Spotify device and add `music=spotify` to `--stages`. Messages and calls stay mocks on the Pi.
+For music in the face, add `--spotify-player` (ADR-031). It needs full Premium, the face open in Chromium, and one new `uv run python -m bench.spotify_login` on the Mac, then `.env` copied over again. Messages and calls stay mocks on the Pi.

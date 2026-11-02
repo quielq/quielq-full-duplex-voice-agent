@@ -68,6 +68,7 @@ from harness.phrase_cache import load_phrase
 from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
 from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
 from harness.system_stats import SystemStats
+from servers.tasks.music.backends import PLAYER_NAME, SpotifyBackend
 from harness.recovery import LLMErrorRecovery
 from harness.timer_watch import TimerWatch
 from harness.tool_policy import PolicyGate, ToolPolicy
@@ -282,6 +283,10 @@ async def run_bot(
         turn_obs.on_text = ui.state.on_text
         await ui.start()
         logger.info(f"robot face at http://{ui_cfg['host']}:{ui_cfg['port']}")
+        if ui_cfg["spotify_player"]:
+            ui.state.spotify_player = True
+            ui.spotify_token = SpotifyBackend().access_token
+            ui.on_player_status = lambda state, detail: log.emit("spotify_player", state=state, detail=detail)
 
     addressing = _addressing(cfg, log)
     stayed_silent = False
@@ -477,6 +482,7 @@ def main() -> None:
     ap.add_argument("--reply-templates", action="store_true", help="skip the second LLM call (ADR-020)")
     ap.add_argument("--echo-cancel", action="store_true", help="WebRTC AEC, for live runs on speakers")
     ap.add_argument("--ui", action="store_true", help="serve the robot face (harness/ui.py, ADR-027)")
+    ap.add_argument("--spotify-player", action="store_true", help="play Spotify in the face page (ADR-031)")
     ap.add_argument("--servers", default="", help=f"task servers, default all: {','.join(TASK_SERVERS)}")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
@@ -488,6 +494,12 @@ def main() -> None:
         if stage not in cfg.providers["stages"]:
             ap.error(f"unknown stage {stage!r}")
         cfg.providers["stages"][stage] = choice
+    if args.spotify_player:
+        cfg.profile["ui"]["spotify_player"] = True
+    if cfg.profile["ui"]["spotify_player"]:
+        cfg.profile["ui"]["enabled"] = True
+        cfg.providers["stages"]["music"] = "spotify"
+        os.environ["ME3_SPOTIFY_DEVICE"] = PLAYER_NAME
     os.environ["ME3_MUSIC_BACKEND"] = cfg.providers["stages"].get("music", "fake")
     flux = cfg.providers["providers"]["deepgram"]["flux"]
     for item in filter(None, args.flux.split(",")):

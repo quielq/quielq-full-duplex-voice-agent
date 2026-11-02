@@ -80,6 +80,9 @@ class MockBackend:
         return self._save(self._load() | {"volume": level})
 
 
+PLAYER_NAME = "ME3"   # must match harness/ui_spotify.js
+
+
 def _ledger() -> CostLedger:
     cfg = yaml.safe_load((REPO_ROOT / "configs" / "providers.yaml").read_text())
     return CostLedger.from_providers_config(cfg, data_dir() / "cost_ledger.jsonl")
@@ -90,9 +93,17 @@ def _title(track: dict) -> str:
     return f"{track['name']} by {artists[0]['name']}" if artists else track["name"]
 
 
-def pick_device(devices: list[dict]) -> dict:
-    """The active device, then the computer, so a smart speaker never starts by surprise."""
+def pick_device(devices: list[dict], name: str = "") -> dict:
+    """The active device, then the computer, so a smart speaker never starts by surprise.
+
+    A ``name`` means that device or nothing (ADR-031).
+    """
     usable = [d for d in devices if not d.get("is_restricted")]
+    if name:
+        for device in usable:
+            if device.get("name") == name:
+                return device
+        raise MusicError("The music player on the screen is not connected yet.")
     for wanted in (lambda d: d.get("is_active"), lambda d: d.get("type") == "Computer", lambda d: True):
         for device in usable:
             if wanted(device):
@@ -145,10 +156,12 @@ class SpotifyBackend:
         client: httpx.Client | None = None,
         ledger: CostLedger | None = None,
         local_play: Callable[[str], None] | None = None,
+        device_name: str = "",
     ):
         self._client = client or httpx.Client(timeout=TIMEOUT_S)
         self._ledger = ledger or _ledger()
         self._local_play = local_play
+        self._device_name = device_name
         self._token = ""
         self._expires = 0.0
 
@@ -195,6 +208,20 @@ class SpotifyBackend:
             raise MusicError("Spotify is rate limiting us. Try again in a minute.")
         return r
 
+    def access_token(self) -> str:
+        """A short-lived token for the player in the face page (ADR-031). Never log this."""
+        try:
+            self._ledger.authorize("spotify")
+        except SpendRefused as e:
+            raise MusicError("Spotify calls are switched off for today.") from e
+        if time.monotonic() >= self._expires:
+            try:
+                self._refresh()
+            except httpx.HTTPError as e:
+                raise MusicError("Spotify did not answer in time.") from e
+            self._ledger.record("spotify", "spotify_requests", 1, 0.0)
+        return self._token
+
     def _send(self, method: str, path: str, **kwargs) -> httpx.Response:
         headers = {"Authorization": f"Bearer {self._token}"}
         return self._client.request(method, f"{API_URL}{path}", headers=headers, **kwargs)
@@ -225,9 +252,9 @@ class SpotifyBackend:
         tracks = [t for t in tracks if t]
         if not tracks:
             raise MusicError(f"Spotify found nothing for {query}.")
-        device = pick_device(self._checked("GET", "/me/player/devices").json().get("devices", []))
+        device = pick_device(self._checked("GET", "/me/player/devices").json().get("devices", []), self._device_name)
         uris = [t["uri"] for t in tracks]
-        if self._local_play and device.get("type") == "Computer":
+        if self._local_play and not self._device_name and device.get("type") == "Computer":
             uris = uris[:1]  # the album supplies what comes next
             self._local_play(uris[0], tracks[0]["album"]["uri"])
         else:
@@ -307,5 +334,6 @@ def build_backend(choice: str):
     if choice == "fake":
         return MockBackend()
     if choice == "spotify":
-        return SpotifyBackend(local_play=play_in_mac_app if sys.platform == "darwin" else None)
+        local_play = play_in_mac_app if sys.platform == "darwin" else None
+        return SpotifyBackend(local_play=local_play, device_name=os.environ.get("ME3_SPOTIFY_DEVICE", ""))
     raise ValueError(f"unknown music backend {choice!r}")

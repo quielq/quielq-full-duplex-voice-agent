@@ -225,6 +225,7 @@
   const LABELS = { idle: "Ready", listening: "Listening", thinking: "Thinking", working: "Working",
                    asking: "Waiting for your answer", speaking: "Speaking" };
   let timers = [];
+  let playerLoaded = false;
 
   function row(parent, cls, cells) {
     const div = document.createElement("div");
@@ -269,6 +270,12 @@
     }
     $("temp").textContent = s.thermostat.target_c + "°C";
     $("mode").textContent = s.thermostat.mode;
+    if (s.spotify_player && !playerLoaded) {   // off by default, so the page stays self-contained
+      playerLoaded = true;
+      const script = document.createElement("script");
+      script.src = "/spotify-player.js";
+      document.head.append(script);
+    }
     $("music").textContent = s.music.now_playing
       ? (s.music.playing ? "" : "Paused: ") + s.music.now_playing
       : "Nothing playing";

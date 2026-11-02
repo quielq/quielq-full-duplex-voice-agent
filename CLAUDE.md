@@ -32,7 +32,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - Duck-then-decide is custom: scale output by about 0.3 on speech onset, decide within about 0.5 s using the allowlist (stop, wait, no, cancel, pause). Duck within 100 ms with Silero `start_secs` of about 0.064 to 0.1.
 - Pipecat has no AEC. Phase 1 uses headphones. Phase 2 uses a separate USB mic and speaker with no hardware AEC, so `pi.yaml` turns on WebRTC AEC in the harness (ADR-013, ADR-029); PipeWire echo-cancel, then an RMS gate, are the fallbacks. `--echo-cancel` adds it on the Mac for speaker tests.
 - `write_file` and `edit_file` have no undo window, because a multi-step job needs each file at once. The server keeps replaced versions in `data/workspace/.versions` (ADR-028). Do not extend this to any tool that leaves the workspace.
-- The robot face (`--ui`, ADR-027) reads the event log and stays on 127.0.0.1. It displays devices and only controls the mic mute, so nothing on screen can bypass the tool policy.
+- The robot face (`--ui`, ADR-027) reads the event log and stays on 127.0.0.1. It displays devices and only controls the mic mute, so nothing on screen can bypass the tool policy. With `--spotify-player` the page also plays Spotify (ADR-031, off by default), but it only plays: the `music` tools still choose and pause.
 
 ## Layout and commands
 

@@ -379,3 +379,11 @@ def test_only_the_music_server_receives_spotify_credentials():
     assert "SPOTIFY_CLIENT_SECRET" in _server_env(None, "servers.tasks.music.server")
     for module in ("", "servers.tasks.clock.server"):
         assert not [k for k in _server_env(None, module) if k.startswith("SPOTIFY_")]
+
+
+def test_a_named_device_is_that_device_or_nothing():
+    other = {"id": "x", "name": "Xiaomi Speaker", "is_active": True, "type": "Speaker"}
+    me3 = {"id": "m", "name": "ME3", "is_active": False, "type": "Computer"}
+    assert pick_device([other, me3], "ME3")["id"] == "m"
+    with pytest.raises(MusicError):
+        pick_device([other], "ME3")

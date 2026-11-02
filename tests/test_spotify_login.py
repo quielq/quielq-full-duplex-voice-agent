@@ -24,7 +24,7 @@ def test_authorize_url_uses_loopback_and_only_the_player_scopes():
     query = parse_qs(urlsplit(authorize_url("cid", "st")).query)
     assert query["redirect_uri"] == [REDIRECT_URI]
     assert "localhost" not in REDIRECT_URI
-    assert query["scope"] == ["user-read-playback-state user-modify-playback-state"]
+    assert query["scope"] == ["user-read-playback-state user-modify-playback-state streaming user-read-email user-read-private"]
     assert query["state"] == ["st"]
 
 

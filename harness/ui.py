@@ -3,11 +3,12 @@
 ``UiState`` turns event-log lines into what the page shows, so the UI sees exactly what the logs
 record and adds no second path through the pipeline. ``UiServer`` sends that state over
 server-sent events. The page is one self-contained file with no outside requests, so the face
-still works when the network does not.
+still works when the network does not. The Spotify player is a separate file, loaded only when
+``ui.spotify_player`` is on (ADR-031).
 
 Lights and the thermostat are read from the same JSON files their mock servers write. The panel
 only displays them: the voice path stays the one way to change anything, so the tool policy
-cannot be bypassed from the screen. The one control is the mic mute.
+cannot be bypassed from the screen. The one control is the mic mute, and the player only plays.
 
     uv run python -m harness.ui --demo     # every expression in turn, no bot, no spend
 """
@@ -27,11 +28,14 @@ from urllib.parse import urlsplit
 from aiohttp import web
 
 from harness.config import REPO_ROOT, load_config
+from servers.tasks.music.backends import MusicError
 from servers.tasks.lights.server import DEFAULT as DEFAULT_LIGHTS
 from servers.tasks.thermostat.server import DEFAULT as DEFAULT_THERMOSTAT
 
 PAGE = Path(__file__).with_name("ui_page.html")
+PLAYER_SCRIPT = Path(__file__).with_name("ui_spotify.js")
 MOOD_HOLD_S = 3.0
+LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 SORRY_WORDS = ("sorry", "i can't", "i cannot", "i couldn't", "unfortunately")
 ANGRY_DECISIONS = {"denied_guard", "denied_contained", "contained"}
 ASKING_DECISIONS = {"hold_needs_confirmation", "read_back"}
@@ -104,6 +108,7 @@ class UiState:
         self.heard = ""
         self.said = ""
         self.music = {"playing": False, "now_playing": ""}
+        self.spotify_player = False
         self._new_reply = True
         self._awaiting_answer = False
 
@@ -192,6 +197,7 @@ class UiState:
             "heard": self.heard,
             "said": self.said,
             "music": self.music,
+            "spotify_player": self.spotify_player,
             **read_devices(self._data_dir, time.time()),
         }
 
@@ -204,6 +210,8 @@ class UiServer:
         self.host = host
         self.port = port
         self.on_mute: Callable[[], object] | None = None
+        self.spotify_token: Callable[[], str] | None = None   # set only when the player is on
+        self.on_player_status: Callable[[str, str], object] | None = None
         self._clients: set[asyncio.Queue] = set()
         self._runner: web.AppRunner | None = None
         self._pump: asyncio.Task | None = None
@@ -213,6 +221,9 @@ class UiServer:
         app.router.add_get("/", self._page)
         app.router.add_get("/events", self._events)
         app.router.add_post("/api/mute", self._mute)
+        app.router.add_get("/spotify-player.js", self._player_script)
+        app.router.add_get("/api/spotify-token", self._token)
+        app.router.add_post("/api/spotify-status", self._player_status)
         return app
 
     async def _page(self, _request: web.Request) -> web.FileResponse:
@@ -232,11 +243,40 @@ class UiServer:
         finally:
             self._clients.discard(queue)
 
-    async def _mute(self, request: web.Request) -> web.Response:
-        # A page on another site must not be able to switch the mic from this browser.
+    def _same_site_only(self, request: web.Request) -> None:
+        # A page on another site must not be able to reach these from this browser.
         origin = request.headers.get("Origin")
         if origin and urlsplit(origin).netloc != request.host:
             raise web.HTTPForbidden(text="wrong origin")
+        if request.host.partition(":")[0] not in LOCAL_HOSTS:  # a rebound domain name lands here
+            raise web.HTTPForbidden(text="wrong host")
+
+    async def _player_script(self, _request: web.Request) -> web.FileResponse:
+        if self.spotify_token is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(PLAYER_SCRIPT, headers={"Cache-Control": "no-store"})
+
+    async def _token(self, request: web.Request) -> web.Response:
+        self._same_site_only(request)
+        if self.spotify_token is None:
+            raise web.HTTPNotFound()
+        try:
+            token = await asyncio.to_thread(self.spotify_token)
+        except MusicError as e:
+            raise web.HTTPServiceUnavailable(text=str(e)) from e
+        return web.json_response({"token": token}, headers={"Cache-Control": "no-store"})
+
+    async def _player_status(self, request: web.Request) -> web.Response:
+        self._same_site_only(request)
+        if self.spotify_token is None:
+            raise web.HTTPNotFound()
+        body = await request.json()
+        if self.on_player_status:
+            self.on_player_status(str(body.get("state", ""))[:40], str(body.get("detail", ""))[:200])
+        return web.json_response({})
+
+    async def _mute(self, request: web.Request) -> web.Response:
+        self._same_site_only(request)
         if self.on_mute is None:
             raise web.HTTPConflict(text="this run has no mic")
         self.on_mute()

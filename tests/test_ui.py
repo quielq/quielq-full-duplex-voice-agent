@@ -4,11 +4,13 @@ import asyncio
 import json
 
 import aiohttp
+import aiohttp.test_utils
 import pytest
 
 from harness.bot import SYSTEM_PROMPT
 from harness.config import load_config
-from harness.ui import PAGE, UiServer, UiState, read_devices, step_label
+from servers.tasks.music.backends import PLAYER_NAME
+from harness.ui import PAGE, PLAYER_SCRIPT, UiServer, UiState, read_devices, step_label
 
 
 class Clock:
@@ -195,3 +197,55 @@ def test_mute_without_a_mic_says_so(tmp_path):
             assert r.status == 409
 
     asyncio.run(_with_server(tmp_path, body))
+
+
+async def _player_server(tmp_path, token=lambda: "short-token"):
+    server = UiServer(UiState(tmp_path), port=0)
+    server.spotify_token = token
+    client = aiohttp.test_utils.TestClient(aiohttp.test_utils.TestServer(server._app()))
+    await client.start_server()
+    return server, client
+
+
+async def test_the_player_routes_are_off_unless_the_player_is_on(tmp_path):
+    client = aiohttp.test_utils.TestClient(aiohttp.test_utils.TestServer(UiServer(UiState(tmp_path))._app()))
+    await client.start_server()
+    try:
+        assert (await client.get("/api/spotify-token")).status == 404
+        assert (await client.get("/spotify-player.js")).status == 404
+    finally:
+        await client.close()
+
+
+async def test_the_page_gets_a_token_and_nothing_else_does(tmp_path):
+    _, client = await _player_server(tmp_path)
+    try:
+        r = await client.get("/api/spotify-token")
+        assert r.status == 200 and (await r.json()) == {"token": "short-token"}
+        assert r.headers["Cache-Control"] == "no-store"
+        evil = await client.get("/api/spotify-token", headers={"Origin": "https://evil.example"})
+        assert evil.status == 403
+        rebound = await client.get("/api/spotify-token", headers={"Host": "evil.example:8770"})
+        assert rebound.status == 403
+    finally:
+        await client.close()
+
+
+async def test_the_player_reports_into_the_log(tmp_path):
+    server, client = await _player_server(tmp_path)
+    seen = []
+    server.on_player_status = lambda state, detail: seen.append((state, detail))
+    try:
+        await client.post("/api/spotify-status", json={"state": "account_error", "detail": "needs Premium"})
+        assert seen == [("account_error", "needs Premium")]
+    finally:
+        await client.close()
+
+
+def test_the_player_script_is_only_loaded_on_request():
+    page = PAGE.read_text()
+    assert "sdk.scdn.co" not in page and "s.spotify_player" in page
+    script = PLAYER_SCRIPT.read_text()
+    assert f'name: "{PLAYER_NAME}"' in script
+    for control in ("player.pause", "player.resume", "player.nextTrack", "player.togglePlay", "player.seek"):
+        assert control not in script
