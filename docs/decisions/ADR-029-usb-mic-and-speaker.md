@@ -25,6 +25,8 @@ The review plans a hardware-AEC speakerphone for Phase 2. Quiel will use a separ
 
 The talker comes from the same speaker, so it stands in for a person, and the real barge-in test is live. The long run shows no runaway drift, but the blips mean the live echo test is still open. Temperature went from 59 to 75 C over these runs, so the Pi needs a check on cooling.
 
+First live run on the Pi, `20261102-111258-a686c7`, Flux, Haiku 5.5, Cartesia, echo cancelling on, $0.05: three turns, all three transcripts were Quiel's own words, two tools ran, and Silero fired twice during replies without starting a turn. Replies were 3.0 and 3.4 s with a tool and 1.4 s without. No reply ran longer than about 7 s and nobody talked over one, so the 60 s echo test and real barge-in are still open. Temperature reached about 78 C.
+
 ## Alternatives
 
 - **Buy a speakerphone:** the most reliable echo result, but not the hardware chosen.
