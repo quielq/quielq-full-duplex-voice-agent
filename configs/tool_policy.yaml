@@ -76,6 +76,10 @@ tools:
   fetch_content: {timeout_s: 20.0}
   get_weather: {timeout_s: 15.0}
   index_documents: {timeout_s: 60.0}
+  # Confined to the workspace, and the server keeps the old version, so a multi-step job can
+  # write a file and use it on the next step (ADR-028).
+  write_file: {permission: auto, undo_s: 0}
+  edit_file: {permission: auto, undo_s: 0}
   send_message:
     timeout_s: 25.0   # the bridge can take 22 s
     readback: "Send {to} this message: {body}. Should I send it?"

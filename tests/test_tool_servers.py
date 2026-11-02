@@ -419,3 +419,14 @@ def test_fetch_retries_a_403_once(monkeypatch):
     monkeypatch.setattr(knowledge, "FETCH_RETRY_S", 0)
     monkeypatch.setattr(knowledge, "_get", lambda url, page: answers.pop(0))
     assert knowledge.fetch_content("https://example.com/")["text"] == "page"
+
+
+def test_a_rewrite_keeps_the_old_version(tmp_path, monkeypatch):
+    monkeypatch.setenv("ME3_DATA_DIR", str(tmp_path))
+    from servers.tasks.workspace import server as workspace
+
+    assert "previous_version" not in workspace.write_file("a.txt", "one")
+    kept = workspace.write_file("a.txt", "two")["previous_version"]
+    assert (tmp_path / "workspace" / kept).read_text() == "one"
+    assert workspace.edit_file("a.txt", "two", "three")["previous_version"].startswith(".versions/")
+    assert [f["path"] for f in workspace.list_files()["files"]] == ["a.txt"]

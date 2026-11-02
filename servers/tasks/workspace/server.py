@@ -79,6 +79,17 @@ def _clip(text: str) -> str:
     return text if len(text) <= MAX_CHARS else text[-MAX_CHARS:]  # the end of output is what matters
 
 
+def _keep_version(target: Path) -> str | None:
+    """Copy a file about to change, since writes run with no undo window (ADR-028)."""
+    if not target.is_file():
+        return None
+    folder = workspace_dir() / ".versions"
+    folder.mkdir(exist_ok=True)
+    copy = folder / f"{time.time_ns()}-{target.name}"
+    shutil.copyfile(target, copy)
+    return str(copy.relative_to(workspace_dir()))
+
+
 @mcp.tool(
     annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 )
@@ -130,15 +141,17 @@ def write_file(
     content: str,
     mode: Annotated[Literal["write", "append"], Field(description="write replaces the file")] = "write",
 ) -> dict:
-    """Write a file in the workspace, creating folders as needed. The documents folder is read-only."""
+    """Write a file in the workspace, creating folders as needed. Use append to add to a long file. The documents folder is read-only."""
     try:
         target = inside(path, [workspace_dir()])
     except OutsideRoots as e:
         return {"error": str(e)}
     target.parent.mkdir(parents=True, exist_ok=True)
+    previous = _keep_version(target) if mode == "write" else None
     with open(target, "w" if mode == "write" else "a") as f:
         f.write(content)
-    return {"path": path, "full_path": str(target), "bytes": target.stat().st_size}
+    result = {"path": path, "full_path": str(target), "bytes": target.stat().st_size}
+    return result | {"previous_version": previous} if previous else result
 
 
 @mcp.tool(
@@ -163,8 +176,9 @@ def edit_file(
         return {"error": "that text is not in the file"}
     if count > 1 and not replace_all:
         return {"error": f"that text occurs {count} times, so set replace_all or give more of it"}
+    previous = _keep_version(target)
     target.write_text(text.replace(old_string, new_string))
-    return {"path": path, "replaced": count}
+    return {"path": path, "replaced": count, "previous_version": previous}
 
 
 @mcp.tool(
