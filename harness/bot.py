@@ -68,6 +68,7 @@ from harness.phrase_cache import load_phrase
 from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
 from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
 from harness.recovery import LLMErrorRecovery
+from harness.timer_watch import TimerWatch
 from harness.tool_policy import PolicyGate, ToolPolicy
 
 SYSTEM_PROMPT = (
@@ -414,13 +415,15 @@ async def run_bot(
         finisher = None
         if input_mode != "mic":
             finisher = asyncio.create_task(finish_after_reply())
+        clock_file = (Path(data_dir) if data_dir else cfg.path("data_dir")) / "clock.json"
+        timers = asyncio.create_task(TimerWatch(clock_file, speak, log.emit).run())
         try:
             await runner.run()
         finally:
-            if finisher:
-                finisher.cancel()
+            for task in filter(None, (finisher, timers)):
+                task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await finisher
+                    await task
             await policy.close()
 
     await cost_obs.flush_tts()
