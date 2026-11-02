@@ -1,6 +1,6 @@
 # ADR-031: Spotify plays inside the robot face
 
-Date: Nov 2, 2026. Status: requested by Quiel on Nov 2, 2026. Built and off by default, not yet heard on the Pi.
+Date: Nov 2, 2026. Status: requested by Quiel on Nov 2, 2026. Built and off by default. Played on the Pi on Nov 2, 2026.
 
 ## Context
 
@@ -9,6 +9,8 @@ ADR-022 controls a Spotify app that runs somewhere else. The Pi has raspotify fr
 ## Spike
 
 Run on the Pi on Nov 2, 2026, `20261102-113457-c40ee0`, using raspotify, music at 50%, nobody talking: about 2 minutes of jazz piano and Christmas songs gave no Silero onsets, no transcripts, and no replies, $0.014. The mic was at -3 to -9 dB, close to clipping. Nobody spoke, so hearing a person over music is untested.
+
+Player run on the Pi on Nov 2, 2026, `20261102-120127-3f5a77`, fake voice stages: the page reported `ready`, Spotify listed `ME3`, the real `play` path started a track, and about 83 s played through Chromium into the SoundBar at volume 50 with no player errors. Temperature stayed at 52 to 58 C and peak load was 2.39, with the face open. The volume reading lagged the change by some seconds.
 
 ## Decision
 
@@ -28,7 +30,7 @@ Run on the Pi on Nov 2, 2026, `20261102-113457-c40ee0`, using raspotify, music a
 ## Consequences
 
 - Music needs the face open in Chromium, with Widevine and autoplay allowed. The kiosk launcher sets the autoplay flag. Another browser window needs a tap on the page first.
-- Whether Widevine works in the Pi's Chromium here is untested, and so is the CPU and heat cost. The Pi reached 78 C in the first live run.
+- Heat with live voice and music together is unmeasured. The Pi reached 78 C in the first live run, and the player run stayed under 58 C on fakes.
 - Full Premium is required. Spotify lists mobile-only plans as unsupported.
 - The echo canceller still does not hear the music, because it is not in the reference. Hearing a person over music is the open risk, wherever the music plays.
 
