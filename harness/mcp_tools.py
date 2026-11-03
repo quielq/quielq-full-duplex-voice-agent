@@ -21,6 +21,7 @@ from pipecat.services.mcp_service import MCPClient
 
 from harness.config import REPO_ROOT
 
+CLOSE_TIMEOUT_S = 5.0
 CLOCK_MODULE = "servers.tasks.clock.server"
 TASK_SERVERS = {
     "clock": CLOCK_MODULE,
@@ -145,7 +146,10 @@ async def task_clients(
             entered.append(cm)
         yield clients
     finally:
-        for client in clients.values():
-            await client.close()
-        for cm in reversed(entered):
-            await cm.__aexit__(None, None, None)
+        # A stuck server must not hold up the exit. Its stdin closes with this process.
+        with contextlib.suppress(TimeoutError):
+            async with asyncio.timeout(CLOSE_TIMEOUT_S):
+                for client in clients.values():
+                    await client.close()
+                for cm in reversed(entered):
+                    await cm.__aexit__(None, None, None)
