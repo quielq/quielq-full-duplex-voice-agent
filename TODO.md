@@ -4,7 +4,7 @@ Living list of open work. Tick items as they close, add new ones where they belo
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
-Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page. Last run `20261102-123315-a8d32d`, 29 transcripts. This work is on `build/pi-port`, not merged. Feature freeze is Nov 5 and the deadline is Nov 7.
+Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page. Last run `20261102-123315-a8d32d`, 29 transcripts. `build/pi-port` merged into local main on Nov 3, not pushed. Feature freeze is Nov 5 and the deadline is Nov 7.
 
 ## Waiting on Quiel
 
@@ -46,13 +46,13 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [ ] Barge-in over the bot's speech and the 60 s echo test, live on the Pi. The clean bench talker test failed before the mic gain was lowered
 - [ ] Confirm the two `open_in_browser` runs on Nov 2 showed the pages on screen. The tool committed, but nobody checked
 - [ ] Install the boot service with `scripts/pi_setup.sh --service`, and add `--spotify-player` to `bot.env`
-- [ ] Find why the bot takes about 2 minutes to exit after its pipeline stops
-- [ ] Show on the face when TTS has failed. A spent Cartesia account left the bot silent, because the spoken recovery phrases need TTS too
+- [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit
+- [x] Show on the face when TTS has failed: `tts_failed`, a sad face and "Voice is down" until audio plays again (fakes only, not yet on a real Cartesia failure)
 - [ ] The cost ledger showed far less on Cartesia than the credits used, so check its price against the real balance
-- [ ] Keep the 50% mic gain in `scripts/pi_setup.sh` or the docs: it is a PipeWire setting on this Pi only
-- [ ] `play` in the first 20 s after start says the player is not connected: wait for it, or say so better
+- [x] Keep the 50% mic gain: `wpctl` line in `scripts/pi_setup.sh`, not yet run on the Pi
+- [x] `play` in the first 20 s after start: waits up to 4 s for the player, then says it is still starting and to try again (fakes only). The 10 s tool timeout rules out a full 20 s wait
 - [ ] Decide what to do with VCM and raspotify on the Pi: VCM is stopped and disabled, raspotify still runs
-- [ ] Merge `build/pi-port` into main
+- [x] Merge `build/pi-port` into main (Nov 3, local only)
 - [ ] Enhancement, parked: music lyrics reach the transcript and can trigger tools. In `20261102-123315-a8d32d`, a lyric was followed by `stop_music`. Options: lower the music while speech is detected, or add the music to the echo canceller's reference through a PipeWire virtual sink
 
 ## Multi-stage jobs (ADR-028)
@@ -67,14 +67,15 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [ ] Repeat the website job and try a larger site, to learn how reliable it is
 - [ ] Try a job that uses `bash` and `serve`: each step asks for a yes, so check it is bearable
 - [ ] Decide how a long silent job should sound: the waiting phrase is built, with no real clips yet
-- [ ] Prune `.versions` if it grows
+- [ ] Prune `.versions` if it grows (one 2.5 KB file on Nov 3, nothing to do yet)
 
 ## Check after the Nov 2 live run
 
 - [ ] Run a live session on the fixes made after the last mic run: `restart_track`, no preamble before tools, clarifying unclear fragments, desktop commands refused in `bash` (tests only so far)
 - [ ] Run `open_in_browser` with `ME3_WORKSPACE_LIVE=1` and a spoken yes (ADR-026)
-- [ ] Look into `tts_starved` at about 0.02x and the speaker output gaps (worst 3.3 s), both flagged on all three long mic runs. Not yet known whether they are real or a false reading
-- [ ] Look into the `phantom_turn` in run `20261102-000823-8958d3`
+- [x] `tts_starved` at about 0.02x was a false reading: hop windows ran across the wait between replies. Fixed, and speech arrives at 2x to 11x real time. Most output gaps were pauses between sentences or during tools
+- [ ] Two real speaker write stalls in `20261102-095054-8e433b` (1,889 ms and 313 ms) with audio buffered, cause unknown. `loop_lag` events now log a stalled event loop, so check them after the next live run
+- [x] The `phantom_turn` in run `20261102-000823-8958d3` was a false alarm: the run stopped with that turn open. The report now skips such turns
 
 ## Finish the first spike
 
@@ -185,7 +186,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] Loudness gate with 400 ms of pre-roll, off by default, synthetic audio only (ADR-016)
 - [ ] Check Flux with gaps in the audio before enabling the gate with it (ADR-016)
 - [x] Run `bench/task_suite/cases/addressing.yaml` on Groq (ADR-017)
-- [ ] Relax `addr_short_follow_up_in_active`: it expects "thanks" and a real model says "you're welcome" (ADR-017)
+- [x] Relax `addr_short_follow_up_in_active`: accepts "thanks" or "welcome" (ADR-017)
 - [ ] Fix side talk on Haiku before enabling addressing: it answered both `addr_side_talk` cases (ADR-025)
 - [ ] Tune the IDLE word rules on a recorded room
 - [x] ACTIVE/IDLE conversation states (ADR-016)
@@ -217,7 +218,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] Recheck Pipecat deprecations on every upgrade (ADR-003)
 - [ ] Recheck prices on the day each provider goes live (several are promotional)
 - [ ] Not yet researched: UP Diliman IP policy, Data Privacy Act details, most providers' terms on data use
-- [ ] Delete old merged branches. `music-spotify` shows 4 unmerged commits, whose titles match work already on main, so compare before deleting
+- [x] Delete `music-spotify`: compared Nov 3, its work is already on main
 
 ## Done
 
