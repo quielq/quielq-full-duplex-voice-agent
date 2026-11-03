@@ -28,6 +28,7 @@ QUEUE_SIZE = 10  # Spotify's Development Mode search maximum
 TOKEN_MARGIN_S = 30
 START_CHECK_S = 3.0  # with the requests before it, this stays inside the tool's 10 s policy timeout
 START_POLL_S = 0.4
+PLAYER_WAIT_S = 4.0  # the page player can take 20 s, but the tool must answer within its 10 s timeout
 RESTARTED_MS = 3000  # a song this near its start has restarted
 
 
@@ -103,7 +104,7 @@ def pick_device(devices: list[dict], name: str = "") -> dict:
         for device in usable:
             if device.get("name") == name:
                 return device
-        raise MusicError("The music player on the screen is not connected yet.")
+        raise MusicError("The music player on the screen is still starting. Try again in a few seconds.")
     for wanted in (lambda d: d.get("is_active"), lambda d: d.get("type") == "Computer", lambda d: True):
         for device in usable:
             if wanted(device):
@@ -252,7 +253,7 @@ class SpotifyBackend:
         tracks = [t for t in tracks if t]
         if not tracks:
             raise MusicError(f"Spotify found nothing for {query}.")
-        device = pick_device(self._checked("GET", "/me/player/devices").json().get("devices", []), self._device_name)
+        device = self._find_device()
         uris = [t["uri"] for t in tracks]
         if self._local_play and not self._device_name and device.get("type") == "Computer":
             uris = uris[:1]  # the album supplies what comes next
@@ -267,6 +268,17 @@ class SpotifyBackend:
             "volume": device.get("volume_percent"),
             "device": device.get("name", ""),
         }
+
+    def _find_device(self) -> dict:
+        deadline = time.monotonic() + PLAYER_WAIT_S
+        while True:
+            devices = self._checked("GET", "/me/player/devices").json().get("devices", [])
+            try:
+                return pick_device(devices, self._device_name)
+            except MusicError:
+                if not self._device_name or time.monotonic() >= deadline:
+                    raise
+            time.sleep(START_POLL_S)
 
     def _wait_for(self, ready: Callable[[dict], bool], failure: str) -> dict:
         deadline = time.monotonic() + START_CHECK_S

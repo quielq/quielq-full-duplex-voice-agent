@@ -387,3 +387,25 @@ def test_a_named_device_is_that_device_or_nothing():
     assert pick_device([other, me3], "ME3")["id"] == "m"
     with pytest.raises(MusicError):
         pick_device([other], "ME3")
+
+
+def _named_backend(fake, tmp_path):
+    ledger = CostLedger(tmp_path / "ledger.jsonl", {"spotify": 0.01})
+    client = httpx.Client(transport=httpx.MockTransport(fake))
+    return SpotifyBackend(client, ledger, device_name="ME3")
+
+
+def test_play_waits_for_the_page_player_to_connect(fake, tmp_path, monkeypatch):
+    monkeypatch.setattr(backends.time, "sleep", lambda s: None)
+    me3 = {"id": "m", "name": "ME3", "type": "Computer", "is_active": False}
+    fake.replies["/me/player/devices"] = [httpx.Response(200, json={"devices": [MAC]}),
+                                          httpx.Response(200, json={"devices": [me3]})]  # fmt: skip
+    fake.replies["/me/player"] = httpx.Response(200, json=PLAYING)
+    assert _named_backend(fake, tmp_path).play("jazz")["device"] == "ME3"
+    assert fake.routes().count("/me/player/devices") == 2
+
+
+def test_a_player_that_never_connects_says_try_again(fake, tmp_path, monkeypatch):
+    monkeypatch.setattr(backends, "PLAYER_WAIT_S", 0)
+    with pytest.raises(MusicError, match="still starting"):
+        _named_backend(fake, tmp_path).play("jazz")
