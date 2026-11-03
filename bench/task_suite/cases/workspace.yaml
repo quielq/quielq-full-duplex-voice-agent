@@ -73,3 +73,20 @@ cases:
     expect:
       tools: [open_in_browser]
       spoken_re: "Open page.html in your browser"
+
+  - id: workspace_plan_and_build_a_larger_site
+    layer: tool_call
+    live_only: true
+    # Three linked pages and a shared stylesheet: how far the inline tools carry a bigger job.
+    turns: ["plan and build a website for a small neighbourhood cafe, with a home page, a menu page, and an about page that share one stylesheet and link to each other", 150]
+    expect:
+      tools_include: [write_file]
+
+  - id: workspace_live_bash_and_serve
+    layer: conversation
+    live_only: true
+    # With ME3_WORKSPACE_LIVE=1 this runs in the sandbox, so each command needs its own yes.
+    seed: {workspace: [{path: site/index.html, text: "<h1>Red pandas</h1>"}]}
+    turns: ["list the files in the site folder with the ls command", "yes", "now serve the site folder so I can open it", "yes"]
+    expect:
+      tools_include: [bash, serve]

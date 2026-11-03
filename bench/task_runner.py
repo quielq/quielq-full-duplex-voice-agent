@@ -220,7 +220,9 @@ def seed_workspace(data_dir: Path, items: list[dict]) -> None:
     root = data_dir / "workspace"
     root.mkdir(exist_ok=True)
     for item in items:
-        (root / item["path"]).write_text(item["text"])
+        path = root / item["path"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(item["text"])
 
 
 def read_workspace(data_dir: Path) -> list[dict]:
