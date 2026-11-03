@@ -64,8 +64,8 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Live command with the real shell and Tavily search (`docs/tools.md`)
 - [x] Run a website job on Haiku in text: passed once, $0.0061, 19 s, and the page rendered (ADR-028)
 - [x] Run a website job by voice with `--ui`: Flappy Bird and a UP AI page on the Pi, Nov 2. Their quality is not checked
-- [ ] Repeat the website job and try a larger site, to learn how reliable it is
-- [ ] Try a job that uses `bash` and `serve`: each step asks for a yes, so check it is bearable
+- [x] Repeat the website job and try a larger site (Nov 3, text, Haiku): small site 2 of 2 in 14 to 28 s, a three-page cafe site 2 of 2 in about 80 s and $0.02, every page and `plan.md` written. Page quality not checked. Earlier runner results were void: it gave `write_file` an undo window, fixed
+- [x] Try a job that uses `bash` and `serve` (Nov 3, text, live sandbox): 2 of 2, one read-back and one yes per command. The read-back speaks flags aloud ("python3 dash m http.server 8000"), which is clumsy by voice
 - [ ] Decide how a long silent job should sound: the waiting phrase is built, with no real clips yet
 - [ ] Prune `.versions` if it grows (one 2.5 KB file on Nov 3, nothing to do yet)
 
@@ -79,7 +79,7 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 
 ## Finish the first spike
 
-- [ ] Step 4, Cartesia arm: run `bench/interruption_test.py --tts cartesia` and confirm it truncates like `fake_words` (ADR-006). One live truncation is recorded in ADR-015, but the bench has not run on Cartesia
+- [ ] Step 4, Cartesia arm (ADR-006): ran Nov 3. It truncates, but commits 4 words past what was heard (immediate, stop 279 ms) and 5 in duck mode (stop 1,298 ms), against 1 on `fake_words`. Check whether the heard-word estimate or Cartesia's timestamps cause it
 - [ ] Step 7, Pi port (needs a go):
   - [x] Write `scripts/pi_setup.sh`, the `me3-bot` service, the kiosk launcher, and `docs/quickstart-pi.md` (ADR-030), not run on a Pi
   - [x] Run the setup and tests on the Pi: Bookworm, not Trixie, 450 passed, and the `say` failures fixed
@@ -197,7 +197,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 
 ## Model comparison and benchmark
 
-- [ ] Repeat the Haiku task suite: 61 of 64 is one repeat with fake tools, so flakiness is unknown (ADR-025)
+- [x] Repeat the Haiku task suite (Nov 3): 321 of 340 over 5 repeats, $0.52. Failures: side talk 0 of 10 (known), `notes_delete_runs_after_undo` 2 of 5 (lists notes, never deletes), `notes_conv_undo_keeps_note` 4 of 5, and the site case, void from the runner bug and 2 of 2 after the fix
 - [ ] 40 tool-calling turns plus 20 non-addressed utterances, 5 repeats each, against the decision rule, through `bench/task_runner.py`. Haiku is the baseline, other candidates after purchases are approved
 - [ ] Full-Duplex-Bench adapter (v1/v1.5, then v3)
 - [ ] Our own task suite and team-recorded clips (including self-corrections)
