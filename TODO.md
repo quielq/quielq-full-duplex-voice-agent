@@ -9,9 +9,9 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 ## Waiting on Quiel
 
 - [x] Give the go for step 7, the Pi port (Nov 2)
-- [ ] Decide whether real voice servers and the audio side channel stay in scope before the deadline (check the assignment spec first). The replan has no slot for them, and leaving them out is the recommendation
-- [ ] Decide whether to build `delegate` if Haiku cannot finish a website job with the existing tools
-- [ ] Decide the patent and privacy question before Nov 7 (repo stays private until then)
+- [ ] Choose how to build the voice servers: spec items 2 and 5 ask for MCP servers attached to the ASR and TTS, run on the Pi, so they are in scope (spec checked Nov 3)
+- [ ] Decide whether to build `delegate`, and on which model: Haiku, OpenRouter, or Ollama. OnIt is dropped (Nov 3)
+- [x] Patent question dropped, and the repo goes public as a course requirement (Nov 3). Privacy measures are listed in `docs/privacy.md`
 - [ ] Decide reply templates: enable or leave off. Measured on Groq 120b only, not on Haiku (ADR-020)
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
@@ -179,7 +179,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] `open_in_browser` for workspace HTML (ADR-026, live run still to do, see above)
 - [x] `comms` phone bridge built, dry run only (ADR-024, real send waits on approval)
 - [x] Read-back from real arguments for open world destructive tools (ADR-024)
-- [ ] `delegate` (onit in a per-task sandbox, with a token cap)
+- [ ] `delegate` (own worker loop on the workspace tools, with a token cap, model not chosen)
 
 ## No-wake-word addressing
 
@@ -193,7 +193,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] `stay_silent` tool (ADR-016)
 - [x] `require_wake_after_idle` fallback switch (ADR-016)
 - [x] Mute switch in software (`kill -USR1`, log line); a hardware button and light wait for the Pi
-- [ ] Privacy baseline (no stored audio, notice to the room, opt-outs, consent record). The display now shows transcripts to the room
+- [x] Privacy measures listed in `docs/privacy.md` (Nov 3)
 
 ## Model comparison and benchmark
 
@@ -217,7 +217,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 
 - [ ] Recheck Pipecat deprecations on every upgrade (ADR-003)
 - [ ] Recheck prices on the day each provider goes live (several are promotional)
-- [ ] Not yet researched: UP Diliman IP policy, Data Privacy Act details, most providers' terms on data use
+- [ ] Not yet researched: most providers' terms on data use
 - [x] Delete `music-spotify`: compared Nov 3, its work is already on main
 
 ## Done
