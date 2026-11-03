@@ -1,12 +1,17 @@
 """Spoken recovery when the LLM fails and when a spending cap is hit, on fakes."""
 
 import asyncio
+import json
 
 import pytest
+from pipecat.frames.frames import ErrorFrame
+from pipecat.observers.base_observer import FramePushed
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from harness.bot import run_bot
 from harness.config import load_config
-from harness.fakes import RuleBasedLLMService
+from harness.events import EventLog, TurnEventObserver
+from harness.fakes import RuleBasedLLMService, ToneTTSService
 from harness.mcp_tools import TASK_SERVERS
 from harness.providers import build_tts
 
@@ -73,3 +78,14 @@ def test_the_cap_notice_never_spends_on_the_capped_tts(cfg, tmp_path, monkeypatc
     cfg.providers["stages"]["tts"] = "cartesia"
     result = run(cfg, tmp_path, say="hello")
     assert cfg.profile["recovery"]["cap_phrase"] not in result.spoken_text
+
+
+async def test_a_tts_error_is_logged_as_a_voice_failure(tmp_path):
+    log = EventLog(tmp_path)
+    await TurnEventObserver(log).on_push_frame(
+        FramePushed(source=ToneTTSService(), destination=FrameProcessor(), frame=ErrorFrame("quota_exceeded"),
+                    direction=FrameDirection.UPSTREAM, timestamp=0)  # fmt: skip
+    )
+    log.close()
+    events = [json.loads(line)["event"] for line in log.path.read_text().splitlines()]
+    assert events == ["pipeline_error", "tts_failed"]

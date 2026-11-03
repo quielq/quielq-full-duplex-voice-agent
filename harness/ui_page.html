@@ -259,7 +259,7 @@
   function draw(s) {
     robot.dataset.face = s.face;
     robot.classList.toggle("talking", s.talking);
-    $("state").textContent = s.muted ? "Mic muted" : LABELS[s.activity];
+    $("state").textContent = s.muted ? "Mic muted" : s.voice_down ? "Voice is down" : LABELS[s.activity];
     $("step").textContent = s.step;
     $("heard").textContent = s.heard;
     $("said").textContent = s.said;

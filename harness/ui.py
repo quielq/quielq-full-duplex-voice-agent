@@ -109,6 +109,7 @@ class UiState:
         self.said = ""
         self.music = {"playing": False, "now_playing": ""}
         self.spotify_player = False
+        self.voice_down = False
         self._new_reply = True
         self._awaiting_answer = False
 
@@ -167,11 +168,16 @@ class UiState:
                 self._awaiting_answer = False
         elif event == "first_audio_out":
             self.activity = "speaking"
+            self.voice_down = False
         elif event == "audio_silent":
             if self.activity == "speaking":
                 self.activity = "asking" if self._awaiting_answer else "idle"
         elif event in ("pipeline_error", "spend_cap_reached", "reply_timeout"):
             self._set_mood("sad")
+            self.activity = "idle"
+        elif event == "tts_failed":
+            # The spoken phrases need TTS too, so the screen is the only way left to say so.
+            self.voice_down = True
             self.activity = "idle"
         elif event == "mic_mute":
             self.muted = bool(rec.get("muted"))
@@ -185,6 +191,8 @@ class UiState:
             return "muted"
         if self.activity in ("listening", "thinking", "working", "asking"):
             return self.activity
+        if self.voice_down:
+            return "sad"
         return self.mood if self._clock() < self._mood_until else "neutral"
 
     def snapshot(self) -> dict:
@@ -193,6 +201,7 @@ class UiState:
             "activity": self.activity,
             "talking": self.activity == "speaking",
             "muted": self.muted,
+            "voice_down": self.voice_down,
             "step": self.step,
             "heard": self.heard,
             "said": self.said,
@@ -337,6 +346,9 @@ DEMO_SCRIPT: list[tuple[float, str, dict]] = [
     (4.0, "tool_policy", {"decision": "read_back"}),
     (4.0, "audio_silent", {}),
     (4.0, "pipeline_error", {"error": "demo"}),
+    (4.0, "tts_failed", {"error": "demo"}),
+    (5.0, "first_audio_out", {}),
+    (2.0, "audio_silent", {}),
 ]
 
 

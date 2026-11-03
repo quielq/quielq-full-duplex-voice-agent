@@ -35,6 +35,7 @@ from pipecat.frames.frames import (
     VADUserStoppedSpeakingFrame,
 )
 from pipecat.observers.base_observer import BaseObserver, FramePushed
+from pipecat.services.tts_service import TTSService
 
 
 class EventLog:
@@ -172,3 +173,5 @@ class TurnEventObserver(BaseObserver):
             log.emit("interruption")
         elif isinstance(frame, ErrorFrame):
             log.emit("pipeline_error", error=frame.error)
+            if isinstance(data.source, TTSService):
+                log.emit("tts_failed", error=frame.error)

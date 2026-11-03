@@ -99,6 +99,15 @@ def test_an_apology_looks_sad(ui):
     assert ui.face() == "sad" and ui.said == "Sorry, I missed that."
 
 
+def test_a_voice_failure_stays_on_the_face_until_audio_plays(ui, clock):
+    ui.on_event({"event": "tts_failed", "error": "quota_exceeded"})
+    clock.now += 3600
+    assert ui.face() == "sad" and ui.snapshot()["voice_down"]
+    ui.on_event({"event": "first_audio_out"})
+    ui.on_event({"event": "audio_silent"})
+    assert ui.face() == "neutral" and not ui.snapshot()["voice_down"]
+
+
 def test_a_new_turn_clears_the_last_reply(ui):
     ui.on_text("First.")
     send(ui, "asr_final", text="and then")
