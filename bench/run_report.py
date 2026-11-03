@@ -28,10 +28,12 @@ LOGS_DIR = REPO_ROOT / "logs"
 NOISY = {"audio_hop", "echo_window", "gain_applied", "tool_policy", "first_audio_out_acoustic", "system_stats"}
 
 SLOW_REPLY_MS = 2000  # end of turn to audio
-OUTPUT_GAP_MS = 300  # a hole in speech that people hear
+OUTPUT_GAP_MS = 300  # a speaker write this long is a hole in speech that people hear
 STARVED_RATIO = 0.9  # audio arriving slower than this while the backlog is near empty
 STARVED_BACKLOG_MS = 200
 MIN_STARVED_WINDOWS = 2
+MAX_STARVED_WINDOW_MS = 1200  # logs before Nov 3 stretched a window across the wait between replies
+OPEN_TURN_MS = 10_000  # a turn this close to run_end was cut off, not a phantom
 TOOL_FAILURES = {"timeout", "tool_error", "commit_failed", "denied_unknown"}
 
 
@@ -130,7 +132,9 @@ def _starved_windows(events: list[dict]) -> list[dict]:
         if e["event"] != "audio_hop" or not e.get("written_ms"):
             continue
         ratio = e["arrived_ms"] / max(e["window_ms"], 1)
-        if ratio < STARVED_RATIO and e["backlog_ms"] < STARVED_BACKLOG_MS:
+        draining = e["arrived_ms"] == 0  # the end of a reply: everything has already arrived
+        if ratio < STARVED_RATIO and e["backlog_ms"] < STARVED_BACKLOG_MS and not draining \
+                and e["window_ms"] <= MAX_STARVED_WINDOW_MS:
             out.append(e)
     return out
 
@@ -158,10 +162,11 @@ def find_anomalies(events: list[dict], turns: list[Turn]) -> list[Anomaly]:
             detail = e.get("error", "") or e.get("result", "") or e.get("decision")
             add("error", "tool_failed", tid, f"{e.get('tool')}: {detail}"[:200])
 
-    gaps = [e["max_output_gap_ms"] for e in events
-            if e["event"] == "echo_window" and e.get("max_output_gap_ms", 0) >= OUTPUT_GAP_MS]  # fmt: skip
+    # Gaps between sentences and during tools are pauses, so only a stalled write counts.
+    gaps = [e["write_max_ms"] for e in events
+            if e["event"] == "audio_hop" and e.get("write_max_ms", 0) >= OUTPUT_GAP_MS]  # fmt: skip
     if gaps:
-        add("warn", "output_gap", None, f"{len(gaps)} s with a speaker output gap, worst {max(gaps)} ms")
+        add("warn", "output_gap", None, f"{len(gaps)} s with a stalled speaker write, worst {max(gaps)} ms")
 
     for t in turns:
         if t.heard and not t.spoke and not t.tools and not t.cut_off:
@@ -171,6 +176,12 @@ def find_anomalies(events: list[dict], turns: list[Turn]) -> list[Anomaly]:
 
     turn_ids = {e["turn_id"] for e in events if e["event"] == "user_turn_start"}
     heard = {t.turn for t in turns if t.heard}
+    run_end = next((e["t_ns"] for e in events if e["event"] == "run_end"), None)
+    if turn_ids and run_end is not None:
+        last = max(turn_ids)
+        started = max(e["t_ns"] for e in events if e["event"] == "user_turn_start" and e["turn_id"] == last)
+        if (run_end - started) / 1e6 < OPEN_TURN_MS:
+            turn_ids.discard(last)
     if phantom := sorted(turn_ids - heard):
         add("warn", "phantom_turn", phantom[0],
             f"{len(phantom)} turn(s) started with no transcript: echo or noise? turns {phantom[:8]}")  # fmt: skip

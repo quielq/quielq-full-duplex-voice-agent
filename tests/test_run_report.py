@@ -44,7 +44,7 @@ def test_missing_run_end_is_reported():
         (ev("spend_cap_reached", 1, 5, provider="groq"), "spend_cap"),
         (ev("tool_policy", 1, 5, tool="x", decision="tool_error", error="boom"), "tool_failed"),
         (ev("tts_cleared", 1, 5, clear_ms=3875, timed_out=True), "tts_clear_timeout"),
-        (ev("echo_window", 1, 5, max_output_gap_ms=900), "output_gap"),
+        (ev("audio_hop", 1, 5, write_max_ms=900), "output_gap"),
     ],
 )
 def test_single_event_anomalies(extra, code):
@@ -76,7 +76,12 @@ def test_a_long_wait_with_no_reply_is_still_silent():
 
 
 def test_a_turn_with_no_transcript_is_a_phantom():
-    assert "phantom_turn" in codes([*GOOD, ev("user_turn_start", 2, 960)])
+    later = [ev("user_turn_start", 3, 2000), ev("asr_final", 3, 2001, text="hi"), ev("run_end", 3, 2100)]
+    assert "phantom_turn" in codes([*GOOD[:-1], ev("user_turn_start", 2, 960), *later])
+
+
+def test_a_turn_cut_off_by_the_end_of_the_run_is_not_a_phantom():
+    assert "phantom_turn" not in codes([*GOOD[:-1], ev("user_turn_start", 2, 960), ev("run_end", 2, 5000)])
 
 
 def hop(arrived, backlog, turn=1):
@@ -87,6 +92,16 @@ def test_starved_speech_needs_low_arrival_and_no_backlog():
     assert "tts_starved" in codes([*GOOD, hop(430, 0), hop(430, 10)])
     assert "tts_starved" not in codes([*GOOD, hop(430, 5000), hop(430, 5000)])  # buffered, plays fine
     assert "tts_starved" not in codes([*GOOD, hop(430, 0)])  # one window is the tail of a reply
+
+
+def test_the_end_of_a_reply_and_a_long_wait_are_not_starved():
+    assert "tts_starved" not in codes([*GOOD, hop(0, 80), hop(0, 40)])
+    waits = [hop(154, 154) | {"window_ms": 15000}, hop(154, 154) | {"window_ms": 8000}]
+    assert "tts_starved" not in codes([*GOOD, *waits])
+
+
+def test_a_pause_in_the_echo_reference_is_not_an_output_gap():
+    assert "output_gap" not in codes([*GOOD, ev("echo_window", 1, 5, max_output_gap_ms=3500)])
 
 
 def test_interruption_counts_only_when_it_cuts_speech():
