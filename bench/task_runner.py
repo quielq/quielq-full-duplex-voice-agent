@@ -277,7 +277,7 @@ async def run_case(
     undo_s = DEFAULT_UNDO_S if case.undo_s is None else case.undo_s
     cfg.tool_policy["defaults"]["undo_s"] = undo_s
     for rule in (cfg.tool_policy["tools"] or {}).values():
-        if "undo_s" in rule:
+        if rule.get("undo_s"):  # a tool with no window keeps none (ADR-028)
             rule["undo_s"] = undo_s
     cfg.profile["addressing"]["enabled"] = case.addressing
     silent = case.expect.get("silent", False)
