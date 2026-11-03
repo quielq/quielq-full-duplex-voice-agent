@@ -101,3 +101,12 @@ async def test_stats_loop_emits_and_can_be_cancelled():
     with pytest.raises(asyncio.CancelledError):
         await task
     assert events[0][0] == "system_stats" and "load_1m" in events[0][1]
+
+
+def test_a_late_loop_is_logged_and_a_normal_one_is_not():
+    seen = []
+    lag = system_stats.LoopLag(lambda name, **f: seen.append((name, f)), tick_s=0.05)
+    lag.check(0.06)
+    assert seen == []
+    lag.check(1.05)
+    assert seen == [("loop_lag", {"ms": 1000})]

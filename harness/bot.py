@@ -20,6 +20,7 @@ import asyncio
 import contextlib
 import os
 import signal
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -67,7 +68,7 @@ from harness.null_output import PacedNullOutputTransport
 from harness.phrase_cache import load_phrase
 from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
 from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
-from harness.system_stats import SystemStats
+from harness.system_stats import LoopLag, SystemStats
 from servers.tasks.music.backends import PLAYER_NAME, SpotifyBackend
 from harness.recovery import LLMErrorRecovery
 from harness.timer_watch import TimerWatch
@@ -296,6 +297,15 @@ async def run_bot(
         stayed_silent = True
         turn_obs.reply_done.set()
 
+    last_step = time.monotonic()
+
+    def shutdown(step: str) -> None:
+        """Time each exit step: one live run took 62 s to stop (20261102-095054-8e433b)."""
+        nonlocal last_step
+        now = time.monotonic()
+        log.emit("shutdown_step", step=step, ms=round((now - last_step) * 1000))
+        last_step = now
+
     async with task_clients(mcp_transport, data_dir, servers) as clients:
         # The system prompt lives on the LLM service (system messages in LLMContext are
         # deprecated since Pipecat 1.9).
@@ -436,17 +446,22 @@ async def run_bot(
         clock_file = (Path(data_dir) if data_dir else cfg.path("data_dir")) / "clock.json"
         timers = asyncio.create_task(TimerWatch(clock_file, speak, log.emit).run())
         stats = asyncio.create_task(SystemStats(log.emit).run()) if input_mode == "mic" else None
+        lag = asyncio.create_task(LoopLag(log.emit).run()) if input_mode == "mic" else None
         try:
             await runner.run()
         finally:
-            for task in filter(None, (finisher, timers, stats)):
+            shutdown("pipeline")
+            for task in filter(None, (finisher, timers, stats, lag)):
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
             await policy.close()
+            shutdown("tool_policy")
             if ui:
                 await ui.stop()
+                shutdown("ui")
 
+    shutdown("mcp_clients")
     await cost_obs.flush_tts()
     log.emit("run_end", session_usd=round(cost_obs.session_usd, 6))
     log.close()

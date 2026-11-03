@@ -9,11 +9,14 @@ import asyncio
 import os
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 INTERVAL_S = 5.0
 THROTTLE_TIMEOUT_S = 2.0
+LAG_TICK_S = 0.05
+LAG_REPORT_MS = 200  # a stalled loop holds up every speaker write behind it
 
 
 def read_temp_c(path: Path = Path("/sys/class/thermal/thermal_zone0/temp")) -> float | None:
@@ -64,3 +67,23 @@ class SystemStats:
         while True:
             self._emit("system_stats", **await asyncio.to_thread(sample))
             await asyncio.sleep(self._interval_s)
+
+
+class LoopLag:
+    """Logs when the event loop wakes late, to explain a stalled speaker write. Logging only."""
+
+    def __init__(self, emit: Callable[..., object], tick_s: float = LAG_TICK_S, clock=time.monotonic):
+        self._emit = emit
+        self._tick_s = tick_s
+        self._clock = clock
+
+    async def run(self) -> None:
+        while True:
+            start = self._clock()
+            await asyncio.sleep(self._tick_s)
+            self.check(self._clock() - start)
+
+    def check(self, slept_s: float) -> None:
+        late_ms = (slept_s - self._tick_s) * 1000
+        if late_ms >= LAG_REPORT_MS:
+            self._emit("loop_lag", ms=round(late_ms))
