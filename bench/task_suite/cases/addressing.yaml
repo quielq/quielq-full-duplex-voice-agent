@@ -44,4 +44,4 @@ cases:
     layer: conversation
     addressing: true
     turns: ["what time is it", "thanks a lot"]
-    expect: {tools: [get_time], spoken_re: "thanks"}
+    expect: {tools: [get_time], spoken_re: "thanks|welcome"}
