@@ -29,7 +29,7 @@ The review has no screen. Quiel wants the Pi to show a robot face on a 7-inch to
 
 - The UI cost on the voice path is one short function per event. CPU use of the page on the Pi is unmeasured, and SVG glow filters were left out for that reason.
 - `open_in_browser` opens a page over the kiosk face on the Pi, and touch has no way back yet.
-- The screen shows transcripts to anyone in the room. This belongs in the privacy baseline.
+- The screen shows transcripts to anyone in the room (`docs/privacy.md`).
 - `aiohttp` becomes a direct dependency. It was already installed through Pipecat.
 
 ## Sources

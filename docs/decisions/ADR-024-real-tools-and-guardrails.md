@@ -37,7 +37,7 @@ Finish on the Mac and then move to the Pi. Every part below is chosen at run tim
 - On the Pi, `serve` uses the host network, so a started service has outbound access.
 - The bridge link is plain HTTP on the LAN.
 - Calls need a click on the Mac, which is a real limit on hands-free use.
-- OnIt's Apache-2.0 file is vendored unchanged with its header. Review this for the patent decision.
+- OnIt's Apache-2.0 file is vendored unchanged with its header, which the licence requires.
 - A real message, call, or model run has not happened. All of them wait on a separate go-ahead.
 
 ## Sources

@@ -273,27 +273,6 @@ def check_git(cfg: Config) -> Iterator[tuple]:
     yield _warn("unmerged branches", " ".join(unmerged)) if unmerged else _ok("branches", "all merged into main")
 
 
-def check_visibility(cfg: Config) -> Iterator[tuple]:
-    """Rule 8: the repo stays private until the patent decision."""
-    if not shutil.which("gh"):
-        yield _skip("repo visibility", "gh not installed")
-        return
-    try:
-        out = subprocess.run(
-            ["gh", "repo", "view", "--json", "visibility", "-q", ".visibility"],
-            cwd=REPO_ROOT, capture_output=True, text=True, timeout=10,
-        ).stdout.strip()  # fmt: skip
-    except subprocess.TimeoutExpired:
-        yield _skip("repo visibility", "gh timed out")
-        return
-    if not out:
-        yield _skip("repo visibility", "gh returned nothing, signed in?")
-    elif out == "PRIVATE":
-        yield _ok("repo visibility", "private")
-    else:
-        yield _fail("repo visibility", out, "make it private: nothing is published before the patent decision")
-
-
 def check_spend(cfg: Config) -> Iterator[tuple]:
     path = cfg.path("data_dir") / "cost_ledger.jsonl"
     bad = 0
@@ -578,7 +557,6 @@ CHECKS: dict[str, tuple[Callable[[Config], Iterator[tuple]], str]] = {
     "spend": (check_spend, "fast"),
     "audio": (check_audio, "fast"),
     "runs": (check_last_runs, "fast"),
-    "visibility": (check_visibility, "network"),
     "network": (check_reachability, "network"),
     "sandbox": (check_sandbox, "fast"),
     "pi": (check_pi, "fast"),

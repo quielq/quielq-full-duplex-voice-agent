@@ -17,7 +17,7 @@ The attached `ME3_Architecture_Review.md` is the source of truth for design. Rea
 5. **No em dashes or en dashes** in any document, comment, or commit message. Use commas, colons, or periods.
 6. **Small commits** with clear messages, one concern each.
 7. **Cost control.** Every provider call goes through `cost_ledger` with a hard daily cap per provider. A cap of zero means the call is refused.
-8. **Keep the repo private** until I decide on the patent question. Do not publish packages, demos, or posts.
+8. **The repo is public** as a course requirement (changed Nov 3, 2026). Nothing private goes in it: keys, `.env`, recordings of people, `data/`, or `logs/`.
 9. Report plainly. If a step fails, say what you tried and what happened. Do not retry the same failing command more than twice.
 
 ## Hard technical rules (from the research pass)

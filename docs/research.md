@@ -27,7 +27,7 @@ One design tension was decided in the architecture review (MCP carries control o
 8. The budget is rebuilt to about $20 cash, with the Deepgram credit covering development.
 9. Cartesia Pro's 100K credits cover only about 2 hours of agent speech, and word timestamps (needed to truncate context to what was heard) require Cartesia, ElevenLabs, or Rime, not Deepgram Aura.
 10. Spotify is demo only.
-11. Licensing and patentability are now covered in their own sections below.
+11. Licensing is now covered in its own section below.
 12. Hardware cost of a sellable unit is about $300.
 
 ## Requirements and constraints
@@ -376,14 +376,7 @@ This is a checklist for a Philippine IP lawyer, not legal advice. Licences were 
 
 - **Provider terms.** Only two were verified: ElevenLabs' free tier is non-commercial and Cartesia's free tier is for personal use. Bring-your-own-keys is the safest way to sell until the rest are checked.
 - **Spotify.** Terms grant private personal use and bar training machine learning on its content. Development mode allows 5 users and needs Premium. Extended access is for organizations with at least 250K monthly active users. So it is demo only; alternatives (a Subsonic-compatible server, internet radio, local files) were not researched in depth.
-- **Privacy.** An always-on microphone raises Data Privacy Act (RA 10173) obligations that were not researched. Baseline: no stored audio by default, a hardware mute, notice to people in the room, and a consent record.
-
-## Patentability and prior art
-
-- **Law.** Section 22.2 of the Philippine IP Code excludes "programs for computers" as such; IPOPHL's 2018 guidelines for computer-implemented inventions require a technical solution with technical effect (law-firm summaries, not the IPOPHL text). Section 25 gives a 12-month non-prejudicial disclosure window before filing, so a public repo or demo starts a clock.
-- **Prior art found.** Barge-in is old and heavily patented (for example US6882973B1, US7162421B1, US8046221). Truncating context to what was heard is standard practice (OpenAI Realtime, Pipecat). Device-directed speech detection is crowded (US 10978061, arXiv 1808.02504, arXiv 2604.08412). Early end-of-turn (Deepgram Flux), speculative tool calling, and async tools (LiveKit) already exist.
-- **Realistic protection.** Copyright, brand, trade secrets, and the benchmark and tuned prompts are more practical than a patent.
-- **Not researched:** UP Diliman's IP policy, utility models, and individual prior art for four of the five ideas below.
+- **Privacy.** The measures built so far are listed in `docs/privacy.md`.
 
 ## Improvements from the literature
 
@@ -414,7 +407,6 @@ Other findings: v3 shows disfluency is the main failure mode, DuplexCascade show
 | Pipecat API churn | Pre-1.0 examples use removed arguments that are silently ignored | Use only 1.x APIs |
 | Smart Turn false "complete" | 3.75% for English cuts people off | Incomplete-turn fallback and a recovery phrase |
 | Licence limits on a product | TEN VAD, Spotify, and a non-commercial benchmark | See the licensing section |
-| Disclosure starts a patent clock | A public repo or demo starts the 12-month window | Keep the repo private until decided |
 | Unverified vendor numbers | Latency and accuracy claims come from vendors and press | Reproduce from the Pi on the venue network before citing |
 | Security of tools that act | Calls, purchases, and shell commands run from a voice | Least privilege, approval for high-stakes actions, and logging every tool call, per the Agents deck |
 
@@ -425,7 +417,6 @@ Other findings: v3 shows disfluency is the main failure mode, DuplexCascade show
 - Can Pipecat's SmallWebRTC transport drive Full-Duplex-Bench v2's examiner? (v3 covers tool use.)
 - Is the PR that widens Pipecat's MCP SDK support merged?
 - Which provider terms (Deepgram, Groq, Anthropic, Google, OpenRouter, Ollama Cloud) allow resale and what do they say about audio retention?
-- UP Diliman's IP policy for team coursework, and Data Privacy Act specifics, were not researched.
 - How is the no-wake-word requirement graded: by false-trigger rate, or by a wake word after idle being acceptable?
 - Which 10 base commands and which complex task will the class settle on at Thursday's meeting?
 - A music source that could back a product (see licensing).
@@ -434,7 +425,7 @@ Other findings: v3 shows disfluency is the main failure mode, DuplexCascade show
 
 Prof. Atienza's Agents and Efficiency decks are the course material. Outside references, not part of Prof's lectures and used for ideas only: the LiveKit and DeepLearning.AI voice-agent slides and Anthony's AI-generated course guide. Also used: the class group chat (Oct 20 to 21, 2026) and the Full-Duplex-Bench v1 ([arXiv 2503.04721](https://arxiv.org/abs/2503.04721)) and v1.5 papers.
 
-Added in this revision (verification pass): [Pipecat MCPClient reference](https://reference-server.pipecat.ai/en/latest/api/pipecat.services.mcp_service.html), [Pipecat user turn strategies](https://docs.pipecat.ai/api-reference/server/utilities/turn-management/user-turn-strategies), [Smart Turn repository](https://github.com/pipecat-ai/smart-turn), [Pipecat PR 5624](https://github.com/pipecat-ai/pipecat/pull/5624), [Pipecat issue 5605](https://github.com/pipecat-ai/pipecat/issues/5605), [Pipecat issue 670](https://github.com/pipecat-ai/pipecat/issues/670), [Full-Duplex-Bench repository](https://github.com/DanielLin94144/Full-Duplex-Bench), [v3 paper](https://arxiv.org/pdf/2604.04847), [DuplexCascade](https://github.com/sbintuitions/DuplexCascade), [FastMCP changelog](https://gofastmcp.com/changelog), [Spotify terms](https://developer.spotify.com/terms), [Spotify quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes), [TEN VAD licence](https://github.com/TEN-framework/ten-vad/blob/main/LICENSE), [Philippine IP Code](https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/2/4371), [Raspberry Pi 5 product brief](https://pip-assets.raspberrypi.com/categories/892-raspberry-pi-5/documents/RP-008348-DS-6-raspberry-pi-5-product-brief.pdf).
+Added in this revision (verification pass): [Pipecat MCPClient reference](https://reference-server.pipecat.ai/en/latest/api/pipecat.services.mcp_service.html), [Pipecat user turn strategies](https://docs.pipecat.ai/api-reference/server/utilities/turn-management/user-turn-strategies), [Smart Turn repository](https://github.com/pipecat-ai/smart-turn), [Pipecat PR 5624](https://github.com/pipecat-ai/pipecat/pull/5624), [Pipecat issue 5605](https://github.com/pipecat-ai/pipecat/issues/5605), [Pipecat issue 670](https://github.com/pipecat-ai/pipecat/issues/670), [Full-Duplex-Bench repository](https://github.com/DanielLin94144/Full-Duplex-Bench), [v3 paper](https://arxiv.org/pdf/2604.04847), [DuplexCascade](https://github.com/sbintuitions/DuplexCascade), [FastMCP changelog](https://gofastmcp.com/changelog), [Spotify terms](https://developer.spotify.com/terms), [Spotify quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes), [TEN VAD licence](https://github.com/TEN-framework/ten-vad/blob/main/LICENSE), [Raspberry Pi 5 product brief](https://pip-assets.raspberrypi.com/categories/892-raspberry-pi-5/documents/RP-008348-DS-6-raspberry-pi-5-product-brief.pdf).
 
 Web pages opened for the first version of this document:
 

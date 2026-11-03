@@ -24,6 +24,7 @@ You asked for better tools than onit because it is slow on the shared DGX. Three
 
 - The slowness is most likely the model endpoint it is pointed at, not onit itself, but nobody has measured that, and its docs give no latency figure. Its setup takes an endpoint URL, key, and model name, so it can be pointed at a fast commercial endpoint (for example Groq) instead of the DGX. The plan times it against a stub LLM to separate its own overhead from the endpoint.
 - Pipecat takes over the job onit would have done on the voice path (the loop that decides which tool to call). Onit stays useful for the one long task such as building a website, where its shell, file editing, and web search tools matter and a few extra seconds do not. It is a small project (about 10 stars) with no documented programmatic API, so it sits behind our `delegate` MCP server and runs as a subprocess in a per-task sandbox directory. Hermes Agent (MCP both ways, 70+ tools) is an alternative worker, but a review reports 15,000 to 20,000 input tokens of fixed overhead per call, which makes it a poor fit for anything latency-bound.
+- **Nov 3, 2026: OnIt is dropped as the worker.** If `delegate` is built, its worker is our own tool loop on a model chosen then (Haiku 5.5, a model through OpenRouter, or one served by Ollama), using the workspace tools behind the tool policy. Only OnIt's command policy table stays, vendored in `servers/vendor/` for the shell guard (ADR-024).
 - CrewAI is a multi-agent orchestration framework with MCP integration announced in its community forum. It has no audio layer and adds LLM calls, so it does not belong on the voice path. It could be a worker, but onit's built-in shell and file tools fit the website task better.
 
 Pipecat's MCP support is now verified from its own documentation: `MCPClient` supports stdio, SSE, and streamable HTTP, and `register_tools(llm)` converts MCP tool schemas into LLM function calls. Two caveats remain. `MCPClient` has no documented way to surface server notifications (such as `speech_started` or `played_up_to`) as pipeline events, so we need our own bridge (see the MCP section). And the pull request that widens MCP SDK compatibility says only the streamable HTTP path is integration-tested. Gate 1 therefore tests a real spoken tool call over both stdio and HTTP.
@@ -61,7 +62,7 @@ flowchart LR
   PIPE <--> LLM
   VOICE <--> ASR
   VOICE <--> TTS
-  TASK -->|"delegate"| WORKER["Background worker: onit"]
+  TASK -->|"delegate"| WORKER["Background worker: own tool loop"]
 ```
 
 The Pi holds the audio device, VAD, the Pipecat loop, and the MCP servers. The voice servers hold the ASR and TTS connections and the LLM is called from Pipecat, so a model can be swapped without touching the loop. Audio frames travel on a local side channel, and MCP carries only commands and events. The one long task goes to a worker over `delegate`, so the loop keeps listening while it runs.
@@ -168,7 +169,7 @@ Audio frames travel on a local side channel between the audio device, VAD, and t
 | `notes` | `add_reminder`, `list_reminders`, `add_to_list`, `read_list` | Reminders and lists | Local SQLite |
 | `comms` | `call`, `send_message` | Calls and messaging | Mock first; Bluetooth to the iPhone is the Tier 2 stretch from the VCM plan |
 | `knowledge` | `web_search`, `fetch_page` | Ask a question or search | A search API; provider not yet chosen |
-| `delegate` | `start_task`, `task_status`, `task_result`, `cancel_task` | The random complex task | Returns a task id at once; a worker agent (onit is the candidate) runs it as a subprocess in a per-task sandbox and the voice agent reports back when it finishes. We use our own task ids and polling, not the MCP tasks extension (SEP-2663), because Pipecat's client is unlikely to support it (unverified). |
+| `delegate` | `start_task`, `task_status`, `task_result`, `cancel_task` | The random complex task | Returns a task id at once; a worker loop (our own, on a model not yet chosen) runs it in the background with the workspace tools and the voice agent reports back when it finishes. We use our own task ids and polling, not the MCP tasks extension (SEP-2663), because Pipecat's client is unlikely to support it (unverified). |
 
 ### Rules for all servers
 
@@ -204,7 +205,7 @@ An always-open microphone with streaming ASR bills for speech the VAD lets throu
 - A daily spend cap in the harness that mutes the agent and says so when reached.
 - A mute switch (physical button or voice command) and a visible indicator, since a room full of people is being streamed to a cloud ASR. Anyone present should know.
 - A config flag `require_wake_after_idle` that restores your fallback (a wake word after idle) without code changes, kept off by default and used during development when the room is noisy.
-- A privacy baseline: no audio stored by default, a hardware mute switch with an indicator light, a written notice to everyone in the room, provider settings that opt out of training and retention where available, and a consent record.
+- No audio stored, and a mute that stops the mic before the cloud. `docs/privacy.md` lists what is built.
 
 ### How we test it
 
@@ -387,21 +388,13 @@ Only two provider terms were verified: ElevenLabs' free tier is limited to non-c
 
 Spotify's developer terms grant a licence for private personal use and say that commercial deployment is not granted; they bar using Spotify content to train machine learning models and bar selling Spotify content or data. Development mode allows up to five authorized users, requires the app owner to have Premium, and is for non-commercial use by individual developers. Extended access takes organizations only, with at least 250k monthly active users, an established business, and commercial viability, and review can take up to six weeks. So Spotify is fine for the class demo and not for a product.
 
-### Patentability and prior art
-
-- **Law.** Section 22.2 of the Philippine IP Code excludes "programs for computers" and methods of doing business. IPOPHL's 2018 guidelines for computer-implemented inventions allow protection only for a genuine technical solution with technical effect, and claims should tie program instructions to a device (these are law-firm summaries, not the IPOPHL text).
-- **Disclosure clock.** Section 25 gives inventors a 12-month non-prejudicial disclosure window before filing. Any public demo, repo, or report starts that clock, so decide before Nov 7 whether the repo stays private.
-- **Ownership.** UP Diliman's IP policy for student and team coursework was not researched. Co-ownership with teammates and the university's rules need settling before anything is sold or filed.
-- **Prior art.** Barge-in itself is old, heavily patented art (for example US6882973B1, US7162421B1, and US8046221). Truncating context to what was heard is standard practice (OpenAI Realtime `conversation.item.truncate`, Pipecat's word-timestamp aggregation). Device-directed speech detection without a wake word is also crowded (for example US10978061, arXiv 1808.02504, and arXiv 2604.08412). Early end-of-turn (Deepgram Flux eager end-of-turn), speculative tool calling, and async tools (LiveKit) already exist.
-- **Realistic protection.** Copyright on our own code, the brand name, trade secrets, the benchmark and tuned prompts, and integrations for a specific user group are more practical than a patent.
-
 ### Privacy
 
-An always-listening microphone raises obligations under the Philippines Data Privacy Act (RA 10173), which were not researched in detail. The baseline is in the No wake word section: no audio stored by default, a hardware mute with an indicator, notice to everyone in the room, provider opt-outs, and a consent record.
+The measures built so far are listed in `docs/privacy.md`.
 
 ## Improvements to test
 
-These are candidate upgrades that the benchmark can prove or kill. Each one has a metric so the evidence is collected from the start. None is known to be novel: the search for prior art was shallow, and only idea 1 had no direct match.
+These are candidate upgrades that the benchmark can prove or kill. Each one has a metric so the evidence is collected from the start. None is claimed as new: related work was searched only briefly, and only idea 1 had no direct match.
 
 | # | Idea | Metric that would prove it | Prior art found |
 | --- | --- | --- | --- |
@@ -584,8 +577,7 @@ This is tight. The real voice servers and audio side channel have no slot, so th
 | Promotional prices end | Nova-3 and Flux rates are marked promotional | Recheck on the day we commit |
 | Full-Duplex-Bench is non-commercial | CC BY-NC 4.0 limits commercial benchmarking claims | Coursework use only; ask permission before any commercial claim |
 | Spotify cannot back a product | Five-user development mode and a 250k-user extended tier | Demo only; research another music source before selling |
-| Public disclosure starts the patent clock | A 12-month window applies after any public release | Keep the repo private until the patent decision |
-| Privacy of always-on audio | Room occupants are streamed to cloud ASR | Privacy baseline: no stored audio, hardware mute, notice, opt-outs, consent record |
+| Privacy of always-on audio | Room occupants are streamed to cloud ASR | No stored audio, a mute before the cloud, and the measures in `docs/privacy.md` |
 | The deadline moves or the command list changes on Thursday | The plan is counted back from Nov 7 | Confirm the date in Google Classroom; keep task servers small and swappable |
 
 ### Open decisions
@@ -594,11 +586,11 @@ This is tight. The real voice servers and audio side channel have no slot, so th
 - **Search provider** for the `knowledge` server. Not chosen.
 - **Light control.** Whether the Xiaomi bulb can be controlled locally or only through the cloud. Not checked.
 - **Default models.** ASR, TTS, and LLM defaults come out of the comparison, not before it. The starting stack is only a starting point.
-- **Where the worker runs.** onit on the Pi, on a laptop, or on the DGX. The Pi is the cheapest, but a long task such as a website build may be better off elsewhere.
+- **Which model the worker uses,** if `delegate` is built: Haiku 5.5, a model through OpenRouter, or one served by Ollama. Not decided (Nov 3).
 - **Whether the class shares one benchmark clip set.** The class chat suggested a common benchmark; if the class agrees on one, ours becomes the adapter for it.
 - **Echo hardware.** Which speakerphone to use, and whether the VCM plan's Anker device is good enough.
 - **Music source** for a sellable product.
-- **Not researched:** UP Diliman's IP policy, Data Privacy Act specifics, utility models, provider terms other than ElevenLabs and Cartesia free tiers, and the licences of LiveKit, Moshi, PersonaPlex, and the Qwen ASR weights.
+- **Not researched:** provider terms other than ElevenLabs and Cartesia free tiers, and the licences of LiveKit, Moshi, PersonaPlex, and the Qwen ASR weights.
 
 ### Sources
 
@@ -608,7 +600,7 @@ The research document for this project holds the full source list. Key sources f
 - Smart Turn: [repository](https://github.com/pipecat-ai/smart-turn), [v3 announcement](https://www.daily.co/blog/announcing-smart-turn-v3-with-cpu-inference-in-just-12ms/)
 - Harness and MCP: [onit](https://github.com/sibyl-oracles/onit), [baby-onit](https://github.com/sibyl-oracles/baby-onit), [FastMCP changelog](https://gofastmcp.com/changelog), [FastMCP background tasks notes](https://github.com/PrefectHQ/fastmcp/blob/main/dev-docs/v4-notes/background-tasks.md)
 - Benchmarks: [Full-Duplex-Bench repository](https://github.com/DanielLin94144/Full-Duplex-Bench), [v1 paper](https://arxiv.org/html/2503.04721), [v2 paper](https://arxiv.org/html/2510.07838v2), [v3 paper](https://arxiv.org/pdf/2604.04847), [DuplexCascade](https://github.com/sbintuitions/DuplexCascade)
-- Licences and IP: [Spotify developer terms](https://developer.spotify.com/terms), [Spotify quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes), [TEN VAD licence](https://github.com/TEN-framework/ten-vad/blob/main/LICENSE), [Philippine IP Code (RA 8293)](https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/2/4371), [law firm summary on computer programs](https://ndvlaw.com/are-computer-programs-and-business-methods-patentable-in-the-philippines/), [IPOPHL guidelines summary](https://managingip.com/article/2a5c27nzm5t1nkcnbvqps/the-philippines-examination-guidelines-for-ict-and-computer-related-inventions)
+- Licences and IP: [Spotify developer terms](https://developer.spotify.com/terms), [Spotify quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes), [TEN VAD licence](https://github.com/TEN-framework/ten-vad/blob/main/LICENSE)
 - Pricing (third-party aggregators unless noted): [Deepgram](https://scored.tools/blog/deepgram-pricing-plans-2026/), [Cartesia](https://www.cekura.ai/blogs/cartesia-pricing), [Groq](https://flexprice.io/pricing-index/groq), [Claude Haiku 5.5](https://www.marktechpost.com/2026/10/07/anthropic-releases-claude-haiku-5-5-a-small-model-with-1m-context-priced-at-0-10-per-million-input-tokens/), [Raspberry Pi 5 product brief](https://pip-assets.raspberrypi.com/categories/892-raspberry-pi-5/documents/RP-008348-DS-6-raspberry-pi-5-product-brief.pdf), [Jabra Speak2 40](https://www.bhphotovideo.com/c/product/1759848-REG/jabra_2740_209_speak2_40_speakerphone_for.html)
 
 LiveKit and the DeepLearning.AI voice agent course are outside references, used for ideas only. Figures taken from third parties (NVIDIA's VoiceChat numbers, the Hermes overhead, Groq and Anthropic pricing aggregators) are marked as such where they appear above.

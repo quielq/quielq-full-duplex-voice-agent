@@ -13,7 +13,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 5. No em dashes or en dashes in documents, comments, or commit messages. Use commas, colons, or periods.
 6. Small commits, one concern each, with clear messages.
 7. Every provider call goes through `bench/cost_ledger.py` with a hard daily cap per provider. A cap of zero refuses the call.
-8. The repo stays private until the patent decision. Publish nothing (packages, demos, posts).
+8. The repo is public as a course requirement (Nov 3, 2026). Nothing private goes in it: keys, `.env`, recordings of people, `data/`, or `logs/`.
 9. Report plainly. If a step fails, say what was tried and what happened. Do not retry the same failing command more than twice.
 
 ## Hard technical rules
