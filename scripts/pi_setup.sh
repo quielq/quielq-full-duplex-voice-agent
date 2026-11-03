@@ -38,6 +38,11 @@ if [[ ! -e .env ]]; then
   echo "created .env: add the keys by hand"
 fi
 
+# Full gain made the bot hear itself on Nov 2. PipeWire keeps this across reboots.
+if command -v wpctl >/dev/null; then
+  wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 0.5 || echo "could not set the mic gain: set it to 50% by hand"
+fi
+
 if [[ "$service" == true ]]; then
   units="$HOME/.config/systemd/user"
   mkdir -p "$units" "$HOME/.config/me3" "$HOME/.config/labwc"
