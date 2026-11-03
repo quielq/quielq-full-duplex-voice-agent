@@ -22,6 +22,7 @@ class AudioHops:
         self._clock = clock
         self._window_start: float | None = None
         self._last_arrival: float | None = None
+        self._last_activity: float | None = None
         self._backlog_ms = 0.0
         self._clear()
 
@@ -35,6 +36,7 @@ class AudioHops:
 
     def on_arrival(self, nbytes: int, sample_rate: int) -> None:
         now = self._clock()
+        self._close_if_idle(now)
         if self._last_arrival is not None and now - self._last_arrival < MAX_SPEECH_GAP_S:
             self._arrival_max_gap_ms = max(self._arrival_max_gap_ms, (now - self._last_arrival) * 1000)
         self._last_arrival = now
@@ -44,6 +46,7 @@ class AudioHops:
         self._tick(now)
 
     def on_write(self, nbytes: int, sample_rate: int, seconds: float) -> None:
+        self._close_if_idle(self._clock())
         speech_ms = nbytes / 2 / sample_rate * 1000
         self._written_ms += speech_ms
         self._backlog_ms -= speech_ms
@@ -56,12 +59,28 @@ class AudioHops:
         """An interruption dropped whatever had not played."""
         self._backlog_ms = 0.0
 
+    def _close_if_idle(self, now: float) -> None:
+        """A wait between replies is not slow speech, so it never joins a window."""
+        last = self._last_activity
+        if self._window_start is None or last is None or now - last <= self._window_s:
+            return
+        if self._written_ms or self._arrived_ms:
+            self._emit(last - self._window_start)
+        self._window_start = None
+        self._clear()
+
     def _tick(self, now: float) -> None:
+        self._last_activity = now
         if self._window_start is None:
             self._window_start = now
         elapsed = now - self._window_start
         if elapsed < self._window_s:
             return
+        self._emit(elapsed)
+        self._window_start = now
+        self._clear()
+
+    def _emit(self, elapsed: float) -> None:
         self._on_event(
             "audio_hop",
             window_ms=round(elapsed * 1000),
@@ -73,8 +92,6 @@ class AudioHops:
             arrival_max_gap_ms=round(self._arrival_max_gap_ms),
             backlog_ms=round(self._backlog_ms),
         )
-        self._window_start = now
-        self._clear()
 
 
 class HopTimedTTS:

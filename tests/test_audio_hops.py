@@ -42,7 +42,22 @@ def test_arrival_gap_is_reported_but_a_quiet_bot_is_not():
     assert events[0][1]["arrival_max_gap_ms"] == 600
     clock.now = 60.0
     hops.on_arrival(320, 16000)
+    clock.now = 61.0
+    hops.on_write(320, 16000, 0.01)
     assert events[1][1]["arrival_max_gap_ms"] == 0
+
+
+def test_a_wait_between_replies_is_not_slow_speech():
+    hops, events, clock = _hops()
+    hops.on_write(9600, 24000, 0.04)
+    clock.now = 0.5
+    hops.on_write(9600, 24000, 0.04)  # the reply ends here
+    clock.now = 15.0
+    hops.on_arrival(3200, 16000)
+    assert len(events) == 1 and events[0][1]["window_ms"] == 500 and events[0][1]["written_ms"] == 400
+    clock.now = 16.0
+    hops.on_arrival(32000, 16000)
+    assert events[1][1]["window_ms"] == 1000 and events[1][1]["arrived_ms"] == 1100
 
 
 def test_interruption_clears_the_backlog():
