@@ -481,13 +481,13 @@ Versions 1 and 1.5 are offline: they supply a user-channel wav and expect a time
 
 ### Definitions
 
-- **End-to-end latency:** the end of user speech (a ground-truth label in playback tests) to the first non-silent output sample at the device.
+- **End-to-end latency:** the end of user speech (a ground-truth label in playback tests) to the first non-silent output sample at the device. As built (ADR-036): the last input sample over a threshold before end of turn, to the play time of the first TTS sample over a threshold at the output, both logged by `harness/audio_marks.py`. The thinking phrase is told apart by its frame class and never counts.
 - **Stop latency:** interrupter speech onset to output silence, measured acoustically with a loopback mic.
 - **Tool latency:** tool call emitted to tool result.
 - **Task success:** a scripted judge per task.
 - **Cost per successful task:** total provider spend for the session divided by successful tasks, from usage metadata.
 
-Pipecat's metrics frames give per-service time to first byte. Use them for attribution, but take headline numbers from audio timestamps.
+Pipecat's metrics frames give per-service time to first byte. Use them for attribution, but take headline numbers from audio timestamps. `bench/latency_probe.py` reports both: the headline from the audio marks, and the per-stage deltas from framework events as attribution.
 
 ### Run protocol
 
@@ -498,6 +498,8 @@ This follows the method in Prof's Efficiency deck: warm up, time inside a loop, 
 3. Report p50, p90, and p95, not only the mean, and plot a stacked per-stage bar (VAD, end-of-turn, ASR, LLM, TTS, network) so the slow stage is obvious.
 4. Record the environment with every run: network round trip to each provider, Pi temperature, model and provider versions, and cost.
 5. Change one thing at a time (ASR, LLM, or TTS) so differences can be attributed.
+
+As built (ADR-036): `bench/latency_bench.py` runs N scripted wav turns per session, half with a tool and half without, each turn starting once the bot has replied and been quiet. `bench/latency_probe.py` takes several event logs or run ids, drops the first three turns of each session, and prints p50, p90, and p95 for all, no-tool, and tool turns, the stage attribution, and cost per turn from the ledger. The full report goes to `logs/latency-<time>.json`. Random order, two times of day, and the environment record are still for the person running it.
 
 ### Scoring
 
