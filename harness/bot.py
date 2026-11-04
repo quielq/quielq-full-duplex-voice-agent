@@ -11,6 +11,9 @@ Inputs:
 
 Every stage uses a free fake unless configs/providers.yaml selects a real provider
 whose daily cap is above zero.
+
+Agents (ADR-039): --agent picks one for a scripted run. With the robot face on a live mic, the
+face picks it instead, and choosing another ends the session and starts the next one with it.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from loguru import logger
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.frames.frames import LLMMessagesAppendFrame, TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
@@ -47,6 +51,7 @@ from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
 from bench.cost_ledger import CostLedger
+from harness.agents import DOCUMENT_TOOLS, Agent, AgentStore, prompt_for, seed_documents, session_config
 from harness.addressing import (
     ADDRESSING_PROMPT,
     Addressing,
@@ -255,8 +260,17 @@ async def run_bot(
     last_reply_timeout_s: float | None = None,
     handle_sigint: bool = True,
     servers: dict[str, str] | None = None,
+    agent: Agent | None = None,
+    ui: UiServer | None = None,
 ) -> BotResult:
+    """One session. ``ui`` is a face that outlives the session (the agent loop in main); without
+    it the session starts and stops its own face when the profile turns the face on."""
     log = EventLog(cfg.path("logs_dir"))
+    doc_scope = None
+    if agent is not None:
+        log.emit("agent", id=agent.id, kind=agent.kind, model=agent.model, documents=agent.documents)
+        if agent.kind == "documents":
+            servers, doc_scope = {"docs": TASK_SERVERS["docs"]}, agent.documents
     ledger = CostLedger.from_providers_config(
         cfg.providers, cfg.path("data_dir") / "cost_ledger.jsonl"
     )
@@ -289,17 +303,18 @@ async def run_bot(
     turn_obs.policy = policy
 
     ui_cfg = cfg.profile["ui"]
-    ui: UiServer | None = None
-    if ui_cfg["enabled"]:
+    owns_ui = ui is None and ui_cfg["enabled"]
+    if owns_ui:
         ui = UiServer(UiState(Path(data_dir) if data_dir else cfg.path("data_dir")), ui_cfg["host"], ui_cfg["port"])
-        log.listeners.append(ui.state.on_event)
-        turn_obs.on_text = ui.state.on_text
         await ui.start()
         logger.info(f"robot face at http://{ui_cfg['host']}:{ui_cfg['port']}")
         if ui_cfg["spotify_player"]:
-            ui.state.spotify_player = True
-            ui.spotify_token = SpotifyBackend().access_token
-            ui.on_player_status = lambda state, detail: log.emit("spotify_player", state=state, detail=detail)
+            _spotify_player(ui, log)
+    if ui:
+        log.listeners.append(ui.state.on_event)
+        turn_obs.on_text = ui.state.on_text
+        if agent is not None:
+            ui.state.set_agent(agent)
 
     addressing = _addressing(cfg, log)
     stayed_silent = False
@@ -318,10 +333,12 @@ async def run_bot(
         log.emit("shutdown_step", step=step, ms=round((now - last_step) * 1000))
         last_step = now
 
-    async with task_clients(mcp_transport, data_dir, servers) as clients:
+    async with task_clients(mcp_transport, data_dir, servers, doc_scope) as clients:
         # The system prompt lives on the LLM service (system messages in LLMContext are
         # deprecated since Pipecat 1.9).
         tools = await policy.tools(clients)
+        if doc_scope is not None:  # a document agent sees its search tools and nothing else
+            tools = ToolsSchema(standard_tools=[t for t in tools.standard_tools if t.name in DOCUMENT_TOOLS])
         if addressing:
             tools.standard_tools.append(addressing.tool(on_silent))
         context = LLMContext(tools=tools)
@@ -333,7 +350,8 @@ async def run_bot(
             # exactly what a dropped utterance leaves behind (ADR-016).
             user_params.empty_user_turn = None
         aggregators = LLMContextAggregatorPair(context, user_params=user_params)
-        prompt = f"{SYSTEM_PROMPT} {ADDRESSING_PROMPT}" if addressing else SYSTEM_PROMPT
+        base_prompt = prompt_for(agent, SYSTEM_PROMPT) if agent else SYSTEM_PROMPT
+        prompt = f"{base_prompt} {ADDRESSING_PROMPT}" if addressing else base_prompt
         llm = build_llm(cfg.providers, ledger, system_instruction=prompt)
         hops = AudioHops(log.emit)
         voice = {"transport": mcp_transport, "data_dir": str(cfg.path("data_dir")), "on_event": log.emit}
@@ -482,6 +500,20 @@ async def run_bot(
             if ui:
                 ui.on_mute = toggle_mute
 
+        if ui:
+            async def screen_tool(tool: str, args: dict) -> dict:
+                result = await policy.run_from_screen(tool, args)
+                log.emit("ui_action", tool=tool, args=args, result=result)
+                return result
+
+            async def switch_agent() -> None:
+                log.emit("agent_switch_requested")
+                await worker.cancel(reason="agent switch")
+
+            ui.on_screen_tool = screen_tool
+            ui.on_switch = switch_agent
+            ui.state.screen_tools = policy.screen_tools()
+
         runner = WorkerRunner(handle_sigint=handle_sigint)
         await runner.add_workers(worker)
         finisher = None
@@ -506,6 +538,11 @@ async def run_bot(
             if network:
                 await network.close()
             if ui:
+                ui.on_screen_tool = ui.on_switch = ui.on_mute = None
+                ui.state.screen_tools = []
+                with contextlib.suppress(ValueError):
+                    log.listeners.remove(ui.state.on_event)
+            if owns_ui:
                 await ui.stop()
                 shutdown("ui")
 
@@ -525,6 +562,39 @@ async def run_bot(
         context_messages=list(context.get_messages()),
         output=output,
     )
+
+
+def _spotify_player(ui: UiServer, log: EventLog | None = None) -> None:
+    ui.state.spotify_player = True
+    ui.spotify_token = SpotifyBackend().access_token
+    if log is not None:
+        ui.on_player_status = lambda state, detail: log.emit("spotify_player", state=state, detail=detail)
+
+
+async def run_agents(cfg: Config, **kwargs) -> BotResult:
+    """Live sessions behind one robot face, one agent at a time (ADR-039). Picking another agent
+    on the face ends the session; this starts the next with the new agent. Ctrl-C ends it all."""
+    ui_cfg = cfg.profile["ui"]
+    data = cfg.path("data_dir")
+    store = AgentStore(data, cfg.providers)
+    ui = UiServer(UiState(data), ui_cfg["host"], ui_cfg["port"])
+    ui.agents = store
+    if ui_cfg["spotify_player"]:
+        _spotify_player(ui)
+    await ui.start()
+    logger.info(f"robot face at http://{ui_cfg['host']}:{ui_cfg['port']}")
+    result = None
+    try:
+        while True:
+            agent = store.active()
+            if result is not None:
+                ui.state.set_agent(agent, announce=True)
+            logger.info(f"agent: {agent.name} ({agent.model})")
+            result = await run_bot(session_config(cfg, agent), agent=agent, ui=ui, **kwargs)
+            if not ui.state.switching:
+                return result
+    finally:
+        await ui.stop()
 
 
 def main() -> None:
@@ -547,6 +617,9 @@ def main() -> None:
     ap.add_argument("--ui", action="store_true", help="serve the robot face (harness/ui.py, ADR-027)")
     ap.add_argument("--spotify-player", action="store_true", help="play Spotify in the face page (ADR-031)")
     ap.add_argument("--servers", default="", help=f"task servers, default all: {','.join(TASK_SERVERS)}")
+    ap.add_argument("--agent", default="", help="agent id from configs/agents.yaml or the face's builder (ADR-039)")
+    ap.add_argument("--model", default="", help="a model from providers.openrouter.models, or direct, for this "
+                    "run's agent instead of its own; live runs only, a fake LLM stays fake (ADR-040)")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
         ap.error("--input wav needs --wav")
@@ -587,11 +660,25 @@ def main() -> None:
         ap.error(f"unknown servers {sorted(unknown)}")
     servers = {n: TASK_SERVERS[n] for n in names} or None
 
+    data = cfg.path("data_dir")
+    if copied := seed_documents(data / "documents"):
+        print(f"copied {len(copied)} sample documents into {data / 'documents'}")
+    store = AgentStore(data, cfg.providers)
+    face_picks = args.input == "mic" and cfg.profile["ui"]["enabled"]
     try:
-        result = asyncio.run(
-            run_bot(cfg, input_mode=args.input, mcp_transport=args.mcp,
-                    say=args.say, wav=args.wav, servers=servers)  # fmt: skip
-        )
+        # A scripted run uses --agent or the default, never the face's last pick.
+        agent = store.get(args.agent) if args.agent else store.builtins()[store.default_id]
+        agent = store.with_model(agent, args.model or None)
+        if face_picks and (args.agent or args.model):
+            store.set_active(agent.id, args.model or None)
+    except ValueError as e:
+        ap.error(str(e))
+    common = dict(input_mode=args.input, mcp_transport=args.mcp, say=args.say, wav=args.wav, servers=servers)
+    try:
+        if face_picks:
+            result = asyncio.run(run_agents(cfg, **common))
+        else:
+            result = asyncio.run(run_bot(session_config(cfg, agent), agent=agent, **common))
     except EchoRisk as e:
         raise SystemExit(f"refused: {e}") from None
     print(f"run {result.run_id}")

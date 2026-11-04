@@ -46,7 +46,7 @@ SERVER_KEYS = {
 }
 
 
-def _server_env(data_dir: str | None, module: str = "") -> dict[str, str]:
+def _server_env(data_dir: str | None, module: str = "", extra: dict[str, str] | None = None) -> dict[str, str]:
     allowed = SERVER_KEYS.get(module, set())
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY") or k in allowed}
     if module != TASK_SERVERS["music"]:  # Spotify credentials reach only music (ADR-022)
@@ -55,6 +55,8 @@ def _server_env(data_dir: str | None, module: str = "") -> dict[str, str]:
         env.pop("ME3_PHONE_BRIDGE_TOKEN", None)
     if data_dir:
         env["ME3_DATA_DIR"] = data_dir
+    env.pop("ME3_DOC_SCOPE", None)  # set only by an agent, below, never inherited
+    env.update(extra or {})
     return env
 
 
@@ -88,13 +90,15 @@ async def _wait_for_port(port: int, proc: subprocess.Popen, timeout: float = 20.
 
 
 @contextlib.asynccontextmanager
-async def http_server(module: str, data_dir: str | None = None) -> AsyncIterator[str]:
+async def http_server(
+    module: str, data_dir: str | None = None, extra: dict[str, str] | None = None
+) -> AsyncIterator[str]:
     """Start one of our FastMCP servers over streamable HTTP on loopback; yield its URL."""
     port = _free_port()
     proc = subprocess.Popen(
         [sys.executable, "-m", module, "--transport", "http", "--port", str(port)],
         cwd=REPO_ROOT,
-        env=_server_env(data_dir, module),
+        env=_server_env(data_dir, module, extra),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -124,18 +128,18 @@ async def clock_client(transport: str, data_dir: str | None = None) -> AsyncIter
 
 @contextlib.asynccontextmanager
 async def server_client(
-    module: str, transport: str, data_dir: str | None = None
+    module: str, transport: str, data_dir: str | None = None, extra: dict[str, str] | None = None
 ) -> AsyncIterator[MCPClient]:
     if transport == "stdio":
         params = StdioServerParameters(
             command=sys.executable,
             args=["-m", module],
             cwd=str(REPO_ROOT),
-            env=_server_env(data_dir, module),
+            env=_server_env(data_dir, module, extra),
         )
         yield MCPClient(server_params=params)
     elif transport == "http":
-        async with http_server(module, data_dir) as url:
+        async with http_server(module, data_dir, extra) as url:
             yield MCPClient(server_params=StreamableHttpParameters(url=url))
     else:
         raise ValueError(f"unknown MCP transport {transport!r}")
@@ -143,14 +147,19 @@ async def server_client(
 
 @contextlib.asynccontextmanager
 async def task_clients(
-    transport: str, data_dir: str | None = None, servers: dict[str, str] | None = None
+    transport: str,
+    data_dir: str | None = None,
+    servers: dict[str, str] | None = None,
+    doc_scope: list[str] | None = None,
 ) -> AsyncIterator[dict[str, MCPClient]]:
-    """One client per task server, keyed by server name."""
+    """One client per task server, keyed by server name. ``doc_scope`` limits the docs server
+    to those folders under data/documents (ADR-039)."""
     clients: dict[str, MCPClient] = {}
     entered = []
     try:
         for name, module in (servers or TASK_SERVERS).items():
-            cm = server_client(module, transport, data_dir)
+            extra = {"ME3_DOC_SCOPE": ",".join(doc_scope)} if doc_scope and module == TASK_SERVERS["docs"] else None
+            cm = server_client(module, transport, data_dir, extra)
             clients[name] = await cm.__aenter__()
             entered.append(cm)
         yield clients

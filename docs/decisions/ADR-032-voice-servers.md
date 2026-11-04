@@ -1,6 +1,6 @@
 # ADR-032: Voice servers that hold the Flux and Cartesia streams
 
-Date: Nov 4, 2026. Status: option B chosen by Quiel on Nov 4, 2026. Built and tested on fakes. Not run live yet.
+Date: Nov 4, 2026. Status: option B chosen by Quiel on Nov 4, 2026. Built and tested on fakes. Run live on the Mac on Nov 4: the interruption bench through `voice-speak`, and an 18 turn mic run through both servers (Results). Not run on the Pi yet.
 
 ## Context
 

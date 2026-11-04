@@ -22,6 +22,7 @@ STAGE_PROVIDER = {
     "voice_speak": "cartesia",   # Cartesia through our voice-speak MCP server (ADR-032)
     "groq": "groq",
     "anthropic": "anthropic",
+    "openrouter": "openrouter",
     "spotify": "spotify",
 }
 
@@ -124,6 +125,20 @@ def build_llm(providers_cfg: dict, ledger: CostLedger, *, system_instruction: st
             api_key=key,
             settings=AnthropicLLMService.Settings(
                 model=p["model"], max_tokens=p["max_tokens"], system_instruction=system_instruction
+            ),
+        )
+    if choice == "openrouter":
+        from pipecat.services.openrouter.llm import OpenRouterLLMService
+
+        _, p, key = _authorize(choice, providers_cfg, ledger)
+        model = p["model"]
+        if model not in (providers_cfg["prices"]["openrouter"].get("by_model") or {}):
+            # The ledger needs a price, or the daily cap would count this model as free.
+            raise SpendRefused(f"openrouter: no price for {model} in providers.yaml")
+        return OpenRouterLLMService(
+            api_key=key,
+            settings=OpenRouterLLMService.Settings(
+                model=model, max_completion_tokens=p["max_tokens"], system_instruction=system_instruction
             ),
         )
     raise ValueError(f"unknown llm stage {choice!r}")

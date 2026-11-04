@@ -55,6 +55,7 @@ STAGE_HOSTS: dict[str, tuple[str, int]] = {
     "voice_speak": ("api.cartesia.ai", 443),
     "anthropic": ("api.anthropic.com", 443),
     "groq": ("api.groq.com", 443),
+    "openrouter": ("openrouter.ai", 443),
 }
 
 Probe = Callable[[str, int, float], Awaitable[bool]]

@@ -50,7 +50,7 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | --- | --- | --- | --- |
 | `clock` | `get_time`, `set_timer`, `set_alarm`, `list_timers`, `cancel_timer` | Real. The bot says when one is due (`harness/timer_watch.py`) | |
 | `notes` | `add_note`, `list_notes`, `delete_note` | Real, SQLite | |
-| `docs` | `index_documents`, `local_search`, `search_document` | Real, SQLite FTS5 | Put files in `data/documents`, which the agent can read but never write |
+| `docs` | `index_documents`, `local_search`, `search_document`, `list_documents`, `read_document` | Real, SQLite FTS5 | Put files in `data/documents`, which the agent can read but never write. A document agent sees only its folders (ADR-039) |
 | `workspace` | `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, `serve_status` | Real, confined to `data/workspace` | |
 | `workspace` | `bash`, `serve` | Mock | `ME3_WORKSPACE_LIVE=1` and a working sandbox |
 | `workspace` | `open_in_browser` | Mock | `ME3_WORKSPACE_LIVE=1`. Runs outside the sandbox, HTML in the workspace only (ADR-026) |
@@ -65,6 +65,26 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | `delegate` | `start_task`, `task_status`, `task_result`, `cancel_task` | Fake worker model. Its file tools are real, in `data/workspace` | `ME3_TOOL_STAGES=delegate=anthropic` (Haiku 5.5, ADR-035) |
 
 `ME3_TOOL_STAGES` takes several at once: `search=tavily,comms=bridge`.
+
+## Voice tools
+
+The voice servers are MCP servers too, but the harness calls them, not the LLM, so they are not in the tool list the model sees and `tool_policy.py` does not hold them. They carry control only. Audio rides a Unix socket per stream, and events are logging notifications on the `voice` logger while `listen` or `speak` is open (ADR-008, ADR-032).
+
+| Server | Tools | Purpose | Status |
+| --- | --- | --- | --- |
+| `voice-listen` | `listen`, `stop_listening`, `status` | Holds one Deepgram Flux stream per `listen` call and sends transcript and turn events | Live on the Mac, Nov 4 (`stt=voice_listen`) |
+| `voice-speak` | `speak`, `stop`, `status` | Holds one Cartesia stream per `speak` call, with word timestamps for `played_up_to` | Live on the Mac, Nov 4 (`tts=voice_speak`) |
+| stubs | the above, plus `duck` and `unduck` in `voice-speak` | The bridge probe (ADR-008). Ducking and playback stay in the harness, so `duck` and `unduck` exist only here | Fakes only |
+
+Their limits:
+
+- **Key stays in the server.** `SERVER_KEYS` in `harness/mcp_tools.py` gives `voice-listen` only the Deepgram key and `voice-speak` only the Cartesia key. The harness never sees them.
+- **Fixed upstream.** The provider address is fixed per server, and the harness supplies only a `key=value` query string, so a caller cannot point the key anywhere else. Tests may name a loopback upstream through an environment variable, and nothing else.
+- **Private socket.** Each stream gets a socket in a 0700 folder, set to 0600, and the first frame must be a one-time token compared in constant time.
+- **Cost ledger.** Each `listen` or `speak` call checks the provider's daily cap before it opens a stream.
+- **Recovery.** A dropped stream is reopened by Pipecat's reconnect logic through a new call, and a dead server is restarted. Tested on fakes, stdio and HTTP.
+
+Proven live on Nov 4: an 18 turn mic run through both servers (`20261104-202417-64248a`, $0.21), where both streams stayed up for the whole 5 minute run and voice interruption worked, and the interruption bench through `voice-speak` (`20261104-202147-ab3d44`, $0.0246, 9 words heard, 10 committed). The stored waiting, network-loss, and cap clips were also made through `voice-speak`. Not yet run on the Pi.
 
 ## Add a tool
 

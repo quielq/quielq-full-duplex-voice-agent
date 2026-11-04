@@ -6,9 +6,14 @@ server-sent events. The page is one self-contained file with no outside requests
 still works when the network does not. The Spotify player is a separate file, loaded only when
 ``ui.spotify_player`` is on (ADR-031).
 
-Lights and the thermostat are read from the same JSON files their mock servers write. The panel
-only displays them: the voice path stays the one way to change anything, so the tool policy
-cannot be bypassed from the screen. The one control is the mic mute, and the player only plays.
+Lights and the thermostat are read from the same JSON files their mock servers write. The
+controls are the mic mute, the music buttons, a tap on a light to turn it on or off, the
+thermostat's step buttons, and the agent picker and builder (ADR-038, ADR-039). A tap runs its
+tool through ``ToolPolicy.run_from_screen``, which refuses anything the voice path would hold
+or ask about, so the screen never skips a question.
+
+The page gets two kinds of server-sent event: the state, whenever it changes, and the chat
+history, only when a turn is added. Streaming reply text so never resends the history.
 
     uv run python -m harness.ui --demo     # every expression in turn, no bot, no spend
 """
@@ -20,13 +25,15 @@ import asyncio
 import contextlib
 import json
 import time
-from collections.abc import Callable
+from collections import deque
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from aiohttp import web
 
+from harness.agents import Agent, AgentError, AgentStore
 from harness.config import REPO_ROOT, load_config
 from servers.tasks.music.backends import MusicError
 from servers.tasks.lights.server import DEFAULT as DEFAULT_LIGHTS
@@ -35,6 +42,12 @@ from servers.tasks.thermostat.server import DEFAULT as DEFAULT_THERMOSTAT
 PAGE = Path(__file__).with_name("ui_page.html")
 PLAYER_SCRIPT = Path(__file__).with_name("ui_spotify.js")
 MOOD_HOLD_S = 3.0
+HISTORY_TURNS = 40
+HISTORY_CHARS = 600
+TIMERS_SHOWN = 4
+# The screen's music buttons. Every tool a tap may run is in tool_policy.SCREEN_TOOLS (ADR-038).
+MUSIC_BUTTONS = {"pause": "stop_music", "play": "resume_music", "next": "next_track"}
+THERMOSTAT_STEP_C = 0.5
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 SORRY_WORDS = ("sorry", "i can't", "i cannot", "i couldn't", "unfortunately")
 ANGRY_DECISIONS = {"denied_guard", "denied_contained", "contained"}
@@ -84,13 +97,38 @@ def _read_json(path: Path, default: dict) -> dict:
     return default
 
 
+class _FileCache:
+    """Re-read a JSON file only when it changes: the state is polled ten times a second."""
+
+    def __init__(self):
+        self._seen: dict[Path, tuple[tuple[float, int] | None, dict]] = {}
+
+    def read(self, path: Path, default: dict) -> dict:
+        try:
+            st = path.stat()
+            key = (st.st_mtime, st.st_size)
+        except OSError:
+            key = None
+        cached = self._seen.get(path)
+        if cached and cached[0] == key:
+            return cached[1]
+        value = _read_json(path, default) if key else default
+        self._seen[path] = (key, value)
+        return value
+
+
+_files = _FileCache()
+
+
 def read_devices(data_dir: Path, now: float) -> dict:
-    timers = _read_json(data_dir / "clock.json", {})
+    timers = _files.read(data_dir / "clock.json", {})
     pending = sorted((i for i in timers.values() if i["fires_at"] > now), key=lambda i: i["fires_at"])
     return {
-        "lights": list(_read_json(data_dir / "lights.json", DEFAULT_LIGHTS).values()),
-        "thermostat": _read_json(data_dir / "thermostat.json", DEFAULT_THERMOSTAT),
-        "timers": [{"kind": i["kind"], "label": i["label"], "fires_at": i["fires_at"]} for i in pending[:3]],
+        "lights": list(_files.read(data_dir / "lights.json", DEFAULT_LIGHTS).values()),
+        "thermostat": _files.read(data_dir / "thermostat.json", DEFAULT_THERMOSTAT),
+        "timers": [{"kind": i["kind"], "label": i["label"], "fires_at": i["fires_at"],
+                    "created_at": i.get("created_at")} for i in pending[:TIMERS_SHOWN]],  # fmt: skip
+        "timers_more": max(0, len(pending) - TIMERS_SHOWN),
     }
 
 
@@ -113,6 +151,34 @@ class UiState:
         self.network_down = False   # set and cleared only by the network events (ADR-037)
         self._new_reply = True
         self._awaiting_answer = False
+        self.agent: dict = {"id": "generalist", "name": "Generalist", "color": "#7fd3ee", "kind": "generalist",
+                            "model": "direct"}
+        self.screen_tools: list[str] = []  # what a tap may run in this session; set by the bot
+        self.switching = ""
+        self.history: deque[dict] = deque(maxlen=HISTORY_TURNS)
+        self.history_version = 0
+        self._reply_open = False
+
+    def set_agent(self, agent: Agent, *, announce: bool = False) -> None:
+        self.agent = {"id": agent.id, "name": agent.name, "color": agent.color, "kind": agent.kind,
+                      "model": agent.model}
+        self.switching = ""
+        if announce:
+            self._add("system", f"Now talking to {agent.name}")
+
+    # Chat history: one entry per user turn and per reply. A reply is committed when it ends,
+    # so the history event goes out once a turn, not once a token.
+
+    def _add(self, who: str, text: str) -> None:
+        self._end_reply()
+        if text.strip():
+            self.history.append({"who": who, "text": text.strip()[:HISTORY_CHARS]})
+            self.history_version += 1
+
+    def _end_reply(self) -> None:
+        if self._reply_open:
+            self._reply_open = False
+            self.history_version += 1
 
     def _set_mood(self, mood: str) -> None:
         self.mood = mood
@@ -123,7 +189,12 @@ class UiState:
         if self._new_reply:
             self._new_reply = False
             self.said = ""
+            self._end_reply()
+            self.history.append({"who": "agent", "text": ""})
+            self._reply_open = True
         self.said += text
+        if self._reply_open and self.history:
+            self.history[-1]["text"] = self.said.strip()[:HISTORY_CHARS]
         if self.said.lstrip().lower().startswith(SORRY_WORDS):
             self._set_mood("sad")
 
@@ -145,6 +216,7 @@ class UiState:
             self.activity = "listening"
         elif event == "asr_final" or event == "user_text":
             self.heard = rec.get("text", "")
+            self._add("user", self.heard)
             self._new_reply = True
             self.step = ""
             self.activity = "thinking"
@@ -152,6 +224,7 @@ class UiState:
             if self.activity != "speaking":
                 self.activity = "thinking"
         elif event == "tool_call_start":
+            self._end_reply()
             self.activity = "working"
             self.step = step_label(rec.get("name", ""), rec.get("args"))
             self._new_reply = True
@@ -174,6 +247,7 @@ class UiState:
             self.activity = "speaking"
             self.voice_down = False
         elif event == "audio_silent":
+            self._end_reply()
             if self.activity == "speaking":
                 self.activity = "asking" if self._awaiting_answer else "idle"
         elif event in ("pipeline_error", "spend_cap_reached", "reply_timeout"):
@@ -192,6 +266,7 @@ class UiState:
             self.muted = bool(rec.get("muted"))
         elif event == "timer_due":
             self.said = rec.get("phrase", "")
+            self._add("agent", self.said)
             self._set_mood("happy")
 
     def face(self) -> str:
@@ -217,8 +292,18 @@ class UiState:
             "said": self.said,
             "music": self.music,
             "spotify_player": self.spotify_player,
+            "agent": self.agent,
+            "switching": self.switching,
+            "screen_tools": self.screen_tools,
+            "history_version": self.history_version,
             **read_devices(self._data_dir, time.time()),
         }
+
+    def history_snapshot(self) -> list[dict]:
+        done = list(self.history)
+        if self._reply_open and done:
+            done = done[:-1]  # the reply still streaming shows in the caption instead
+        return done
 
 
 class UiServer:
@@ -231,6 +316,11 @@ class UiServer:
         self.on_mute: Callable[[], object] | None = None
         self.spotify_token: Callable[[], str] | None = None   # set only when the player is on
         self.on_player_status: Callable[[str, str], object] | None = None
+        # Set by the bot for one session: runs a tapped tool through the tool policy.
+        self.on_screen_tool: Callable[[str, dict], Awaitable[dict]] | None = None
+        # Set by the bot for one session: ends it so the next one starts with the new agent.
+        self.on_switch: Callable[[], Awaitable[None]] | None = None
+        self.agents: AgentStore | None = None
         self._clients: set[asyncio.Queue] = set()
         self._runner: web.AppRunner | None = None
         self._pump: asyncio.Task | None = None
@@ -244,6 +334,13 @@ class UiServer:
         app.router.add_get("/api/spotify-token", self._token)
         app.router.add_post("/api/spotify-status", self._player_status)
         app.router.add_post("/api/spotify-track", self._player_track)
+        app.router.add_post("/api/music", self._music)
+        app.router.add_post("/api/light", self._light)
+        app.router.add_post("/api/thermostat", self._thermostat)
+        app.router.add_get("/api/agents", self._agents)
+        app.router.add_post("/api/agents/active", self._choose_agent)
+        app.router.add_post("/api/agents/save", self._save_agent)
+        app.router.add_post("/api/agents/delete", self._delete_agent)
         return app
 
     async def _page(self, _request: web.Request) -> web.FileResponse:
@@ -256,8 +353,9 @@ class UiServer:
         self._clients.add(queue)
         try:
             await response.write(self._frame(self.state.snapshot()))
-            while True:
-                await response.write(await queue.get())
+            await response.write(self._frame(self.state.history_snapshot(), "history"))
+            while (frame := await queue.get()) is not None:  # None: the server is stopping
+                await response.write(frame)
         except (ConnectionResetError, asyncio.CancelledError):
             return response
         finally:
@@ -304,6 +402,92 @@ class UiServer:
         self.state.music = {"playing": bool(body.get("playing")), "now_playing": str(body.get("now_playing", ""))[:200]}
         return web.json_response({})
 
+    async def _tap(self, tool: str, args: dict) -> web.Response:
+        """Run a tapped tool through the tool policy, as if asked by voice."""
+        if self.on_screen_tool is None:
+            raise web.HTTPConflict(text="no session is running")
+        result = await self.on_screen_tool(tool, args)
+        self.state._tool_end(tool, result)
+        return web.json_response({"result": result})
+
+    async def _body(self, request: web.Request) -> dict:
+        self._same_site_only(request)
+        with contextlib.suppress(ValueError):
+            body = await request.json()
+            if isinstance(body, dict):
+                return body
+        raise web.HTTPBadRequest(text="expected a JSON object")
+
+    async def _music(self, request: web.Request) -> web.Response:
+        body = await self._body(request)
+        tool = MUSIC_BUTTONS.get(str(body.get("action")))
+        if tool is None:
+            raise web.HTTPBadRequest(text="unknown action")
+        return await self._tap(tool, {})
+
+    async def _light(self, request: web.Request) -> web.Response:
+        """A tap on a light: the page sends the room and whether it should be on."""
+        body = await self._body(request)
+        return await self._tap("set_light", {"room": body.get("room"), "is_on": body.get("is_on")})
+
+    async def _thermostat(self, request: web.Request) -> web.Response:
+        """A step button: the page sends the new setpoint, and the policy checks its range and step."""
+        body = await self._body(request)
+        return await self._tap("set_thermostat", {"target_c": body.get("target_c")})
+
+    def _store(self) -> AgentStore:
+        if self.agents is None:
+            raise web.HTTPNotFound(text="agents are off for this run")
+        return self.agents
+
+    async def _agents(self, request: web.Request) -> web.Response:
+        self._same_site_only(request)
+        store = self._store()
+        return web.json_response({
+            "agents": [a.public() for a in store.all().values()],
+            "active": self.state.agent["id"],
+            "picks": store.picks(),
+            "colors": store.colors,
+            "models": store.models(),
+            "documents": await asyncio.to_thread(store.document_choices),
+        }, headers={"Cache-Control": "no-store"})  # fmt: skip
+
+    async def _choose_agent(self, request: web.Request) -> web.Response:
+        self._same_site_only(request)
+        body = await request.json()
+        try:
+            agent = self._store().set_active(str(body.get("id", "")), str(body.get("model") or "") or None)
+        except AgentError as e:
+            raise web.HTTPBadRequest(text=str(e)) from e
+        if (agent.id, agent.model) != (self.state.agent["id"], self.state.agent.get("model")):
+            if self.on_switch:
+                self.state.switching = agent.name
+                await self.on_switch()
+            else:  # no session to restart (the demo): show the pick at once
+                self.state.set_agent(agent, announce=True)
+        return web.json_response({"active": agent.id})
+
+    async def _save_agent(self, request: web.Request) -> web.Response:
+        self._same_site_only(request)
+        body = await request.json()
+        try:
+            agent = self._store().save(body if isinstance(body, dict) else {})
+        except AgentError as e:
+            raise web.HTTPBadRequest(text=str(e)) from e
+        return web.json_response({"agent": agent.public()})
+
+    async def _delete_agent(self, request: web.Request) -> web.Response:
+        self._same_site_only(request)
+        body = await request.json()
+        agent_id = str(body.get("id", ""))
+        if agent_id == self.state.agent["id"]:
+            raise web.HTTPBadRequest(text="switch to another agent before deleting this one")
+        try:
+            self._store().delete(agent_id)
+        except AgentError as e:
+            raise web.HTTPBadRequest(text=str(e)) from e
+        return web.json_response({})
+
     async def _mute(self, request: web.Request) -> web.Response:
         self._same_site_only(request)
         if self.on_mute is None:
@@ -312,20 +496,28 @@ class UiServer:
         return web.json_response({"muted": self.state.muted})
 
     @staticmethod
-    def _frame(snapshot: dict) -> bytes:
-        return f"data: {json.dumps(snapshot)}\n\n".encode()
+    def _frame(data: dict | list, event: str = "") -> bytes:
+        head = f"event: {event}\n" if event else ""
+        return f"{head}data: {json.dumps(data)}\n\n".encode()
+
+    def _broadcast(self, frame: bytes) -> None:
+        for queue in self._clients:
+            if queue.full():  # a stalled page catches up on the next change
+                queue.get_nowait()
+            queue.put_nowait(frame)
 
     async def _send_changes(self, every_s: float = 0.1) -> None:
         last = None
+        last_history = self.state.history_version
         while True:
-            snapshot = self.state.snapshot()
-            if snapshot != last:
-                last = snapshot
-                frame = self._frame(snapshot)
-                for queue in self._clients:
-                    if queue.full():  # a stalled page catches up on the next change
-                        queue.get_nowait()
-                    queue.put_nowait(frame)
+            if self._clients:  # nothing to build while no page is open
+                snapshot = self.state.snapshot()
+                if snapshot["history_version"] != last_history:
+                    last_history = snapshot["history_version"]
+                    self._broadcast(self._frame(self.state.history_snapshot(), "history"))
+                if snapshot != last:
+                    last = snapshot
+                    self._broadcast(self._frame(snapshot))
             await asyncio.sleep(every_s)
 
     async def start(self) -> None:
@@ -335,6 +527,11 @@ class UiServer:
         self._pump = asyncio.create_task(self._send_changes())
 
     async def stop(self) -> None:
+        # Wake every open page's stream so cleanup does not wait out its 60 s shutdown timeout.
+        for queue in self._clients:
+            while queue.full():
+                queue.get_nowait()
+            queue.put_nowait(None)
         if self._pump:
             self._pump.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -368,7 +565,25 @@ async def _demo(state: UiState, server: UiServer) -> None:
     def toggle() -> None:
         state.on_event({"event": "mic_mute", "muted": not state.muted})
 
+    data = state._data_dir
+
+    async def tap(tool: str, args: dict) -> dict:
+        # The demo has no tool servers, so it writes the mock state files the way they do.
+        if tool == "set_light":
+            lights = _read_json(data / "lights.json", DEFAULT_LIGHTS)
+            lights[args["room"]]["is_on"] = args["is_on"]
+            (data / "lights.json").write_text(json.dumps(lights))
+            return lights[args["room"]]
+        if tool == "set_thermostat":
+            thermo = _read_json(data / "thermostat.json", DEFAULT_THERMOSTAT) | {"target_c": args["target_c"]}
+            (data / "thermostat.json").write_text(json.dumps(thermo))
+            return thermo
+        playing = tool != "stop_music"
+        return {"playing": playing, "now_playing": "Demo Song by The Fakes" if playing else state.music["now_playing"]}
+
     server.on_mute = toggle
+    server.on_screen_tool = tap
+    state.screen_tools = ["next_track", "resume_music", "set_light", "set_thermostat", "stop_music"]
     while True:
         for wait, event, fields in DEMO_SCRIPT:
             await asyncio.sleep(wait)
@@ -380,6 +595,8 @@ async def _demo(state: UiState, server: UiServer) -> None:
 async def _serve_demo(host: str, port: int, data_dir: Path) -> None:
     state = UiState(data_dir)
     server = UiServer(state, host, port)
+    server.agents = AgentStore(data_dir, load_config("mac").providers)
+    state.set_agent(server.agents.active())
     await server.start()
     print(f"open http://{host}:{port}")
     try:
@@ -392,10 +609,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--demo", action="store_true", required=True, help="cycle the expressions with no bot")
     ap.add_argument("--profile", choices=["mac", "pi"], default="mac")
+    ap.add_argument("--data-dir", type=Path, help="read devices and agents from here instead of data/")
+    ap.add_argument("--port", type=int, help="override the profile's port")
     args = ap.parse_args()
     cfg = load_config(args.profile).profile
+    data = args.data_dir or REPO_ROOT / cfg["paths"]["data_dir"]
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_serve_demo(cfg["ui"]["host"], cfg["ui"]["port"], REPO_ROOT / cfg["paths"]["data_dir"]))
+        asyncio.run(_serve_demo(cfg["ui"]["host"], args.port or cfg["ui"]["port"], data))
 
 
 if __name__ == "__main__":
