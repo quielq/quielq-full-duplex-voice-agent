@@ -4,17 +4,16 @@ Living list of open work. Tick items as they close, add new ones where they belo
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
-Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase (ADR-033), our own command policy (ADR-034), the `delegate` server (ADR-035), the audio-sample latency method (ADR-036), network-loss recovery (ADR-037), and voice server reconnects were built on `build/voice-servers`, and every one has now run live on the Mac at least once. The full suite passed after the merges (643 passed, 3 skipped), plus one test since. Local main is at `457797e`, behind `build/voice-servers`. Nothing is pushed. Today's spend is about $0.38. Feature freeze is Nov 5 and the deadline is Nov 7.
+Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase (ADR-033), our own command policy (ADR-034), the `delegate` server (ADR-035), the audio-sample latency method (ADR-036), network-loss recovery (ADR-037), and voice server reconnects were built on `build/voice-servers`, and every one has now run live on the Mac at least once. The full suite passed after the merges (643 passed, 3 skipped), plus one test since. Main matches `build/voice-servers` and was pushed to GitHub on Nov 4 at `fcfe3b4`. Today's spend is about $0.38. Feature freeze is Nov 5 and the deadline is Nov 7.
 
 ## Next, in order (Nov 4)
 
 Done on the Mac, Nov 4: the live run through both voice servers (`20261104-202417-64248a`, headline p50 3.0 s, no-tool 2.8 s, tool 4.4 s, ADR-036), the Cartesia interruption bench direct and through `voice-speak` (over-commit 1 word), `delegate` from a script and by voice, the recovery clips, and the `bash` delete read-back after a prompt fix (`20261104-204433-6a77ad`).
 
-1. Fast-forward local main to `build/voice-servers`, and decide whether to push.
-2. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
-3. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
-4. Pi cooling and power before the demo.
-5. Small fixes found live on Nov 4, below under "Found in the Nov 4 live runs".
+1. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
+2. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
+3. Pi cooling and power before the demo.
+4. Small fixes found live on Nov 4, below under "Found in the Nov 4 live runs".
 
 ## Waiting on Quiel
 
