@@ -68,7 +68,7 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 - [ ] Barge-in over the bot's speech and the 60 s echo test, live on the Pi. The clean bench talker test failed before the mic gain was lowered
 - [ ] Confirm the two `open_in_browser` runs on Nov 2 showed the pages on screen. The tool committed, but nobody checked
 - [ ] Install the boot service with `scripts/pi_setup.sh --service`, and add `--spotify-player` to `bot.env`
-- [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit
+- [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit. The Nov 4 Mac runs were ended by closing the terminal tab, which cut the log short, so they give no reading
 - [x] Show on the face when TTS has failed: `tts_failed`, a sad face and "Voice is down" until audio plays again (fakes only, not yet on a real Cartesia failure)
 - [ ] The cost ledger showed far less on Cartesia than the credits used, so check its price against the real balance
 - [x] Keep the 50% mic gain: `wpctl` line in `scripts/pi_setup.sh`, not yet run on the Pi
@@ -93,10 +93,10 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 
 ## Check after the Nov 2 live run
 
-- [ ] Run a live session on the fixes made after the last mic run: `restart_track`, no preamble before tools, clarifying unclear fragments, desktop commands refused in `bash` (tests only so far)
+- [ ] Run a live session on the fixes made after the last mic run. Seen live on Nov 4: tools called with no preamble, and an unclear fragment ("Only a certificate.") got a short question back. Still untried live: `restart_track`, and desktop commands refused in `bash`
 - [ ] Run `open_in_browser` with `ME3_WORKSPACE_LIVE=1` and a spoken yes (ADR-026)
 - [x] `tts_starved` at about 0.02x was a false reading: hop windows ran across the wait between replies. Fixed, and speech arrives at 2x to 11x real time. Most output gaps were pauses between sentences or during tools
-- [ ] Two real speaker write stalls in `20261102-095054-8e433b` (1,889 ms and 313 ms) with audio buffered, cause unknown. `loop_lag` events now log a stalled event loop, so check them after the next live run
+- [ ] Two real speaker write stalls in `20261102-095054-8e433b` (1,889 ms and 313 ms) with audio buffered, cause unknown. `loop_lag` events now log a stalled event loop. In the 5 minute Mac run on Nov 4 the only one was 229 ms during shutdown, none while talking, so check again on the Pi, where the stalls happened
 - [x] The `phantom_turn` in run `20261102-000823-8958d3` was a false alarm: the run stopped with that turn open. The report now skips such turns
 
 ## Finish the first spike
@@ -119,7 +119,7 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 - [x] Check Cartesia delivery from the Philippines: smooth by ear, and used for all live runs since (ADR-015)
 - [x] Spoken fallback on LLM errors such as Groq rejecting `set_timer` with 0 seconds (`harness/recovery.py`, fake-tested)
 - [x] Give the agent a real clock (`get_time`, daaf377)
-- [ ] Live speaker test with `--echo-cancel`: one run passed with no self-echo and a real barge-in (ADR-015). Still to check: the first-speech blip, and repeat it across runs (ADR-013)
+- [ ] Live speaker test with `--echo-cancel`: one run passed with no self-echo and a real barge-in (ADR-015). Two more speaker runs on Nov 4 (`20261104-202417-64248a`, `20261104-204433-6a77ad`): one turn in the first was the bot hearing its own words and cutting itself off, the second had none. Still to check: the first-speech blip (ADR-013)
 
 Set aside because Cartesia replaced Aura-2 as the live TTS (ADR-015), and worth doing only if Aura-2 comes back:
 
