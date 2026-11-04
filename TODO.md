@@ -4,7 +4,7 @@ Living list of open work. Tick items as they close, add new ones where they belo
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
-Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase (ADR-033), our own command policy (ADR-034), the `delegate` server (ADR-035), the audio-sample latency method (ADR-036), network-loss recovery (ADR-037), and voice server reconnects were built on `build/voice-servers`, and every one has now run live on the Mac at least once. The full suite passed after the merges (643 passed, 3 skipped), plus one test since. Main matches `build/voice-servers` and was pushed to GitHub on Nov 4 at `fcfe3b4`. Today's spend is about $0.38. Feature freeze is Nov 5 and the deadline is Nov 7.
+Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase (ADR-033), our own command policy (ADR-034), the `delegate` server (ADR-035), the audio-sample latency method (ADR-036), network-loss recovery (ADR-037), and voice server reconnects were built on `build/voice-servers`, and every one has now run live on the Mac at least once. The full suite passed after the merges (643 passed, 3 skipped), plus one test since. Main matches `build/voice-servers` and is pushed to GitHub (Nov 4, after the live runs and these to-do updates). Today's spend is about $0.38. Feature freeze is Nov 5 and the deadline is Nov 7.
 
 ## Next, in order (Nov 4)
 
