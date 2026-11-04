@@ -32,7 +32,7 @@ Two checks on Nov 4, 2026:
   - A test checks that every listed model has a price.
 - **Credit fee not counted.** OpenRouter charges a fee when credits are bought, reported as 5.5% with a $0.80 minimum on card. The ledger counts list price only, so the cap is slightly generous by that fee.
 - **Network watch.** `openrouter.ai` joins the hosts that `NetworkWatch` probes on an error (ADR-037).
-- **The generalist stays on Anthropic directly.** That avoids the fee and one routing hop on the main path.
+- **The generalist defaults to Anthropic directly.** That avoids the fee and one routing hop on the main path. Since the Nov 4 update it can run on a listed OpenRouter model for one session when the user picks one.
 
 ## Alternatives
 
@@ -70,6 +70,16 @@ The three that missed were run again after the fix, for $0.0017 in total:
 | `openai/gpt-oss-20b` | Right | Right | 2 | $0.0002 | 14.3 s |
 
 So all six answer and refuse correctly on this case. Two style slips: GPT-OSS 20B put the file path in parentheses, and GPT-OSS 120B named the file rather than its title, though the prompt asks for neither. TTS would read both aloud. Sonnet 5.5 was not run, to keep within the approved spend. One question per model is a smoke test, not a comparison. Run times are whole sessions, including MCP server start, not reply latency.
+
+## Update, Nov 4, 2026: the model picked per session
+
+Quiel asked to choose the model when picking an agent, at the start of each session.
+
+- **The picker** shows a model list under each agent: the agent's own model first, then `direct` and every listed OpenRouter model. Picking a model starts a session with that agent and model. Picking the same agent with another model also restarts the session.
+- **Stored per agent** in `data/agents/active.json` as `{"id": ..., "models": {agent: model}}`. Picking the agent's own model clears its entry. A model not in the list is refused, and one in a hand-edited file is ignored.
+- **The generalist too.** Its default stays Anthropic direct. With another model picked, the picker warns that other models may handle its many tools less well; only Haiku 5.5 has been run live with all its tools.
+- **Scripted runs** take `--model` with `--agent`, so a test can try a model without the face.
+- **No spend unasked.** A fake LLM stage stays fake whatever is picked, and every model in the list is priced, so the cap counts it.
 
 ## Sources
 

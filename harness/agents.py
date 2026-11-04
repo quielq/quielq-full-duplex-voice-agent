@@ -5,7 +5,8 @@ documents the docs server may see, and the LLM model. The voice path (VAD, turn 
 STT, TTS, tool policy) is the same for every agent.
 
 Built-in agents are in configs/agents.yaml. Custom agents are saved to
-$data_dir/agents/custom.json, and the last pick to $data_dir/agents/active.json. The builder can
+$data_dir/agents/custom.json, and the last pick to $data_dir/agents/active.json, with the model
+picked for each agent's sessions (any listed model, or the agent's own). The builder can
 choose a name, a colour from the palette, a model from the priced OpenRouter list, and
 documents under data/documents. It cannot add tools, change the tool policy, or raise a cap.
 
@@ -20,7 +21,7 @@ import copy
 import json
 import re
 import shutil
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import yaml
@@ -114,21 +115,49 @@ class AgentStore:
             raise AgentError(f"no agent called {agent_id}")
         return agents[agent_id]
 
-    def active(self) -> Agent:
+    def _picked(self) -> dict:
         with _quiet():
-            chosen = json.loads((self._dir / "active.json").read_text()).get("id")
-            if chosen in (agents := self.all()):
-                return agents[chosen]
-        return self.builtins()[self._cfg["default"]]
+            raw = json.loads((self._dir / "active.json").read_text())
+            if isinstance(raw, dict):
+                return raw
+        return {}
 
-    def set_active(self, agent_id: str) -> Agent:
-        agent = self.get(agent_id)
+    def picks(self) -> dict[str, str]:
+        """The model last picked for each agent on the face. Missing means the agent's own."""
+        models = self._picked().get("models")
+        if not isinstance(models, dict):
+            return {}
+        return {k: v for k, v in models.items() if isinstance(v, str) and v in self.models()}
+
+    def with_model(self, agent: Agent, model: str | None) -> Agent:
+        """This agent for one session with another listed model. Empty or None keeps its own."""
+        if not model:
+            return agent
+        if model not in self.models():
+            raise AgentError("pick one of the listed models")
+        return replace(agent, model=model)
+
+    def active(self) -> Agent:
+        """The last pick, with the model picked for it."""
+        agents = self.all()
+        chosen = self._picked().get("id")
+        agent = agents[chosen] if chosen in agents else self.builtins()[self._cfg["default"]]
+        return self.with_model(agent, self.picks().get(agent.id))
+
+    def set_active(self, agent_id: str, model: str | None = None) -> Agent:
+        """Pick an agent, and the model for its sessions: empty means the agent's own."""
+        agent = self.with_model(self.get(agent_id), model)
+        picks = self.picks()
+        if model and model != self.get(agent_id).model:
+            picks[agent.id] = model
+        else:
+            picks.pop(agent.id, None)
         self._dir.mkdir(parents=True, exist_ok=True)
-        (self._dir / "active.json").write_text(json.dumps({"id": agent.id}))
+        (self._dir / "active.json").write_text(json.dumps({"id": agent.id, "models": picks}))
         return agent
 
     def models(self) -> dict[str, str]:
-        return {DIRECT: "Same as the generalist", **self._models}
+        return {DIRECT: "Claude Haiku 5.5 direct, no OpenRouter fee", **self._models}
 
     def document_choices(self) -> list[str]:
         """Folders and files under data/documents a builder may link, relative to it."""

@@ -142,7 +142,31 @@ def _reply_fields(args: dict, result: Any) -> dict:
     return fields
 
 
-SCREEN_TOOLS = frozenset({"stop_music", "resume_music", "next_track"})
+def _no_args(args: dict) -> bool:
+    return args == {}
+
+
+def _light_args(args: dict) -> bool:
+    room = args.get("room")
+    return (set(args) == {"room", "is_on"} and isinstance(room, str) and 0 < len(room) <= 40
+            and isinstance(args["is_on"], bool))  # fmt: skip
+
+
+def _thermostat_args(args: dict) -> bool:
+    target = args.get("target_c")
+    return (set(args) == {"target_c"} and isinstance(target, (int, float)) and not isinstance(target, bool)
+            and 16 <= target <= 30 and float(target * 2).is_integer())  # fmt: skip
+
+
+# The tools a tap on the robot face may run, each with the only arguments a tap can send
+# (ADR-038). The server checks them again, as it does for a spoken request.
+SCREEN_TOOLS: dict[str, Callable[[dict], bool]] = {
+    "stop_music": _no_args,
+    "resume_music": _no_args,
+    "next_track": _no_args,
+    "set_light": _light_args,
+    "set_thermostat": _thermostat_args,
+}
 
 
 class DuplicateToolName(RuntimeError):
@@ -336,24 +360,31 @@ class ToolPolicy:
     async def _list(client: MCPClient) -> tuple[ToolsSchema, dict]:
         return await client.tools(), await tool_hints(client)
 
-    async def run_from_screen(self, name: str) -> Any:
-        """Run a tool for a button on the robot face (ADR-038). Only the screen tools, only with no
-        arguments, and only when the policy would run them at once anyway: anything that would be
-        held, asked about, or guarded is refused, so the screen never skips a question."""
-        rule, inner = self.rules.get(name), self._inner.get(name)
+    def screen_tools(self) -> list[str]:
+        """The screen tools this session would run at once, so the face can grey out the rest."""
+        return sorted(n for n in SCREEN_TOOLS if self._runs_from_screen(n))
+
+    def _runs_from_screen(self, name: str) -> bool:
+        rule = self.rules.get(name)
         runs_at_once = rule is not None and rule.permission == "auto" and rule.undo_s == 0 and not rule.guard
-        if name not in SCREEN_TOOLS or inner is None or not runs_at_once or (
-            self.contained and name in self._contain_tools
-        ):
-            self._decide(name, "denied_screen")
+        return (name in SCREEN_TOOLS and name in self._inner and runs_at_once
+                and not (self.contained and name in self._contain_tools))  # fmt: skip
+
+    async def run_from_screen(self, name: str, args: dict | None = None) -> Any:
+        """Run a tool for a tap on the robot face (ADR-038). Only the screen tools, only with the
+        arguments a tap can send, and only when the policy would run them at once anyway: anything
+        that would be held, asked about, or guarded is refused, so the screen never skips a question."""
+        args = dict(args or {})
+        if not self._runs_from_screen(name) or not SCREEN_TOOLS[name](args):
+            self._decide(name, "denied_screen", args=args)
             return {"status": "denied", "reason": "not available from the screen"}
-        self._decide(name, "allowed", args={}, by="screen")
+        self._decide(name, "allowed", args=args, by="screen")
         self._screen_calls += 1
         params = FunctionCallParams(
-            function_name=name, tool_call_id=f"screen-{self._screen_calls}", arguments={},
+            function_name=name, tool_call_id=f"screen-{self._screen_calls}", arguments=args,
             llm=None, pipeline_worker=None, context=None, result_callback=None,
         )  # fmt: skip
-        return await self._call(rule, inner, params)
+        return await self._call(self.rules[name], self._inner[name], params)
 
     async def deny_unknown(self, params: FunctionCallParams) -> None:
         """Catch-all handler: a model that calls a disabled or invented tool reaches no server."""

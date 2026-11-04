@@ -6,10 +6,11 @@ server-sent events. The page is one self-contained file with no outside requests
 still works when the network does not. The Spotify player is a separate file, loaded only when
 ``ui.spotify_player`` is on (ADR-031).
 
-Lights and the thermostat are read from the same JSON files their mock servers write. The panel
-only displays them: the voice path stays the one way to change them, so the tool policy cannot
-be bypassed from the screen. The controls are the mic mute, three music buttons that run the
-music tools through the tool policy, and the agent picker and builder (ADR-038, ADR-039).
+Lights and the thermostat are read from the same JSON files their mock servers write. The
+controls are the mic mute, the music buttons, a tap on a light to turn it on or off, the
+thermostat's step buttons, and the agent picker and builder (ADR-038, ADR-039). A tap runs its
+tool through ``ToolPolicy.run_from_screen``, which refuses anything the voice path would hold
+or ask about, so the screen never skips a question.
 
 The page gets two kinds of server-sent event: the state, whenever it changes, and the chat
 history, only when a turn is added. Streaming reply text so never resends the history.
@@ -44,8 +45,9 @@ MOOD_HOLD_S = 3.0
 HISTORY_TURNS = 40
 HISTORY_CHARS = 600
 TIMERS_SHOWN = 4
-# The screen's music buttons, and the only tools the screen may run (ADR-038).
+# The screen's music buttons. Every tool a tap may run is in tool_policy.SCREEN_TOOLS (ADR-038).
 MUSIC_BUTTONS = {"pause": "stop_music", "play": "resume_music", "next": "next_track"}
+THERMOSTAT_STEP_C = 0.5
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 SORRY_WORDS = ("sorry", "i can't", "i cannot", "i couldn't", "unfortunately")
 ANGRY_DECISIONS = {"denied_guard", "denied_contained", "contained"}
@@ -149,14 +151,17 @@ class UiState:
         self.network_down = False   # set and cleared only by the network events (ADR-037)
         self._new_reply = True
         self._awaiting_answer = False
-        self.agent: dict = {"id": "generalist", "name": "Generalist", "color": "#7fd3ee", "kind": "generalist"}
+        self.agent: dict = {"id": "generalist", "name": "Generalist", "color": "#7fd3ee", "kind": "generalist",
+                            "model": "direct"}
+        self.screen_tools: list[str] = []  # what a tap may run in this session; set by the bot
         self.switching = ""
         self.history: deque[dict] = deque(maxlen=HISTORY_TURNS)
         self.history_version = 0
         self._reply_open = False
 
     def set_agent(self, agent: Agent, *, announce: bool = False) -> None:
-        self.agent = {"id": agent.id, "name": agent.name, "color": agent.color, "kind": agent.kind}
+        self.agent = {"id": agent.id, "name": agent.name, "color": agent.color, "kind": agent.kind,
+                      "model": agent.model}
         self.switching = ""
         if announce:
             self._add("system", f"Now talking to {agent.name}")
@@ -289,6 +294,7 @@ class UiState:
             "spotify_player": self.spotify_player,
             "agent": self.agent,
             "switching": self.switching,
+            "screen_tools": self.screen_tools,
             "history_version": self.history_version,
             **read_devices(self._data_dir, time.time()),
         }
@@ -310,8 +316,8 @@ class UiServer:
         self.on_mute: Callable[[], object] | None = None
         self.spotify_token: Callable[[], str] | None = None   # set only when the player is on
         self.on_player_status: Callable[[str, str], object] | None = None
-        # Set by the bot for one session: runs a music tool through the tool policy.
-        self.on_music: Callable[[str], Awaitable[dict]] | None = None
+        # Set by the bot for one session: runs a tapped tool through the tool policy.
+        self.on_screen_tool: Callable[[str, dict], Awaitable[dict]] | None = None
         # Set by the bot for one session: ends it so the next one starts with the new agent.
         self.on_switch: Callable[[], Awaitable[None]] | None = None
         self.agents: AgentStore | None = None
@@ -329,6 +335,8 @@ class UiServer:
         app.router.add_post("/api/spotify-status", self._player_status)
         app.router.add_post("/api/spotify-track", self._player_track)
         app.router.add_post("/api/music", self._music)
+        app.router.add_post("/api/light", self._light)
+        app.router.add_post("/api/thermostat", self._thermostat)
         app.router.add_get("/api/agents", self._agents)
         app.router.add_post("/api/agents/active", self._choose_agent)
         app.router.add_post("/api/agents/save", self._save_agent)
@@ -394,18 +402,38 @@ class UiServer:
         self.state.music = {"playing": bool(body.get("playing")), "now_playing": str(body.get("now_playing", ""))[:200]}
         return web.json_response({})
 
-    async def _music(self, request: web.Request) -> web.Response:
-        """A music button. The tool runs through the tool policy, as if asked by voice."""
+    async def _tap(self, tool: str, args: dict) -> web.Response:
+        """Run a tapped tool through the tool policy, as if asked by voice."""
+        if self.on_screen_tool is None:
+            raise web.HTTPConflict(text="no session is running")
+        result = await self.on_screen_tool(tool, args)
+        self.state._tool_end(tool, result)
+        return web.json_response({"result": result})
+
+    async def _body(self, request: web.Request) -> dict:
         self._same_site_only(request)
-        body = await request.json()
+        with contextlib.suppress(ValueError):
+            body = await request.json()
+            if isinstance(body, dict):
+                return body
+        raise web.HTTPBadRequest(text="expected a JSON object")
+
+    async def _music(self, request: web.Request) -> web.Response:
+        body = await self._body(request)
         tool = MUSIC_BUTTONS.get(str(body.get("action")))
         if tool is None:
             raise web.HTTPBadRequest(text="unknown action")
-        if self.on_music is None:
-            raise web.HTTPConflict(text="no session is running")
-        result = await self.on_music(tool)
-        self.state._tool_end(tool, result)
-        return web.json_response({"result": result})
+        return await self._tap(tool, {})
+
+    async def _light(self, request: web.Request) -> web.Response:
+        """A tap on a light: the page sends the room and whether it should be on."""
+        body = await self._body(request)
+        return await self._tap("set_light", {"room": body.get("room"), "is_on": body.get("is_on")})
+
+    async def _thermostat(self, request: web.Request) -> web.Response:
+        """A step button: the page sends the new setpoint, and the policy checks its range and step."""
+        body = await self._body(request)
+        return await self._tap("set_thermostat", {"target_c": body.get("target_c")})
 
     def _store(self) -> AgentStore:
         if self.agents is None:
@@ -418,6 +446,7 @@ class UiServer:
         return web.json_response({
             "agents": [a.public() for a in store.all().values()],
             "active": self.state.agent["id"],
+            "picks": store.picks(),
             "colors": store.colors,
             "models": store.models(),
             "documents": await asyncio.to_thread(store.document_choices),
@@ -427,10 +456,10 @@ class UiServer:
         self._same_site_only(request)
         body = await request.json()
         try:
-            agent = self._store().set_active(str(body.get("id", "")))
+            agent = self._store().set_active(str(body.get("id", "")), str(body.get("model") or "") or None)
         except AgentError as e:
             raise web.HTTPBadRequest(text=str(e)) from e
-        if agent.id != self.state.agent["id"]:
+        if (agent.id, agent.model) != (self.state.agent["id"], self.state.agent.get("model")):
             if self.on_switch:
                 self.state.switching = agent.name
                 await self.on_switch()
@@ -536,12 +565,25 @@ async def _demo(state: UiState, server: UiServer) -> None:
     def toggle() -> None:
         state.on_event({"event": "mic_mute", "muted": not state.muted})
 
-    async def music(tool: str) -> dict:
+    data = state._data_dir
+
+    async def tap(tool: str, args: dict) -> dict:
+        # The demo has no tool servers, so it writes the mock state files the way they do.
+        if tool == "set_light":
+            lights = _read_json(data / "lights.json", DEFAULT_LIGHTS)
+            lights[args["room"]]["is_on"] = args["is_on"]
+            (data / "lights.json").write_text(json.dumps(lights))
+            return lights[args["room"]]
+        if tool == "set_thermostat":
+            thermo = _read_json(data / "thermostat.json", DEFAULT_THERMOSTAT) | {"target_c": args["target_c"]}
+            (data / "thermostat.json").write_text(json.dumps(thermo))
+            return thermo
         playing = tool != "stop_music"
         return {"playing": playing, "now_playing": "Demo Song by The Fakes" if playing else state.music["now_playing"]}
 
     server.on_mute = toggle
-    server.on_music = music
+    server.on_screen_tool = tap
+    state.screen_tools = ["next_track", "resume_music", "set_light", "set_thermostat", "stop_music"]
     while True:
         for wait, event, fields in DEMO_SCRIPT:
             await asyncio.sleep(wait)

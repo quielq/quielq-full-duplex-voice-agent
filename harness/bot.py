@@ -501,17 +501,18 @@ async def run_bot(
                 ui.on_mute = toggle_mute
 
         if ui:
-            async def music_button(tool: str) -> dict:
-                result = await policy.run_from_screen(tool)
-                log.emit("ui_action", tool=tool, result=result)
+            async def screen_tool(tool: str, args: dict) -> dict:
+                result = await policy.run_from_screen(tool, args)
+                log.emit("ui_action", tool=tool, args=args, result=result)
                 return result
 
             async def switch_agent() -> None:
                 log.emit("agent_switch_requested")
                 await worker.cancel(reason="agent switch")
 
-            ui.on_music = music_button
+            ui.on_screen_tool = screen_tool
             ui.on_switch = switch_agent
+            ui.state.screen_tools = policy.screen_tools()
 
         runner = WorkerRunner(handle_sigint=handle_sigint)
         await runner.add_workers(worker)
@@ -537,7 +538,8 @@ async def run_bot(
             if network:
                 await network.close()
             if ui:
-                ui.on_music = ui.on_switch = ui.on_mute = None
+                ui.on_screen_tool = ui.on_switch = ui.on_mute = None
+                ui.state.screen_tools = []
                 with contextlib.suppress(ValueError):
                     log.listeners.remove(ui.state.on_event)
             if owns_ui:
@@ -616,6 +618,8 @@ def main() -> None:
     ap.add_argument("--spotify-player", action="store_true", help="play Spotify in the face page (ADR-031)")
     ap.add_argument("--servers", default="", help=f"task servers, default all: {','.join(TASK_SERVERS)}")
     ap.add_argument("--agent", default="", help="agent id from configs/agents.yaml or the face's builder (ADR-039)")
+    ap.add_argument("--model", default="", help="a model from providers.openrouter.models, or direct, for this "
+                    "run's agent instead of its own; live runs only, a fake LLM stays fake (ADR-040)")
     args = ap.parse_args()
     if args.input == "wav" and not args.wav:
         ap.error("--input wav needs --wav")
@@ -664,8 +668,9 @@ def main() -> None:
     try:
         # A scripted run uses --agent or the default, never the face's last pick.
         agent = store.get(args.agent) if args.agent else store.builtins()[store.default_id]
-        if face_picks and args.agent:
-            store.set_active(args.agent)
+        agent = store.with_model(agent, args.model or None)
+        if face_picks and (args.agent or args.model):
+            store.set_active(agent.id, args.model or None)
     except ValueError as e:
         ap.error(str(e))
     common = dict(input_mode=args.input, mcp_transport=args.mcp, say=args.say, wav=args.wav, servers=servers)

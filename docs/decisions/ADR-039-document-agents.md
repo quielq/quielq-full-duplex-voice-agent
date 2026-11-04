@@ -41,6 +41,7 @@ Each agent's avatar should have its own colour. All of it has to fit on the Pi w
   - An agent's model is `direct`, which keeps the run's own LLM stage, or an OpenRouter model from the priced list (ADR-040).
   - A model applies only on a live run. With the LLM stage on `fake`, every agent stays fake, so picking an agent never spends anything unasked.
   - The generalist is `direct`, which means Haiku 5.5 on Anthropic for live runs (ADR-025).
+  - Each session can run on another listed model, picked under the agent in the picker or with `--model` on a scripted run. The pick is kept per agent in `active.json` and changes only that session's model, not the agent (ADR-040 update).
 - **Switching.**
   - With the face on and a live mic, `run_agents` keeps one face up across sessions. Picking an agent ends the session (`worker.cancel`), and the next session starts with that agent: a fresh context, its own servers, its colour, and a "Now talking to" line in the chat.
   - A scripted run (`--input text` or `wav`) uses `--agent` or the default, never the face's last pick, so tests and benches are not changed by what someone tapped.
@@ -50,7 +51,7 @@ Each agent's avatar should have its own colour. All of it has to fit on the Pi w
   - The server checks each field and refuses with a reason the page shows, for example a path outside the documents folder, a colour not in the palette, an unpriced model, or a built-in name.
   - At most 20 custom agents. A hand-edited bad entry is skipped, not fatal.
   - The routes use the same same-site check as the mute, and the face stays on 127.0.0.1.
-- **Colour.** The face's glow, lens, and accents come from one CSS variable set from the agent's colour. The edge and shade colours are derived with `color-mix`, so there is no image work.
+- **Colour.** The face's glow, lens, and accents come from one CSS variable set from the agent's colour. The edge and shade colours are derived with `color-mix`, so there is no image work. Since the Nov 4 update the shell is mixed from it too, and the picker, the agent chip, and the builder's colour choices each show a small static robot in the agent's colour.
 
 ## Alternatives
 

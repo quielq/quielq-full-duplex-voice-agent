@@ -1,4 +1,4 @@
-"""Agents, the builder's limits, the screen's music buttons, and chat history (ADR-038, ADR-039).
+"""Agents, the builder's limits, model picks, the screen's taps, and chat history (ADR-038, ADR-039).
 No bot, no audio, no spend."""
 
 from __future__ import annotations
@@ -140,8 +140,73 @@ async def test_the_screen_never_skips_a_question(rule):
     assert inner.calls == [] and policy.decisions[-1]["decision"] == "denied_screen"
 
 
-def test_the_buttons_are_the_screen_tools():
-    assert set(MUSIC_BUTTONS.values()) == SCREEN_TOOLS
+def test_the_buttons_are_screen_tools():
+    assert set(MUSIC_BUTTONS.values()) | {"set_light", "set_thermostat"} == set(SCREEN_TOOLS)
+
+
+@pytest.mark.parametrize("name, args", [
+    ("set_light", {"room": "kitchen", "is_on": True}),
+    ("set_thermostat", {"target_c": 22.5}),
+    ("set_thermostat", {"target_c": 16}),
+])  # fmt: skip
+async def test_a_tap_runs_with_the_arguments_a_tap_can_send(name, args):
+    policy, inner = policy_with(ToolRule(name, "auto", 0.0, 10.0))
+    await policy.run_from_screen(name, args)
+    assert inner.calls == [name] and policy.decisions[-1]["args"] == args
+    assert policy.screen_tools() == [name]
+
+
+@pytest.mark.parametrize("name, args", [
+    ("set_light", {"room": "kitchen", "is_on": True, "brightness": 100}),  # brightness stays voice only
+    ("set_light", {"room": "kitchen", "is_on": "yes"}),
+    ("set_light", {"room": "", "is_on": True}),
+    ("set_thermostat", {"target_c": 22.3}),
+    ("set_thermostat", {"target_c": 31}),
+    ("set_thermostat", {"target_c": True}),
+    ("set_thermostat", {"target_c": "22"}),
+    ("stop_music", {"volume": 0}),
+])  # fmt: skip
+async def test_a_tap_with_other_arguments_is_refused(name, args):
+    policy, inner = policy_with(ToolRule(name, "auto", 0.0, 10.0))
+    assert (await policy.run_from_screen(name, args))["status"] == "denied"
+    assert inner.calls == [] and policy.decisions[-1]["decision"] == "denied_screen"
+
+
+async def test_a_light_that_would_ask_is_refused_from_the_screen():
+    policy, inner = policy_with(ToolRule("set_light", "confirm", 0.0, 10.0))
+    assert (await policy.run_from_screen("set_light", {"room": "kitchen", "is_on": True}))["status"] == "denied"
+    assert policy.screen_tools() == [] and inner.calls == []
+
+
+# The model picked for a session (ADR-040)
+
+
+def test_a_model_pick_is_kept_per_agent(store, tmp_path, cfg):
+    coach = store.set_active("coach", "deepseek/deepseek-v4.1-flash")
+    assert coach.model == "deepseek/deepseek-v4.1-flash"
+    again = AgentStore(tmp_path, cfg.providers)
+    assert again.active().model == "deepseek/deepseek-v4.1-flash"
+    assert again.get("coach").model == "anthropic/claude-haiku-5.5"  # the agent itself is unchanged
+    again.set_active("generalist")
+    assert again.picks() == {"coach": "deepseek/deepseek-v4.1-flash"} and again.active().model == DIRECT
+    again.set_active("coach", None)
+    assert again.picks() == {} and again.active().model == "anthropic/claude-haiku-5.5"
+
+
+def test_an_unlisted_model_is_refused_and_a_bad_file_is_ignored(store, tmp_path):
+    with pytest.raises(AgentError, match="model"):
+        store.set_active("coach", "someone/unpriced")
+    (tmp_path / "agents" / "active.json").parent.mkdir(exist_ok=True)
+    (tmp_path / "agents" / "active.json").write_text(json.dumps({"id": "coach", "models": {"coach": "someone/unpriced"}}))
+    assert store.active().model == "anthropic/claude-haiku-5.5"
+
+
+def test_the_generalist_can_run_on_a_picked_model_live_only(cfg, store):
+    gen = store.with_model(store.get("generalist"), "qwen/qwen3.8-flash")
+    assert session_config(cfg, gen).providers["stages"]["llm"] == "fake"
+    cfg.providers["stages"]["llm"] = "anthropic"
+    live = session_config(cfg, gen).providers
+    assert live["stages"]["llm"] == "openrouter" and live["providers"]["openrouter"]["model"] == "qwen/qwen3.8-flash"
 
 
 # Chat history and the agent routes
@@ -185,8 +250,15 @@ async def test_picking_an_agent_ends_the_session(tmp_path, store):
     try:
         r = await client.post("/api/agents/active", json={"id": "coach"})
         assert r.status == 200 and ended == [1] and server.state.switching == "Coach"
+        server.state.set_agent(store.active())
+        assert (await client.post("/api/agents/active", json={"id": "coach"})).status == 200 and ended == [1]
+        r = await client.post("/api/agents/active", json={"id": "coach", "model": "openai/gpt-oss-20b"})
+        assert r.status == 200 and ended == [1, 1]  # same agent, another model: a new session
+        bad = await client.post("/api/agents/active", json={"id": "coach", "model": "someone/unpriced"})
+        assert bad.status == 400
         listing = await (await client.get("/api/agents")).json()
         assert {"generalist", "coach"} <= {a["id"] for a in listing["agents"]}
+        assert listing["picks"] == {"coach": "openai/gpt-oss-20b"}
         assert "it_policy/" in listing["documents"]
         evil = await client.post("/api/agents/active", json={"id": "coach"}, headers={"Origin": "https://evil.example"})
         assert evil.status == 403
@@ -205,18 +277,28 @@ async def test_the_builder_route_reports_why_it_refused(tmp_path, store):
         await client.close()
 
 
-async def test_music_buttons_need_a_session(tmp_path):
+async def test_taps_need_a_session_and_pass_only_their_arguments(tmp_path):
     server, client = await _client(tmp_path)
     try:
         assert (await client.post("/api/music", json={"action": "pause"})).status == 409
+        assert (await client.post("/api/light", json={"room": "kitchen", "is_on": True})).status == 409
         assert (await client.post("/api/music", json={"action": "rm"})).status == 400
+        assert (await client.post("/api/thermostat", data="[]")).status == 400
+        calls = []
 
-        async def music(tool):
-            return {"playing": tool != "stop_music", "now_playing": "Song"}
+        async def tap(tool, args):
+            calls.append((tool, args))
+            return {"playing": tool != "stop_music", "now_playing": "Song"} if "music" in tool or "track" in tool else {}
 
-        server.on_music = music
+        server.on_screen_tool = tap
         assert (await client.post("/api/music", json={"action": "next"})).status == 200
         assert server.state.music == {"playing": True, "now_playing": "Song"}
+        await client.post("/api/light", json={"room": "kitchen", "is_on": False, "brightness": 5})
+        await client.post("/api/thermostat", json={"target_c": 23.5, "mode": "heat"})
+        assert calls[1:] == [("set_light", {"room": "kitchen", "is_on": False}),
+                             ("set_thermostat", {"target_c": 23.5})]  # fmt: skip
+        evil = await client.post("/api/light", json={"room": "kitchen", "is_on": True}, headers={"Origin": "https://evil.example"})
+        assert evil.status == 403
     finally:
         await client.close()
 
