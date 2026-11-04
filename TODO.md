@@ -166,7 +166,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] One live Mac run with `stt=voice_listen,tts=voice_speak`, and the Cartesia interruption bench through the servers (paid, needs a yes)
 - [x] Measure the extra audio hop through the servers on the Mac (`bench/voice_hop_probe`, Nov 4): under 0.5 ms a frame each way, +0.6 ms (stdio) and +2.1 ms (HTTP) from request to first chunk, +6 to 21 ms per stream open (ADR-032). After the event queue (a3bec1e): first-chunk p95 3.3 ms on stdio, was 17 ms
 - [ ] The same probe on the Pi
-- [ ] Consider sending voice events without blocking the relay's down loop: awaiting each emit adds up to 2 ms over HTTP before the next chunk
+- [x] Send voice events without blocking the relay's down loop (Nov 4, a3bec1e): first-chunk p95 fell from 17 ms to 3.3 ms on stdio
 - [ ] Switch the Pi service and the live command to the voice stages once the live run passes
 - [x] `append_text`, `pause`, `resume`, `interrupt(kind)` dropped: Pipecat sends these as Cartesia messages on the stream (ADR-032)
 - [ ] Wire `VoiceEventFrame`s into pipeline actions (ADR-008)
