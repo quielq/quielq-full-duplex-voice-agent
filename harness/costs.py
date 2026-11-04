@@ -24,6 +24,7 @@ from pipecat.metrics.metrics import LLMUsageMetricsData, STTUsageMetricsData
 from pipecat.observers.base_observer import BaseObserver, FramePushed
 
 from bench.cost_ledger import CostLedger
+from harness.providers import CARTESIA_STAGES, FLUX_STAGES
 
 # Prompt size assumed for a withdrawn call before any call has reported usage. The task suite
 # averages about 1,300 tokens a case with every server's tools offered (ADR-017).
@@ -81,7 +82,7 @@ class CostObserver(BaseObserver):
         tts = self._stages["tts"]
         if chars == 0 or tts.startswith("fake"):
             return
-        if tts == "cartesia":
+        if tts in CARTESIA_STAGES:
             await self._record("cartesia", "tts_chars", chars, chars * self._prices["cartesia_per_char"])
         else:
             await self._record("deepgram", "tts_chars", chars, chars * self._prices["deepgram_aura2_per_char"])
@@ -118,6 +119,6 @@ class CostObserver(BaseObserver):
             self._last_prompt_tokens = u.prompt_tokens
             yield llm, "llm_input_tokens", u.prompt_tokens, u.prompt_tokens * rate["input_per_token"]
             yield llm, "llm_output_tokens", u.completion_tokens, u.completion_tokens * rate["output_per_token"]
-        elif isinstance(d, STTUsageMetricsData) and stt == "deepgram_flux":
+        elif isinstance(d, STTUsageMetricsData) and stt in FLUX_STAGES:
             minutes = float(d.value.audio_seconds) / 60.0
             yield "deepgram", "stt_minutes", minutes, minutes * p["deepgram_flux_per_min"]

@@ -1,3 +1,5 @@
 # voice-listen
 
-Stub built (`stub_server.py`, step 6): replays a scripted utterance and streams `speech_started`, `transcript_partial`, `transcript_final`, `speech_ended` as voice events while a `listen` call is open. `stop_listening` ends it. No ASR provider yet; audio will move on a local side channel, not over MCP. See ADR-008 for why events ride a long-running call.
+`server.py` (ADR-032) holds the Deepgram Flux stream and its key. `listen(query)` checks the cap, opens a private Unix socket, and relays Flux both ways while the call stays open. It reports `speech_started`, `transcript_eager`, `speech_resumed`, and `transcript_final` as voice events. `stop_listening` ends a stream. The harness reaches it with `stt=voice_listen`.
+
+`stub_server.py` (step 6) replays a scripted utterance for `bench/voice_bridge_probe.py`. See ADR-008 for why events ride a long-running call.

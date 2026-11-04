@@ -170,11 +170,11 @@ def _duck_report(result, report: dict) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tts", default="fake_words",
-                    choices=["fake", "fake_words", "deepgram_aura2", "cartesia"])  # fmt: skip
+                    choices=["fake", "fake_words", "deepgram_aura2", "cartesia", "voice_speak"])  # fmt: skip
     ap.add_argument("--barge-after", type=float, default=2.5)
     ap.add_argument("--barge-text", default=BARGE_IN)
     ap.add_argument("--barge-in", choices=["immediate", "duck"], default="immediate")
-    ap.add_argument("--stt", choices=["fake", "deepgram_flux"], default="fake",
+    ap.add_argument("--stt", choices=["fake", "deepgram_flux", "voice_listen"], default="fake",
                     help="deepgram_flux gives interim transcripts (spends about $0.001 a run)")  # fmt: skip
     args = ap.parse_args()
     with tempfile.TemporaryDirectory() as d:

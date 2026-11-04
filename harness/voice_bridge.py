@@ -45,6 +45,7 @@ class VoiceServer:
     name: str  # "speak" or "listen"
     module: str = ""  # stdio: python module to run
     url: str = ""  # http: streamable HTTP endpoint
+    env: dict[str, str] | None = None  # stdio: the server's environment, None for the SDK default
 
 
 class _Connection:
@@ -73,7 +74,8 @@ class _Connection:
             else:
                 cm = stdio_client(
                     StdioServerParameters(
-                        command=sys.executable, args=["-m", self.server.module], cwd=str(REPO_ROOT)
+                        command=sys.executable, args=["-m", self.server.module], cwd=str(REPO_ROOT),
+                        env=self.server.env,
                     )
                 )
             async with cm as (read, write):

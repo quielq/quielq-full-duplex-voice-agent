@@ -34,7 +34,13 @@ TASK_SERVERS = {
     "docs": "servers.tasks.docs.server",
     "workspace": "servers.tasks.workspace.server",
 }
-SERVER_KEYS = {"servers.tasks.knowledge.server": {"TAVILY_API_KEY"}}  # the only exceptions (ADR-021)
+VOICE_SERVERS = {"listen": "servers.voice_listen.server", "speak": "servers.voice_speak.server"}
+# The only exceptions: search (ADR-021), and each voice server's own provider (ADR-032).
+SERVER_KEYS = {
+    "servers.tasks.knowledge.server": {"TAVILY_API_KEY"},
+    VOICE_SERVERS["listen"]: {"DEEPGRAM_API_KEY"},
+    VOICE_SERVERS["speak"]: {"CARTESIA_API_KEY"},
+}
 
 
 def _server_env(data_dir: str | None, module: str = "") -> dict[str, str]:

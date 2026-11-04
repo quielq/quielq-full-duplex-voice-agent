@@ -188,7 +188,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--grid", required=True, help="one Flux setting and its values, 'off' for unset")
     ap.add_argument("--set", default="", help="Flux settings held fixed, e.g. eot_threshold=0.6")
-    ap.add_argument("--stt", choices=["fake", "deepgram_flux"], default="fake")
+    ap.add_argument("--stt", choices=["fake", "deepgram_flux", "voice_listen"], default="fake")
     ap.add_argument("--llm", choices=["fake", "groq"], default="fake")
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--model", help="override the Groq model for this run")

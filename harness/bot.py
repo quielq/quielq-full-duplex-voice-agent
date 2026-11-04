@@ -67,7 +67,7 @@ from harness.mcp_tools import TASK_SERVERS, task_clients
 from harness.null_output import PacedNullOutputTransport
 from harness.phrase_cache import load_phrase
 from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
-from harness.providers import STAGE_PROVIDER, build_llm, build_stt, build_tts
+from harness.providers import FLUX_STAGES, STAGE_PROVIDER, build_llm, build_stt, build_tts
 from harness.system_stats import LoopLag, SystemStats
 from servers.tasks.music.backends import PLAYER_NAME, SpotifyBackend
 from harness.recovery import LLMErrorRecovery
@@ -125,19 +125,19 @@ def _turn_strategies(cfg: Config, force_end: ForcedEndTurn | None = None) -> Use
     Pipecat 1.x API: interruptions and turn ends come from user_turn_strategies.
     Never allow_interruptions / interruption_strategies / TransportParams(vad_analyzer=...).
     "flux" returns None so the aggregator applies the strategies Deepgram Flux
-    recommends (its own start and end of turn); it needs stt=deepgram_flux.
+    recommends (its own start and end of turn); it needs Flux (stt=deepgram_flux or voice_listen).
     """
     mode = cfg.profile["turn"]["stop"]
-    flux_stt = cfg.providers["stages"]["stt"] == "deepgram_flux"
+    flux_stt = cfg.providers["stages"]["stt"] in FLUX_STAGES
     if mode == "auto":
         mode = "flux" if flux_stt else "smart_turn"
     elif mode not in ("flux", "flux_forced") and flux_stt:
         raise ValueError(f"turn.stop={mode} does not work with Deepgram Flux STT; use auto or flux")
     elif mode == "flux_forced" and not flux_stt:
-        raise ValueError("turn.stop=flux_forced needs stages.stt=deepgram_flux")
+        raise ValueError("turn.stop=flux_forced needs stages.stt=deepgram_flux or voice_listen")
     if mode == "flux":
-        if cfg.providers["stages"]["stt"] != "deepgram_flux":
-            raise ValueError("turn.stop=flux needs stages.stt=deepgram_flux")
+        if not flux_stt:
+            raise ValueError("turn.stop=flux needs stages.stt=deepgram_flux or voice_listen")
         return None
     if mode == "smart_turn":
         stop = [TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())]
@@ -324,7 +324,8 @@ async def run_bot(
         prompt = f"{SYSTEM_PROMPT} {ADDRESSING_PROMPT}" if addressing else SYSTEM_PROMPT
         llm = build_llm(cfg.providers, ledger, system_instruction=prompt)
         hops = AudioHops(log.emit)
-        tts = build_tts(cfg.providers, ledger, on_event=log.emit, hops=hops)
+        voice = {"transport": mcp_transport, "data_dir": str(cfg.path("data_dir")), "on_event": log.emit}
+        tts = build_tts(cfg.providers, ledger, on_event=log.emit, hops=hops, voice=voice)
         llm.register_function(None, policy.deny_unknown)  # disabled or invented tools stop here
 
         audio = cfg.profile["audio"]
@@ -340,12 +341,13 @@ async def run_bot(
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain, on_event=log.emit)
             trace_writes(transport.output(), hops)
-            stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts, forced=forced)
+            stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts, forced=forced, voice=voice)
             front = [transport.input(), mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
             back = [*filler_procs, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
-            stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts, forced=forced)
+            stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts,
+                            forced=forced, voice=voice)  # fmt: skip
             front = [source, mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
