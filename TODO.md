@@ -9,10 +9,11 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 ## Waiting on Quiel
 
 - [x] Give the go for step 7, the Pi port (Nov 2)
-- [ ] Choose how to build the voice servers: spec items 2 and 5 ask for MCP servers attached to the ASR and TTS, run on the Pi, so they are in scope (spec checked Nov 3)
-- [ ] Decide whether to build `delegate`, and on which model: Haiku, OpenRouter, or Ollama. OnIt is dropped (Nov 3)
+- [x] Choose how to build the voice servers: option B, thin servers that hold the Flux and Cartesia connections, audio on a Unix socket, playback and echo cancelling kept in the harness (Nov 4). Plan waits for approval
+- [x] `delegate` model: Haiku 5.5 for now. OnIt is dropped (Nov 3 and 4). Building it waits for a plan
 - [x] Patent question dropped, and the repo goes public as a course requirement (Nov 3). Privacy measures are listed in `docs/privacy.md`
-- [ ] Decide reply templates: enable or leave off. Measured on Groq 120b only, not on Haiku (ADR-020)
+- [x] Reply templates stay off: the second LLM call always runs (Nov 4, ADR-020). A natural thinking phrase covers long waits instead
+- [ ] Our own command policy to replace the vendored OnIt file (Nov 4): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen. Plan waits for approval
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
 - [ ] Approve generating the real waiting phrase clips (paid TTS call)
