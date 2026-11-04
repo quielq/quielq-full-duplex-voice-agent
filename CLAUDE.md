@@ -40,7 +40,7 @@ Running the full agent on the Mac: `docs/quickstart-mac.md`. The Pi port order: 
 
 ```
 harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py
-servers/        voice_listen/, voice_speak/ (stubs), tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (not built)
+servers/        voice_listen/, voice_speak/ (Flux and Cartesia relays, ADR-032, plus the stubs), voice_relay.py, tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (not built)
 bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
 docs/           architecture.md, tools.md, research.md, prompt.md, decisions/
@@ -82,7 +82,7 @@ Live mic runs refuse the built-in speakers unless `--echo-cancel` is set (WebRTC
 
 General tools (ADR-021, ADR-024): weather and fetch are real by default, and `search` is a fake until `ME3_TOOL_STAGES=search=tavily`. File tools are real but confined to `data/workspace`, with `data/documents` read-only. `send_file` is always a mock.
 
-`bash` and `serve` are mocks unless `ME3_WORKSPACE_LIVE=1`. Live, they pass `servers/shell_guard.py` and run in `servers/sandbox.py` (`sandbox-exec` on the Mac, `bwrap` on the Pi). With no sandbox they refuse. Never weaken this.
+`bash` and `serve` are mocks unless `ME3_WORKSPACE_LIVE=1`. Live, they pass `servers/command_policy.py` (ADR-034: reads run at once, changes and runs ask in plain words, `rm` keeps a copy) and run in `servers/sandbox.py` (`sandbox-exec` on the Mac, `bwrap` on the Pi). With no sandbox they refuse. Never weaken this.
 
 `open_in_browser` is the only tool that leaves the sandbox: one HTML file from the workspace, after a spoken yes, and a mock unless `ME3_WORKSPACE_LIVE=1` (ADR-026). Do not widen it to other file types or to command text without a new ADR.
 
@@ -94,4 +94,10 @@ Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by de
 
 Reply templates skip the second LLM call on simple tools, off by default (`--reply-templates`, ADR-020). `flux_forced` is built and off (ADR-019).
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `delegate`, real voice servers and the audio side channel, the model comparison. Pi scripts are built and have not run on a Pi (ADR-030): the service stays on fakes until `~/.config/me3/bot.env` names live stages. The waiting phrase is built but off by default, with a placeholder tone until real clips are approved.
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `delegate`, the model comparison.
+
+Voice servers (ADR-032): `stt=voice_listen,tts=voice_speak` routes Flux and Cartesia through our MCP servers, which hold the keys. The provider messages ride a Unix socket per stream, and playback, ducking, and AEC stay in the harness. Tested on fakes only.
+
+Pi scripts are built and have not run on a Pi (ADR-030): the service stays on fakes until `~/.config/me3/bot.env` names live stages.
+
+The waiting phrase is on (ADR-033): five clips rotate, after 1500 ms with no reply audio or when a slow tool starts, and the prompt tells the model not to say one itself. Until `ME3_LIVE=1 uv run python -m bench.make_phrases` makes the clips (paid, about $0.003), it is a short tone.

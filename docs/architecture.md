@@ -139,13 +139,15 @@ The reference range comes from an outside source, the DeepLearning.AI voice agen
 
 ### Waiting phrase (approved, ADR-009)
 
-Tool turns need a second LLM call, and the budget above has no line for it. A short local clip ("One sec") from the pre-synthesised phrase cache plays when a tool call starts, or when no reply audio has started about 600 ms after end of turn (a hypothesis to tune). It plays once per turn at most, stops on interruption, never enters the LLM context, and never plays for `stay_silent` or in IDLE. It shortens the silence but does not count toward the targets: the log records `filler_audio_out` separately, and the headline stays first answer audio.
+Tool turns need a second LLM call, and the budget above has no line for it. A short local clip ("One sec") from the pre-synthesised phrase cache plays when a tool call starts, or when no reply audio has started about 600 ms after end of turn (a hypothesis to tune). It plays once per turn at most, stops on interruption, never enters the LLM context, and never plays for `stay_silent` or in IDLE. It shortens the silence but does not count toward the targets: the log records `filler_audio_out` separately, and the headline stays first answer audio. Nov 4, 2026 (ADR-033): on by default, five clips rotate, the timer is 1500 ms, only slow tools trigger it on start, and the prompt tells the model not to say a waiting phrase itself. Reply templates stay off.
 
 ## MCP servers and tool contracts
 
 Two voice servers give the harness its ears and mouth, and seven task servers cover the ten ME2 commands plus delegation. All are written with FastMCP (the Python SDK in Prof's Agents deck) and run on the Pi, so the spec's "you build and run your MCP servers" is met, while the models behind ASR and TTS are commercial APIs.
 
 ### Voice servers (control plane)
+
+**Nov 4, 2026: built as thin servers (ADR-032).** `voice-listen` holds the Flux stream and `voice-speak` holds the Cartesia stream, each with its own key and cap check. The provider's messages travel on a Unix socket per stream, and MCP carries `listen`, `speak`, `stop`, and the voice events. Playback, ducking, and echo cancelling stay in the harness, next to the speaker, so `duck`, `unduck`, and `interrupt` are not server tools. Select them with `stt=voice_listen,tts=voice_speak`. The table below is the original design.
 
 Audio frames travel on a local side channel between the audio device, VAD, and these servers (a Unix socket or shared memory; the choice is a spike). MCP carries only commands and events, which stay small and cancellable.
 
@@ -556,7 +558,7 @@ The last commit is from Oct 21, so the Oct 29 work has not landed and the chart 
 | Nov 4 to 5 | `music`, `lights`, `knowledge`, `delegate` as time allows. Benchmark runs. | Pi |
 | Nov 5 | Feature freeze. | |
 
-This is tight. The real voice servers and audio side channel have no slot, so the demo would keep audio directly in Pipecat, with the bridge shown through the stub probe. That is a scope decision for Quiel, and it must be checked against the assignment spec first.
+This is tight. The real voice servers and audio side channel have no slot, so the demo would keep audio directly in Pipecat, with the bridge shown through the stub probe. That is a scope decision for Quiel, and it must be checked against the assignment spec first. Nov 4, 2026: the spec requires them, so they are built as thin servers (ADR-032).
 
 ## Risks, open decisions, and sources
 
@@ -582,7 +584,7 @@ This is tight. The real voice servers and audio side channel have no slot, so th
 
 ### Open decisions
 
-- **Audio side channel.** Unix socket or shared memory between the audio device, VAD, and the voice servers. Settled by a spike.
+- **Audio side channel.** Settled Nov 4, 2026: a Unix socket per stream (ADR-032).
 - **Search provider** for the `knowledge` server. Not chosen.
 - **Light control.** Whether the Xiaomi bulb can be controlled locally or only through the cloud. Not checked.
 - **Default models.** ASR, TTS, and LLM defaults come out of the comparison, not before it. The starting stack is only a starting point.

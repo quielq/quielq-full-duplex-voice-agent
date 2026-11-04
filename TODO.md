@@ -9,14 +9,15 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 ## Waiting on Quiel
 
 - [x] Give the go for step 7, the Pi port (Nov 2)
-- [x] Choose how to build the voice servers: option B, thin servers that hold the Flux and Cartesia connections, audio on a Unix socket, playback and echo cancelling kept in the harness (Nov 4). Plan waits for approval
+- [x] Choose how to build the voice servers: option B, thin servers that hold the Flux and Cartesia connections, audio on a Unix socket, playback and echo cancelling kept in the harness (Nov 4). Built, ADR-032
 - [x] `delegate` model: Haiku 5.5 for now. OnIt is dropped (Nov 3 and 4). Building it waits for a plan
 - [x] Patent question dropped, and the repo goes public as a course requirement (Nov 3). Privacy measures are listed in `docs/privacy.md`
 - [x] Reply templates stay off: the second LLM call always runs (Nov 4, ADR-020). A natural thinking phrase covers long waits instead
-- [ ] Our own command policy to replace the vendored OnIt file (Nov 4): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen. Plan waits for approval
+- [x] Our own command policy replaces the vendored OnIt file (Nov 4, ADR-034): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen
+- [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
-- [ ] Approve generating the real waiting phrase clips (paid TTS call)
+- [ ] Approve generating the five waiting phrase clips through voice-speak (`bench.make_phrases`, about $0.003)
 - [ ] Later purchase: OpenRouter ($5), only if the model comparison goes ahead
 - [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
 - [x] Confirm the deadline: Nov 7 holds (Oct 31)
@@ -67,7 +68,7 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Run a website job by voice with `--ui`: Flappy Bird and a UP AI page on the Pi, Nov 2. Their quality is not checked
 - [x] Repeat the website job and try a larger site (Nov 3, text, Haiku): small site 2 of 2 in 14 to 28 s, a three-page cafe site 2 of 2 in about 80 s and $0.02, every page and `plan.md` written. Page quality not checked. Earlier runner results were void: it gave `write_file` an undo window, fixed
 - [x] Try a job that uses `bash` and `serve` (Nov 3, text, live sandbox): 2 of 2, one read-back and one yes per command. The read-back speaks flags aloud ("python3 dash m http.server 8000"), which is clumsy by voice
-- [ ] Decide how a long silent job should sound: the waiting phrase is built, with no real clips yet
+- [x] Decide how a long silent job should sound: a rotating thinking phrase, on by default, reply templates off (Nov 4, ADR-033)
 - [ ] Prune `.versions` if it grows (one 2.5 KB file on Nov 3, nothing to do yet)
 
 ## Check after the Nov 2 live run
@@ -130,6 +131,8 @@ Waiting phrase (Nov 2):
 
 - [x] Phrase cache, shared with the network-loss phrases and the spending-cap notice (`harness/phrase_cache.py`)
 - [ ] Generate the real clips (paid TTS call, needs a go); a placeholder tone plays until then
+- [x] Five rotating clips, 1500 ms, slow tools only on start, a prompt rule against saying one, on by default (Nov 4, ADR-033)
+- [ ] Check the 1500 ms threshold and the slow-tool list on a live run
 - [x] Triggers: tool call start, or no reply audio after `filler.after_ms`; off by default in `mac.yaml` and `pi.yaml` (e2f977b)
 - [x] Once per turn, interruptible, kept out of the LLM context, never for `stay_silent` or in IDLE (e2f977b; the IDLE and `stay_silent` hooks wait for those features)
 - [x] `filler_audio_out` event and a `latency_probe` stage; log how often it plays (e2f977b; reply audio after a clip is an estimate)
@@ -156,11 +159,14 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] Test-runner fix: a backchannel run now waits 15 s, not 60 s
 - [ ] Resume policy after an interruption: resume, summarize the unplayed part, or drop it (review improvement 4)
 
-## Voice servers (stubs today)
+## Voice servers (ADR-032)
 
-- [ ] Real `voice-listen` and `voice-speak` backed by Flux and Cartesia/Aura-2
-- [ ] Audio side channel: choose Unix socket or shared memory, then build it
-- [ ] Missing tools: `append_text`, `pause`, `resume`, `interrupt(kind)`, `status`
+- [x] Real `voice-listen` (Flux) and `voice-speak` (Cartesia) as thin relays, tested on fakes over stdio and HTTP (Nov 4)
+- [x] Audio side channel: a Unix socket per stream (Nov 4)
+- [ ] One live Mac run with `stt=voice_listen,tts=voice_speak`, and the Cartesia interruption bench through the servers (paid, needs a yes)
+- [ ] Measure the extra audio hop through the servers, on the Mac and then the Pi
+- [ ] Switch the Pi service and the live command to the voice stages once the live run passes
+- [x] `append_text`, `pause`, `resume`, `interrupt(kind)` dropped: Pipecat sends these as Cartesia messages on the stream (ADR-032)
 - [ ] Wire `VoiceEventFrame`s into pipeline actions (ADR-008)
 - [ ] Reconnect logic for MCP sessions that expire after 30 minutes idle
 - [x] Due timers announce themselves (done in the bot instead, `harness/timer_watch.py`)
