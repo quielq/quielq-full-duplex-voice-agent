@@ -263,6 +263,7 @@ class RuleBasedLLMService(LLMService):
     async def _general_rule(self, context, low: str, tools: set[str]) -> bool:
         """Requests for the knowledge, docs, and workspace tools (ADR-021)."""
         rules = [
+            ("start_task", r"\bin the background,? (.+)", lambda m: {"goal": m.group(1)}),
             ("call_contact", r"\bcall (\w+)$", lambda m: {"to": m.group(1)}),
             ("get_weather", r"\bweather\b", lambda m: {}),
             ("search", r"\bsearch the web for (.+)", lambda m: {"query": m.group(1)}),
@@ -359,6 +360,8 @@ class RuleBasedLLMService(LLMService):
             return "Are you sure?"
         if isinstance(result, dict) and result.get("status") == "denied":
             return "Sorry, I can't do that."
+        if isinstance(result, dict) and "task_id" in result:
+            return "Okay, I'm working on that in the background. I'll tell you when it's done."
         if isinstance(result, dict) and "spoken_time" in result:
             return f"It's {result['spoken_time']} on {result['weekday']}, {result['date']}."
         if isinstance(result, dict) and "target_c" in result:

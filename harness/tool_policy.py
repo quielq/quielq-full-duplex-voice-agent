@@ -514,6 +514,10 @@ class ToolPolicy:
     def _unannounced(self) -> list[HeldAction]:
         return [a for a in self._held if a.state == "undo" and not a.window_open]
 
+    def busy(self) -> bool:
+        """Something is held, waiting for a yes or an undo window, so the floor is not free."""
+        return bool(self._held)
+
     def _awaiting_answer(self) -> list[HeldAction]:
         return [a for a in self._held if a.state == "confirm"]
 

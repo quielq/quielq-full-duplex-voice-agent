@@ -588,7 +588,7 @@ This is tight. The real voice servers and audio side channel have no slot, so th
 - **Search provider** for the `knowledge` server. Not chosen.
 - **Light control.** Whether the Xiaomi bulb can be controlled locally or only through the cloud. Not checked.
 - **Default models.** ASR, TTS, and LLM defaults come out of the comparison, not before it. The starting stack is only a starting point.
-- **Which model the worker uses,** if `delegate` is built: Haiku 5.5, a model through OpenRouter, or one served by Ollama. Not decided (Nov 3).
+- **Which model the worker uses:** Haiku 5.5, chosen by Quiel on Nov 4. Built on fakes in ADR-035.
 - **Whether the class shares one benchmark clip set.** The class chat suggested a common benchmark; if the class agrees on one, ours becomes the adapter for it.
 - **Echo hardware.** Which speakerphone to use, and whether the VCM plan's Anker device is good enough.
 - **Music source** for a sellable product.

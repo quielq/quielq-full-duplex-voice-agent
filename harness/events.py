@@ -94,6 +94,14 @@ class TurnEventObserver(BaseObserver):
         self.policy = None
         # Set by the bot when the face is on: reply text as it streams (harness/ui.py).
         self.on_text = None
+        # Who has the floor, so a background result waits for a quiet moment (ADR-035).
+        self.user_speaking = False
+        self.bot_speaking = False
+        self.replying = False
+
+    @property
+    def quiet(self) -> bool:
+        return not (self.user_speaking or self.bot_speaking or self.replying)
 
     def _first(self, name: str, **fields) -> None:
         if name not in self._firsts:
@@ -114,10 +122,12 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, VADUserStoppedSpeakingFrame):
             log.emit("vad_end")
         elif isinstance(frame, UserStartedSpeakingFrame):
+            self.user_speaking = True
             log.next_turn()
             self._firsts.clear()
             log.emit("user_turn_start")
         elif isinstance(frame, UserStoppedSpeakingFrame):
+            self.user_speaking = False
             log.emit("end_of_turn")
         elif isinstance(frame, TranscriptionFrame):
             self.transcripts.append(frame.text)
@@ -129,6 +139,7 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, EagerEndOfTurnCancelFrame):
             log.emit("eager_cancel")
         elif isinstance(frame, LLMFullResponseStartFrame):
+            self.replying = True
             self._response_has_text = False
             log.emit("llm_request")
         elif isinstance(frame, LLMTextFrame):
@@ -138,6 +149,7 @@ class TurnEventObserver(BaseObserver):
             if self.on_text:
                 self.on_text(frame.text)
         elif isinstance(frame, LLMFullResponseEndFrame):
+            self.replying = False
             log.emit("llm_end")
             if self._response_has_text:
                 self.reply_done.set()
@@ -161,11 +173,13 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, TTSTextFrame):
             self.spoken_text.append(frame.text)
         elif isinstance(frame, BotStartedSpeakingFrame):
+            self.bot_speaking = True
             is_filler = self.filler is not None and self.filler.claim_bot_start()
             log.emit("filler_audio_out" if is_filler else "first_audio_out")
             if self.policy:
                 self.policy.bot_started()
         elif isinstance(frame, BotStoppedSpeakingFrame):
+            self.bot_speaking = False
             log.emit("audio_silent")
             if self.policy:
                 self.policy.bot_stopped()

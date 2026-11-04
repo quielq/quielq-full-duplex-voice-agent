@@ -31,7 +31,7 @@ readback_max_chars: 240
 # tools refuse every call until the session ends (ADR-024).
 containment:
   after_critical: 3
-  tools: [bash, serve, write_file, edit_file, send_file, open_in_browser, send_message, call_contact]
+  tools: [bash, serve, write_file, edit_file, send_file, open_in_browser, send_message, call_contact, start_task]
 
 # Fixed phrases: spoken by the harness with no LLM call.
 phrases:
@@ -71,6 +71,11 @@ reply_templates:
 # report_result: true by default. A held tool's success gets one more LLM reply (ADR-023).
 tools:
   cancel_timer:
+    permission: auto
+    undo_s: 5.0
+  # The worker can do only what needs no yes, so starting one runs at once (ADR-035).
+  start_task: {permission: auto}
+  cancel_task:
     permission: auto
     undo_s: 5.0
   search: {timeout_s: 15.0}
