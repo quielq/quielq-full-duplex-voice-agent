@@ -1,0 +1,51 @@
+customer_id,company,industry,city,contact_name,contact_email,contact_phone,plan,seats,monthly_fee_php,customer_since,renewal_date,status,account_manager,open_tickets,notes
+C-1001,Sikat Logistics Inc.,Logistics,Makati,Nicole Cruz,nicole.cruz@sikatlogistics.example,+63 2 555 7854,Starter,24,0,2021-01-16,,Churned,Lea Manalo,0,Reference customer
+C-1002,Bukid Schools Group,Education,Quezon City,Ana Navarro,ana.navarro@bukidschools.example,+63 2 555 4200,Starter,20,0,2025-06-15,2027-04-08,Trial,Tomas Pineda,5,Moved to annual billing
+C-1003,Mayon Builders Corp.,Construction,Davao City,Paolo Del Rosario,paolo.delrosario@mayonbuilders.example,+63 2 555 9884,Starter,16,0,2026-03-20,2026-06-20,Trial,Lea Manalo,0,Wants a quarterly business review
+C-1004,Liwayway Bank Group,Banking,Baguio,Miguel Dizon,miguel.dizon@liwaywaybank.example,+63 2 555 2005,Starter,21,0,2021-09-23,2026-06-24,Trial,Jen Uy,6,Expanding to Cebu office
+C-1005,Banaag Motors Group,Automotive,Taguig,Isabel Rivera,isabel.rivera@banaagmotors.example,+63 2 555 4211,Business,164,65000,2022-08-14,2027-06-04,Active,Rico Salazar,5,Wants a quarterly business review
+C-1006,Tala Farms Co.,Agriculture,Manila,Ana Garcia,ana.garcia@talafarms.example,+63 2 555 9168,Enterprise,1180,240000,2022-12-28,2026-02-01,Active,Tomas Pineda,2,Moved to annual billing
+C-1007,Tala Hotels Group,Hospitality,Davao City,Enzo Ramos,enzo.ramos@talahotels.example,+63 2 555 1607,Business,77,0,2024-04-22,,Churned,Tomas Pineda,0,Reference customer
+C-1008,Silangan Schools Corp.,Education,Mandaluyong,Luis Reyes,luis.reyes@silanganschools.example,+63 2 555 2012,Starter,39,0,2025-01-19,2026-12-15,Trial,Rico Salazar,4,Asked about the SSO add-on
+C-1009,Molave Hotels Co.,Hospitality,Quezon City,Carlo Santos,carlo.santos@molavehotels.example,+63 2 555 8154,Enterprise,315,0,2025-07-21,,Churned,Rico Salazar,0,Wants a quarterly business review
+C-1010,Habagat Telecom Group,Telecommunications,Taguig,Miguel Ramos,miguel.ramos@habagattelecom.example,+63 2 555 2119,Business,99,0,2021-10-28,,Churned,Tomas Pineda,0,Expanding to Cebu office
+C-1011,Habagat Schools Corp.,Education,Makati,Jose Aquino,jose.aquino@habagatschools.example,+63 2 555 5060,Starter,28,0,2023-12-11,,Churned,Tomas Pineda,0,Wants a quarterly business review
+C-1012,Sinag Pharma Group,Pharmaceuticals,Mandaluyong,Rafael Villanueva,rafael.villanueva@sinagpharma.example,+63 2 555 8091,Enterprise,677,260000,2024-08-07,2027-07-11,Active,Tomas Pineda,4,Late payment twice in 2026
+C-1013,Molave Telecom Inc.,Telecommunications,Cagayan de Oro,Carlo Villanueva,carlo.villanueva@molavetelecom.example,+63 2 555 7101,Enterprise,1047,248000,2025-02-16,2027-06-22,Active,Rico Salazar,4,Asked about the SSO add-on
+C-1014,Sampaguita Motors Group,Automotive,Pasig,Isabel Ramos,isabel.ramos@sampaguitamotors.example,+63 2 555 3630,Starter,22,35000,2023-07-16,2026-04-07,Active,Jen Uy,5,Late payment twice in 2026
+C-1015,Bituin Foods Inc.,Food and beverage,Taguig,Paolo Cruz,paolo.cruz@bituinfoods.example,+63 2 555 5913,Starter,40,0,2023-06-23,,Churned,Jen Uy,0,Unhappy with support response time
+C-1016,Tala Bank Corp.,Banking,Iloilo City,Joshua Dizon,joshua.dizon@talabank.example,+63 2 555 4151,Business,242,66000,2025-10-08,2026-01-01,Active,Tomas Pineda,0,Expanding to Cebu office
+C-1017,Sampaguita Builders Inc.,Construction,Davao City,Andrea Garcia,andrea.garcia@sampaguitabuilders.example,+63 2 555 6772,Starter,10,25000,2022-06-25,2027-12-15,Active,Tomas Pineda,5,Reference customer
+C-1018,Mayon Hotels Group,Hospitality,Baguio,Enzo Santos,enzo.santos@mayonhotels.example,+63 2 555 6829,Starter,13,0,2025-03-03,2027-09-15,Trial,Tomas Pineda,6,Moved to annual billing
+C-1019,Hiraya Pharma Group,Pharmaceuticals,Taguig,Miguel Del Rosario,miguel.delrosario@hirayapharma.example,+63 2 555 4796,Starter,19,26000,2024-11-24,2027-10-02,Active,Jen Uy,4,Renewal discount requested
+C-1020,Amihan Media Inc.,Media,Cagayan de Oro,Andrea Santos,andrea.santos@amihanmedia.example,+63 2 555 2929,Starter,8,0,2025-06-24,2027-07-02,Trial,Rico Salazar,0,Moved to annual billing
+C-1021,Bukid Energy Inc.,Energy,Iloilo City,Gabriel Castillo,gabriel.castillo@bukidenergy.example,+63 2 555 3880,Starter,9,22000,2023-09-21,2027-02-09,Active,Jen Uy,2,Pays on time
+C-1022,Ilog Retail Co.,Retail,Bacolod,Kristine Torres,kristine.torres@ilogretail.example,+63 2 555 3913,Enterprise,1126,246000,2022-02-03,2027-09-20,Active,Lea Manalo,1,Unhappy with support response time
+C-1023,Pinatubo Insurance Inc.,Insurance,Mandaluyong,Isabel Mendoza,isabel.mendoza@pinatuboinsurance.example,+63 2 555 1496,Enterprise,558,245000,2022-10-12,2026-09-28,Active,Lea Manalo,5,Integrations with their ERP
+C-1024,Liwayway Logistics Corp.,Logistics,Cagayan de Oro,Nicole Mendoza,nicole.mendoza@liwaywaylogistics.example,+63 2 555 1531,Business,222,0,2022-12-14,,Churned,Jen Uy,0,Renewal discount requested
+C-1025,Bukid Farms Co.,Agriculture,Cagayan de Oro,Bea Reyes,bea.reyes@bukidfarms.example,+63 2 555 8813,Business,153,0,2024-09-19,,Churned,Tomas Pineda,0,Unhappy with support response time
+C-1026,Kidlat Logistics Inc.,Logistics,Quezon City,Rafael Castillo,rafael.castillo@kidlatlogistics.example,+63 2 555 9897,Starter,36,37000,2021-12-19,2026-11-04,At risk,Jen Uy,4,Reference customer
+C-1027,Diwata Hotels Corp.,Hospitality,Manila,Miguel Garcia,miguel.garcia@diwatahotels.example,+63 2 555 5873,Enterprise,1259,250000,2024-02-23,2027-01-26,At risk,Rico Salazar,5,Reference customer
+C-1028,Ilog Schools Corp.,Education,Manila,Kristine Garcia,kristine.garcia@ilogschools.example,+63 2 555 5859,Enterprise,845,252000,2026-06-21,2027-02-13,At risk,Rico Salazar,6,Expanding to Cebu office
+C-1029,Molave Farms Inc.,Agriculture,Manila,Miguel Villanueva,miguel.villanueva@molavefarms.example,+63 2 555 7277,Starter,23,0,2023-06-18,2027-01-26,Trial,Jen Uy,2,Moved to annual billing
+C-1030,Hiraya Farms Corp.,Agriculture,Baguio,Carlo Navarro,carlo.navarro@hirayafarms.example,+63 2 555 2047,Starter,8,0,2023-01-15,,Churned,Tomas Pineda,0,Integrations with their ERP
+C-1031,Alon Media Inc.,Media,Cebu City,Joshua Tan,joshua.tan@alonmedia.example,+63 2 555 4767,Starter,10,28000,2022-02-10,2026-05-12,Active,Rico Salazar,2,Pays on time
+C-1032,Sikat Hotels Group,Hospitality,Mandaluyong,Patricia Bautista,patricia.bautista@sikathotels.example,+63 2 555 3577,Business,143,73000,2024-08-10,2027-03-12,Active,Jen Uy,1,Expanding to Cebu office
+C-1033,Sampaguita Telecom Inc.,Telecommunications,Bacolod,Luis Flores,luis.flores@sampaguitatelecom.example,+63 2 555 7836,Starter,13,32000,2025-08-05,2027-09-27,Active,Lea Manalo,2,Renewal discount requested
+C-1034,Taal Foods Co.,Food and beverage,Bacolod,Gabriel Mendoza,gabriel.mendoza@taalfoods.example,+63 2 555 1744,Starter,5,24000,2023-01-10,2026-10-25,Active,Rico Salazar,5,Moved to annual billing
+C-1035,Habagat Pharma Corp.,Pharmaceuticals,Baguio,Ana Mendoza,ana.mendoza@habagatpharma.example,+63 2 555 6688,Enterprise,387,244000,2023-06-27,2027-05-12,Active,Rico Salazar,0,Asked about the SSO add-on
+C-1036,Habagat Foods Corp.,Food and beverage,Makati,Luis Flores,luis.flores@habagatfoods.example,+63 2 555 7170,Starter,12,0,2022-03-28,2026-03-22,Trial,Jen Uy,2,Moved to annual billing
+C-1037,Bundok Pharma Group,Pharmaceuticals,Taguig,Jose Navarro,jose.navarro@bundokpharma.example,+63 2 555 7543,Starter,18,30000,2023-12-18,2027-05-12,Active,Jen Uy,3,Integrations with their ERP
+C-1038,Diwata Farms Group,Agriculture,Taguig,Andrea Navarro,andrea.navarro@diwatafarms.example,+63 2 555 4569,Starter,5,20000,2025-05-20,2027-04-19,Active,Rico Salazar,0,Wants a quarterly business review
+C-1039,Banaag Clinics Corp.,Healthcare,Bacolod,Andrea Ramos,andrea.ramos@banaagclinics.example,+63 2 555 2258,Starter,11,38000,2026-02-23,2026-03-12,Active,Jen Uy,4,Late payment twice in 2026
+C-1040,Sinag Energy Co.,Energy,Pasig,Nicole Bautista,nicole.bautista@sinagenergy.example,+63 2 555 3043,Business,61,0,2023-02-11,,Churned,Jen Uy,0,Asked about the SSO add-on
+C-1041,Hiraya Media Corp.,Media,Taguig,Mark Mendoza,mark.mendoza@hirayamedia.example,+63 2 555 4184,Starter,20,32000,2023-01-09,2027-07-18,At risk,Lea Manalo,6,Pays on time
+C-1042,Ilog Foods Corp.,Food and beverage,Taguig,Gabriel Tan,gabriel.tan@ilogfoods.example,+63 2 555 3014,Enterprise,651,256000,2025-10-16,2026-02-19,At risk,Lea Manalo,0,Pays on time
+C-1043,Sinag Media Group,Media,Mandaluyong,Carlo Mendoza,carlo.mendoza@sinagmedia.example,+63 2 555 8230,Business,98,83000,2026-02-05,2027-01-10,Active,Lea Manalo,5,Moved to annual billing
+C-1044,Dagat Pharma Inc.,Pharmaceuticals,Manila,Isabel Aquino,isabel.aquino@dagatpharma.example,+63 2 555 7398,Business,194,80000,2021-06-17,2027-07-10,Active,Tomas Pineda,4,Late payment twice in 2026
+C-1045,Diwata Media Co.,Media,Manila,Carla Rivera,carla.rivera@diwatamedia.example,+63 2 555 4332,Starter,19,0,2021-09-24,,Churned,Rico Salazar,0,Reference customer
+C-1046,Ilog Hotels Corp.,Hospitality,Iloilo City,Ana Bautista,ana.bautista@iloghotels.example,+63 2 555 7674,Starter,37,34000,2025-07-12,2026-10-19,At risk,Tomas Pineda,0,Moved to annual billing
+C-1047,Amihan Motors Inc.,Automotive,Iloilo City,Paolo Aquino,paolo.aquino@amihanmotors.example,+63 2 555 7859,Business,92,0,2022-06-03,,Churned,Jen Uy,0,Expanding to Cebu office
+C-1048,Liwayway Insurance Corp.,Insurance,Manila,Gabriel Villanueva,gabriel.villanueva@liwaywayinsurance.example,+63 2 555 5544,Starter,30,27000,2024-04-08,2027-08-17,Active,Rico Salazar,5,Renewal discount requested
+C-1049,Bagong Farms Inc.,Agriculture,Bacolod,Jose Del Rosario,jose.delrosario@bagongfarms.example,+63 2 555 2915,Starter,14,0,2022-07-20,2026-10-28,Trial,Tomas Pineda,4,Integrations with their ERP
+C-1050,Liwayway Retail Corp.,Retail,Quezon City,Rafael Ramos,rafael.ramos@liwaywayretail.example,+63 2 555 5552,Enterprise,575,243000,2021-05-18,2026-07-24,Active,Tomas Pineda,0,Expanding to Cebu office
