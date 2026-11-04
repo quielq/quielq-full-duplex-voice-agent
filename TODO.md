@@ -225,10 +225,11 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 
 ## Reliability and operations
 
-- [ ] Network-loss detection (the fallback phrases are cached in `harness/phrase_cache.py`, nothing detects the loss yet)
+- [x] Network-loss detection: a TCP probe tells an outage from a bad request, `network_lost` plays once, the face shows it, recovery is logged (Nov 4, ADR-037, fakes only)
+- [ ] Make the `network_lost` and `cap_reached` clips (paid, about $0.005, needs a yes): `ME3_LIVE=1 uv run python -m bench.make_phrases --recovery`
 - [ ] Provider failover per stage, reconnect with backoff, health log
 - [ ] systemd services with restart on failure, auto-start on boot, a watchdog
-- [x] Spoken notice when the daily cap is hit, skipped when TTS is the capped provider
+- [x] Notice when the daily cap is hit, now the stored `cap_reached` clip, so it plays even when TTS is the capped provider (ADR-037)
 - [x] Alert at $10 total spend (doctor warning)
 - [x] Doctor and run report (`bench/doctor.py`, `bench/run_report.py`)
 
