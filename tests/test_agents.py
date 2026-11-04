@@ -244,3 +244,8 @@ def test_document_agents_get_only_read_tools():
     from servers.tasks.docs import server as docs
 
     assert set(DOCUMENT_TOOLS) <= set(dir(docs))
+
+
+def test_a_document_agent_reads_a_table_for_the_latest_entry(store):
+    prompt = prompt_for(store.get("coach"), "")
+    assert "list_documents" in prompt and "rather than searching for dates" in prompt

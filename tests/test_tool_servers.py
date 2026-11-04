@@ -498,3 +498,14 @@ def test_a_match_deep_in_a_chunk_reaches_the_snippet(data):
 
 def test_prose_snippets_still_start_at_the_chunk_when_nothing_matches_a_line():
     assert docs.snippet("x" * 900, {"absent"}) == "x" * docs.SNIPPET_CHARS
+
+
+def test_a_table_shows_its_shape_and_both_ends(data):
+    _doc(data, "log.csv", "title,start_time\nLight,\"Oct 29, 2026\"\nHeavy,\"Oct 27, 2026\"\nFirst,\"Jan 2, 2025\"\n")
+    _doc(data, "notes.md", "plain text")
+    listed = {d["path"]: d for d in docs.list_documents()["documents"]}
+    table = listed["log.csv"]
+    assert table["rows"] == 3 and table["columns"] == ["title", "start_time"] and table["pages"] == 1
+    assert table["first_row"] == "title: Light; start_time: Oct 29, 2026"
+    assert table["last_row"].startswith("title: First")
+    assert "rows" not in listed["notes.md"]

@@ -33,6 +33,8 @@ CHUNK_CHARS = 1600
 OVERLAP_CHARS = 200
 SNIPPET_CHARS = 500
 READ_CHARS = 12000  # one read_document page: the customer list fits in one
+ROW_PREVIEW_CHARS = 240
+TABLES_DESCRIBED = 20  # each table is read to describe it, so only the first few
 _scope_indexed = False
 
 
@@ -238,12 +240,35 @@ def local_search(
     annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 )
 def list_documents() -> dict:
-    """List the documents you can search and read, with their sizes."""
+    """List the documents you can search and read, with their sizes. For a table it also gives
+    the row count, the columns, the pages, and the first and last rows, so you can tell which
+    end holds the latest entries."""
     docs = []
     for root in _roots():
         for p in _files(root):
-            docs.append({"path": _shown(p.resolve()), "kb": round(p.stat().st_size / 1024, 1)})
+            entry = {"path": _shown(p.resolve()), "kb": round(p.stat().st_size / 1024, 1)}
+            if p.suffix.lower() == ".csv" and len(docs) < TABLES_DESCRIBED:
+                entry.update(_table_shape(p))
+            docs.append(entry)
     return {"documents": docs[:200], "total": len(docs)}
+
+
+def _table_shape(path: Path) -> dict:
+    try:
+        text = extract_text(path)
+    except Exception:  # noqa: BLE001, a bad file still gets listed
+        return {}
+    rows = csv_rows(text)
+    header = next(csv.reader(io.StringIO(text)), [])
+    if not rows:
+        return {"rows": 0, "columns": header}
+    return {
+        "rows": len(rows),
+        "columns": header,
+        "pages": max(1, -(-len("\n".join(rows)) // READ_CHARS)),
+        "first_row": rows[0][:ROW_PREVIEW_CHARS],
+        "last_row": rows[-1][:ROW_PREVIEW_CHARS],
+    }
 
 
 @mcp.tool(
@@ -253,7 +278,9 @@ def read_document(
     path: Annotated[str, Field(min_length=1, description="The document, as list_documents names it")],
     page: Annotated[int, Field(ge=1, description="Which page of text, for long documents")] = 1,
 ) -> dict:
-    """Read a document's text a page at a time. Use it for short files or to count and compare rows."""
+    """Read a document's text a page at a time, in file order. Use it for short files, to count or
+    compare rows, and for the latest or earliest entries of a table: list_documents shows which
+    end is newest, so read page 1 or the last page instead of searching for dates."""
     try:
         target = _find(path)
     except OutsideRoots as e:
