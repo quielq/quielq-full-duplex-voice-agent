@@ -29,6 +29,7 @@ from harness.providers import CARTESIA_STAGES, FLUX_STAGES
 # Prompt size assumed for a withdrawn call before any call has reported usage. The task suite
 # averages about 1,300 tokens a case with every server's tools offered (ADR-017).
 WITHDRAWN_PROMPT_TOKENS = 2000
+PRICED_LLMS = ("groq", "anthropic", "openrouter")
 
 
 class CostObserver(BaseObserver):
@@ -94,7 +95,7 @@ class CostObserver(BaseObserver):
         prediction withdrawn after the stream finished is counted twice, which errs high.
         """
         llm = self._stages["llm"]
-        if llm not in ("groq", "anthropic"):
+        if llm not in PRICED_LLMS:
             return
         tokens = self._last_prompt_tokens
         await self._record(llm, "llm_input_tokens_est", tokens, tokens * self._llm_rate()["input_per_token"])
@@ -102,7 +103,10 @@ class CostObserver(BaseObserver):
     def _llm_rate(self) -> dict:
         llm = self._stages["llm"]
         p = self._prices[llm]
-        return p.get("by_model", {}).get(self._models[llm].get("model"), p)
+        model = self._models[llm].get("model")
+        if llm == "openrouter":  # no default rate: build_llm refuses a model without a price
+            return p["by_model"][model]
+        return p.get("by_model", {}).get(model, p)
 
     async def _record(self, provider: str, kind: str, units: float, usd: float) -> None:
         self._ledger.record(provider, kind, units, usd, run_id=self._run_id)
@@ -113,7 +117,7 @@ class CostObserver(BaseObserver):
     def _price(self, d):
         p = self._prices
         llm, stt = self._stages["llm"], self._stages["stt"]
-        if isinstance(d, LLMUsageMetricsData) and llm in ("groq", "anthropic"):
+        if isinstance(d, LLMUsageMetricsData) and llm in PRICED_LLMS:
             u = d.value
             rate = self._llm_rate()
             self._last_prompt_tokens = u.prompt_tokens
