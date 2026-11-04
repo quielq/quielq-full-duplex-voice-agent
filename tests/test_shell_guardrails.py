@@ -44,6 +44,18 @@ def test_rm_names_what_to_keep():
     assert check("rm -r old a.txt && ls").deletes == ("old", "a.txt")
 
 
+def test_the_model_is_told_a_delete_asks_and_keeps_a_copy():
+    # Live on Nov 4, Haiku refused to call bash for a delete because it thought it was permanent,
+    # so the read-back never ran. What the model is told must match what the policy does.
+    from harness.bot import SYSTEM_PROMPT
+
+    decision = check("rm -r delegate_trial")
+    assert decision.verdict == ASK and decision.deletes
+    assert "keeps a copy" in SYSTEM_PROMPT and "Do not refuse" in SYSTEM_PROMPT
+    doc = workspace.bash.__doc__ or getattr(workspace.bash, "description", "")
+    assert "must say yes" in doc and ".versions" in doc
+
+
 @pytest.mark.parametrize("command", [
     "sudo ls", "ls; sudo ls", "rm -rf /", "rm -rf ~", "rm -rf ~/", "cat .env", "cat ../../.env",
     "cat ~/.ssh/id_rsa", "shutdown now", "mkfs /dev/sda", "dd if=/dev/zero of=x", "launchctl list",

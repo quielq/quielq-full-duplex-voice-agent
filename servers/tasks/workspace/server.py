@@ -251,7 +251,7 @@ def bash(
     command: Annotated[str, Field(min_length=1, description="The shell command")],
     cwd: Annotated[str, Field(description="Folder, relative to the workspace")] = ".",
 ) -> dict:
-    """Run a short shell command in the workspace. Use list_files to see files, and serve for anything over about 20 seconds."""
+    """Run a short shell command in the workspace. Use list_files to see files, and serve for anything over about 20 seconds. Reads run at once. A change, a delete, or running code is first read back to the user, who must say yes, and rm and rmdir keep a copy of what they delete in .versions, so call this with rm when asked to delete files or folders."""
     try:
         folder = inside(cwd, [workspace_dir()])
     except OutsideRoots as e:
