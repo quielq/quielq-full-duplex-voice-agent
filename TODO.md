@@ -1,10 +1,18 @@
 # ME3 to-do list
 
-Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 3, 2026.
+Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 4, 2026.
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
-Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page. Last run `20261102-123315-a8d32d`, 29 transcripts. `build/pi-port` merged into local main on Nov 3, not pushed. Feature freeze is Nov 5 and the deadline is Nov 7.
+Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase with real clips (ADR-033), our own command policy (ADR-034), the `delegate` server on fakes (ADR-035), and the voice hop probe were built on `build/voice-servers`. 587 tests pass, and local main matches. Nothing is pushed. Feature freeze is Nov 5 and the deadline is Nov 7.
+
+## Next, in order (Nov 4)
+
+1. Live Mac run through both voice servers, `stt=voice_listen,tts=voice_speak`. It is the first live run of `voice-listen` and checks the 1500 ms thinking phrase. Paid and needs Quiel at the mic.
+2. The Cartesia interruption bench through `voice-speak`, and one live `delegate` task. Both are paid and small.
+3. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
+4. The latency benchmark (spec item 6, graded): a full `latency_probe` from real audio over 30 or more runs, with cost per successful task.
+5. Pi cooling and power before the demo.
 
 ## Waiting on Quiel
 
@@ -14,6 +22,8 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Patent question dropped, and the repo goes public as a course requirement (Nov 3). Privacy measures are listed in `docs/privacy.md`
 - [x] Reply templates stay off: the second LLM call always runs (Nov 4, ADR-020). A natural thinking phrase covers long waits instead
 - [x] Our own command policy replaces the vendored OnIt file (Nov 4, ADR-034): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen
+- [ ] Approve the live Mac run through both voice servers (Next 1), at the mic
+- [ ] Approve the Cartesia bench through `voice-speak` and one live `delegate` task (Next 2)
 - [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
@@ -93,7 +103,7 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
   - [x] Spotify on the Pi: plays in the face with `--spotify-player` (ADR-031)
   - [x] CPU, temperature, memory, and throttling logging (`system_stats` events, doctor `pi` section), not run on a Pi
   - [x] Smart Turn timing on a Pi: 158 ms a decision, over the 120 ms budget, so stay on Flux
-  - [ ] MCP voice-hop cost on the Pi (`bench/voice_bridge_probe.py`)
+  - [ ] Voice server cost on the Pi: `bench/voice_hop_probe` (audio frames) and `bench/voice_bridge_probe.py` (MCP events)
 
 - [x] Check Cartesia delivery from the Philippines: smooth by ear, and used for all live runs since (ADR-015)
 - [x] Spoken fallback on LLM errors such as Groq rejecting `set_timer` with 0 seconds (`harness/recovery.py`, fake-tested)
@@ -165,12 +175,11 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] Audio side channel: a Unix socket per stream (Nov 4)
 - [ ] One live Mac run with `stt=voice_listen,tts=voice_speak`, and the Cartesia interruption bench through the servers (paid, needs a yes)
 - [x] Measure the extra audio hop through the servers on the Mac (`bench/voice_hop_probe`, Nov 4): under 0.5 ms a frame each way, +0.6 ms (stdio) and +2.1 ms (HTTP) from request to first chunk, +6 to 21 ms per stream open (ADR-032). After the event queue (a3bec1e): first-chunk p95 3.3 ms on stdio, was 17 ms
-- [ ] The same probe on the Pi
 - [x] Send voice events without blocking the relay's down loop (Nov 4, a3bec1e): first-chunk p95 fell from 17 ms to 3.3 ms on stdio
 - [ ] Switch the Pi service and the live command to the voice stages once the live run passes
 - [x] `append_text`, `pause`, `resume`, `interrupt(kind)` dropped: Pipecat sends these as Cartesia messages on the stream (ADR-032)
-- [ ] Wire `VoiceEventFrame`s into pipeline actions (ADR-008)
-- [ ] Reconnect logic for MCP sessions that expire after 30 minutes idle
+- [x] Wire `VoiceEventFrame`s into pipeline actions (ADR-008): dropped. With thin servers, Pipecat's own Flux and Cartesia services act on the provider messages, and the voice events are logged for the benchmark (ADR-032)
+- [ ] Reconnect when a voice server's MCP session or stream drops after a long idle. Pipecat reconnects by calling `listen` or `speak` again, but this is untested
 - [x] Due timers announce themselves (done in the bot instead, `harness/timer_watch.py`)
 
 ## Task servers
