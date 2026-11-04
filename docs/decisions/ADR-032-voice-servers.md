@@ -52,6 +52,7 @@ Quiel chose B on Nov 4.
   - Request to first chunk: +0.6 ms on stdio, +2.1 ms on HTTP (relay p95 17 ms and 8 ms). The relay waits for each `audio_started` and `audio_done` event to go out over MCP before it forwards the next message, and HTTP makes that wait longer.
   - Stream open, call to `upstream_connected`: +21 ms on stdio, +5.5 ms on HTTP at p50 (a 20-frame run gave +6 ms on stdio). The first open of a session also starts the server: 0.75 to 0.87 s.
   - So the hop adds well under 1 ms to each audio frame, against a 20 ms frame and a 70 ms turn-to-audio budget. Opens cost tens of ms, and the warm reconnect path should be timed on the Pi.
+- **After sending events from a queue (a3bec1e), Nov 4,** same probe and size, one run (`logs/voice-hop-20261104-131352.json`). Request to first chunk: relay p95 3.3 ms on stdio (was 17 ms) and 6.2 ms on HTTP (was 8 ms), +0.7 ms and +1.0 ms at p50. Chunks down: +0.2 ms at p50 on both. Stream open: +4 ms on stdio and +5 ms on HTTP at p50. Cold opens stayed at 0.75 to 0.97 s. One run on a shared laptop, so single maxima up to about 18 ms are noise.
 - **The key stays in the server process,** and Pipecat's services never receive it. The harness process still loads `.env`, so this keeps the key out of the pipeline, not out of the machine.
 - Each server is one more process on the Pi, about the size of a task server.
 - A stream that drops is reopened by Pipecat's reconnect logic. That logic now calls `listen` or `speak` again.
