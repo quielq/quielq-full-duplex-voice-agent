@@ -39,8 +39,8 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 Running the full agent on the Mac: `docs/quickstart-mac.md`. The Pi port order: `docs/quickstart-pi.md`.
 
 ```
-harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py
-servers/        voice_listen/, voice_speak/ (Flux and Cartesia relays, ADR-032, plus the stubs), voice_relay.py, tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (not built)
+harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py, delegate_watch.py
+servers/        voice_listen/, voice_speak/ (Flux and Cartesia relays, ADR-032, plus the stubs), voice_relay.py, tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (built on fakes, ADR-035)
 bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
 docs/           architecture.md, tools.md, research.md, prompt.md, decisions/
@@ -74,7 +74,7 @@ uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartes
 
 Add `ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily` in front for multi-stage jobs such as building a website (`docs/tools.md`).
 
- The bot starts all nine task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=anthropic --all-servers` needs `ME3_LIVE=1`.
+ The bot starts all ten task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=anthropic --all-servers` needs `ME3_LIVE=1`.
 
 Spotify (demo only, ADR-022): register the redirect URI, run `uv run python -m bench.spotify_login` once, open the Spotify app, then add `music=spotify` to `--stages`. Audio plays in the Spotify app, not through the harness.
 
@@ -94,7 +94,7 @@ Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by de
 
 Reply templates skip the second LLM call on simple tools, off by default (`--reply-templates`, ADR-020). `flux_forced` is built and off (ADR-019).
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, `delegate`, the model comparison.
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, the model comparison. `delegate` is built on fakes only (ADR-035): a live worker needs `ME3_TOOL_STAGES=delegate=anthropic` and approval.
 
 Voice servers (ADR-032): `stt=voice_listen,tts=voice_speak` routes Flux and Cartesia through our MCP servers, which hold the keys. The provider messages ride a Unix socket per stream, and playback, ducking, and AEC stay in the harness. Tested on fakes only.
 

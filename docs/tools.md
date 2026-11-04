@@ -2,7 +2,7 @@
 
 ME3's tools are MCP servers that the voice LLM can call. A spoken request can read a file, search the web, send a message, or run a shell command, so every tool sits behind limits that hold even if the model is wrong or has been fooled. This page explains how a call flows, how to add a tool, and why each guardrail exists.
 
-Decisions and evidence are in ADR-009, ADR-011, ADR-021, ADR-023, ADR-024, ADR-026, and ADR-028.
+Decisions and evidence are in ADR-009, ADR-011, ADR-021, ADR-023, ADR-024, ADR-026, ADR-028, and ADR-035.
 
 ## How a tool call flows
 
@@ -62,6 +62,7 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | `comms` | `send_message`, `call_contact`, `list_contacts`, `list_sent_messages` | Mock | `ME3_TOOL_STAGES=comms=bridge`, see below |
 | `lights` | `set_light`, `list_lights` | Mock | No hardware yet |
 | `thermostat` | `set_thermostat`, `get_thermostat` | Mock | No hardware yet |
+| `delegate` | `start_task`, `task_status`, `task_result`, `cancel_task` | Fake worker model. Its file tools are real, in `data/workspace` | `ME3_TOOL_STAGES=delegate=anthropic` (Haiku 5.5, ADR-035) |
 
 `ME3_TOOL_STAGES` takes several at once: `search=tavily,comms=bridge`.
 
@@ -190,6 +191,16 @@ ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily uv run python -m harness.bot 
 ```
 
 A `bash` read such as `ls` or `grep` runs at once (ADR-034). A `bash` change or run, and every `serve` and `open_in_browser` call, asks for a spoken yes. That is deliberate: those are the tools that can do real harm.
+
+## Background tasks
+
+`start_task` hands a job to a worker and returns an id at once, so the voice loop keeps listening (ADR-035). The worker is a short tool loop on Haiku 5.5, or a scripted fake by default.
+
+- **It can do only what runs at once in the foreground:** `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, and `bash` commands that `servers/command_policy.py` returns as run. It calls the workspace server's own functions, so the same folder roots and `.versions` copies apply.
+- **Anything that needs a yes ends the task, unrun:** a `bash` change or run, `serve`, `open_in_browser`, messages, and calls. The result says "It needs your yes for: ..." in the policy's words, and the user asks for that step in the foreground. A critical refusal ends the task too.
+- **Limits:** 12 model calls and $0.05 per task, two tasks at once, and the `anthropic` daily cap in the ledger. A zero cap refuses before `start_task` returns.
+- **The announcement:** `harness/delegate_watch.py` says "Your background task is done" when nobody is talking, no reply is streaming, and no question is pending. A cancelled task stays quiet.
+- `cancel_task` has the usual 5 s undo window. It stops between steps, and files already written stay.
 
 ## Bash and serve
 

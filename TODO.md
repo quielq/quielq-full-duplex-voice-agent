@@ -10,7 +10,7 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 
 - [x] Give the go for step 7, the Pi port (Nov 2)
 - [x] Choose how to build the voice servers: option B, thin servers that hold the Flux and Cartesia connections, audio on a Unix socket, playback and echo cancelling kept in the harness (Nov 4). Built, ADR-032
-- [x] `delegate` model: Haiku 5.5 for now. OnIt is dropped (Nov 3 and 4). Building it waits for a plan
+- [x] `delegate` model: Haiku 5.5 for now. OnIt is dropped (Nov 3 and 4). Built on fakes, ADR-035
 - [x] Patent question dropped, and the repo goes public as a course requirement (Nov 3). Privacy measures are listed in `docs/privacy.md`
 - [x] Reply templates stay off: the second LLM call always runs (Nov 4, ADR-020). A natural thinking phrase covers long waits instead
 - [x] Our own command policy replaces the vendored OnIt file (Nov 4, ADR-034): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen
@@ -186,7 +186,8 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] `open_in_browser` for workspace HTML (ADR-026, live run still to do, see above)
 - [x] `comms` phone bridge built, dry run only (ADR-024, real send waits on approval)
 - [x] Read-back from real arguments for open world destructive tools (ADR-024)
-- [ ] `delegate` (own worker loop on the workspace tools, with a token cap, model not chosen)
+- [x] `delegate` on fakes: own worker loop on Haiku 5.5, only what needs no yes, step and cost caps, announced at a quiet moment (ADR-035)
+- [ ] One live `delegate` task with `ME3_TOOL_STAGES=delegate=anthropic` (needs approval, likely under $0.01)
 
 ## No-wake-word addressing
 
