@@ -110,6 +110,7 @@ class UiState:
         self.music = {"playing": False, "now_playing": ""}
         self.spotify_player = False
         self.voice_down = False
+        self.network_down = False   # set and cleared only by the network events (ADR-037)
         self._new_reply = True
         self._awaiting_answer = False
 
@@ -182,6 +183,11 @@ class UiState:
             # The spoken phrases need TTS too, so the screen is the only way left to say so.
             self.voice_down = True
             self.activity = "idle"
+        elif event == "network_lost":
+            self.network_down = True
+            self.activity = "idle"
+        elif event == "network_restored":
+            self.network_down = False
         elif event == "mic_mute":
             self.muted = bool(rec.get("muted"))
         elif event == "timer_due":
@@ -194,7 +200,7 @@ class UiState:
             return "muted"
         if self.activity in ("listening", "thinking", "working", "asking"):
             return self.activity
-        if self.voice_down:
+        if self.voice_down or self.network_down:
             return "sad"
         return self.mood if self._clock() < self._mood_until else "neutral"
 
@@ -205,6 +211,7 @@ class UiState:
             "talking": self.activity == "speaking",
             "muted": self.muted,
             "voice_down": self.voice_down,
+            "network_down": self.network_down,
             "step": self.step,
             "heard": self.heard,
             "said": self.said,
@@ -350,6 +357,8 @@ DEMO_SCRIPT: list[tuple[float, str, dict]] = [
     (4.0, "audio_silent", {}),
     (4.0, "pipeline_error", {"error": "demo"}),
     (4.0, "tts_failed", {"error": "demo"}),
+    (3.0, "network_lost", {"stage": "llm", "host": "demo"}),
+    (5.0, "network_restored", {"stages": ["llm"], "down_ms": 5000}),
     (5.0, "first_audio_out", {}),
     (2.0, "audio_silent", {}),
 ]
