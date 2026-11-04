@@ -33,13 +33,16 @@ TASK_SERVERS = {
     "knowledge": "servers.tasks.knowledge.server",
     "docs": "servers.tasks.docs.server",
     "workspace": "servers.tasks.workspace.server",
+    "delegate": "servers.tasks.delegate.server",
 }
 VOICE_SERVERS = {"listen": "servers.voice_listen.server", "speak": "servers.voice_speak.server"}
-# The only exceptions: search (ADR-021), and each voice server's own provider (ADR-032).
+# The only exceptions: search (ADR-021), each voice server's own provider (ADR-032), and the
+# delegate worker's model, which is a fake unless ME3_TOOL_STAGES=delegate=anthropic (ADR-035).
 SERVER_KEYS = {
     "servers.tasks.knowledge.server": {"TAVILY_API_KEY"},
     VOICE_SERVERS["listen"]: {"DEEPGRAM_API_KEY"},
     VOICE_SERVERS["speak"]: {"CARTESIA_API_KEY"},
+    TASK_SERVERS["delegate"]: {"ANTHROPIC_API_KEY"},
 }
 
 

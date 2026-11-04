@@ -1,0 +1,14 @@
+# Delegate task cases (ADR-035). See clock.yaml for the format. The worker model is the fake.
+server: delegate
+cases:
+  - id: delegate_start_runs_at_once
+    layer: tool_call
+    turns: ["in the background, tidy up my workspace notes"]
+    expect:
+      tools: [start_task]
+      args: {start_task: {goal: {re: "tidy up"}}}
+
+  - id: delegate_start_is_acknowledged
+    layer: next_reply
+    turns: ["in the background, tidy up my workspace notes"]
+    expect: {tools: [start_task], spoken_re: "background"}
