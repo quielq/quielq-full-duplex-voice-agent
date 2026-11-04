@@ -17,7 +17,7 @@ Status as of Nov 3: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
-- [ ] Approve generating the five waiting phrase clips through voice-speak (`bench.make_phrases`, about $0.003)
+- [x] Generate the five waiting phrase clips through voice-speak (Nov 4, $0.0029, the first live voice-speak run)
 - [ ] Later purchase: OpenRouter ($5), only if the model comparison goes ahead
 - [x] Approve ADR-009 and the Oct 31 replan (Oct 31)
 - [x] Confirm the deadline: Nov 7 holds (Oct 31)
@@ -130,7 +130,7 @@ Test layers (Nov 1 onward):
 Waiting phrase (Nov 2):
 
 - [x] Phrase cache, shared with the network-loss phrases and the spending-cap notice (`harness/phrase_cache.py`)
-- [ ] Generate the real clips (paid TTS call, needs a go); a placeholder tone plays until then
+- [x] Generate the real clips (Nov 4, `bench.make_phrases`)
 - [x] Five rotating clips, 1500 ms, slow tools only on start, a prompt rule against saying one, on by default (Nov 4, ADR-033)
 - [ ] Check the 1500 ms threshold and the slow-tool list on a live run
 - [x] Triggers: tool call start, or no reply audio after `filler.after_ms`; off by default in `mac.yaml` and `pi.yaml` (e2f977b)

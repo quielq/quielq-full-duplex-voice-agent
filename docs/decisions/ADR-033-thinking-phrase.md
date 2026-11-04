@@ -1,6 +1,6 @@
 # ADR-033: A rotating thinking phrase, on by default, instead of reply templates
 
-Date: Nov 4, 2026. Status: chosen by Quiel on Nov 4, 2026. Built and tested on fakes. The clips are not made yet (a paid call that needs a yes).
+Date: Nov 4, 2026. Status: chosen by Quiel on Nov 4, 2026. Built and tested on fakes. Clips made on Nov 4, 2026.
 
 ## Context
 
@@ -16,7 +16,7 @@ The waiting phrase from ADR-009 already does most of this. It is local audio tha
 - **Only slow tools trigger it when they start:** `search`, `fetch_content`, `get_weather`, `index_documents`, `bash`, `serve`, `write_file`, `play_music`. After a quick tool the 1500 ms timer still applies.
 - **The prompt tells the model not to open with a waiting phrase,** because the device already plays one. The rule that a tool is called with no words before it was already there.
 - `bench/make_phrases.py` makes the clips through our `voice-speak` server (ADR-032), in the live Cartesia voice, at the output rate, metered in the ledger. About 60 characters, about $0.003. It refuses unless `ME3_LIVE=1`.
-- **Until the clips exist** the phrase is the 300 ms placeholder tone, and each run logs how many real clips it found.
+- **The clips were made on Nov 4, 2026** through `voice-speak` against Cartesia, for $0.0029: 0.88 to 1.84 s each, at -15 to -20 dBFS RMS, with about 150 ms of quiet at each end. This was the first live run of `voice-speak`. A missing clip still falls back to the 300 ms tone, and each run logs how many real clips it found.
 - Reply templates stay off, and their code stays (ADR-020).
 
 ## Alternatives
@@ -29,7 +29,6 @@ The waiting phrase from ADR-009 already does most of this. It is local audio tha
 
 - `filler_trigger` now logs which clip played. `filler_clip` logs the list and how many real clips were found.
 - The latency headline is unchanged: the phrase still never counts as first audio (ADR-009).
-- The tone plays on slow turns until the clips are made, live included.
 - The 1500 ms threshold and the slow-tool list are guesses to check against live runs.
 
 ## Sources

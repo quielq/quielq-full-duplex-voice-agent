@@ -22,7 +22,7 @@ from harness.bot import run_bot
 from harness.config import load_config
 from harness.fakes import RuleBasedLLMService
 from harness.filler import FillerProcessor
-from harness.phrase_cache import PHRASES, load_phrase
+from harness.phrase_cache import PHRASE_DIR, PHRASES, load_phrase
 
 pytestmark = pytest.mark.skipif(not shutil.which("say"), reason="macOS `say` not available")
 
@@ -89,7 +89,9 @@ async def test_plays_once_on_a_tool_call_and_stays_out_of_context(cfg, tmp_path,
     assert "Timer set" in r.spoken_text
     text = json.dumps(r.context_messages).lower()
     assert "one sec" not in text
-    assert named(ev, "filler_clip")[0]["real"] == 0
+    clip_event = named(ev, "filler_clip")[0]
+    real = sum((PHRASE_DIR / f"{n}.wav").exists() for n in clip_event["phrases"])
+    assert clip_event["real"] == real  # the clips are committed, so this is all five
     assert filler_rate(ev) == (1, 1)
     deltas = next(iter(stage_deltas(ev).values()))
     assert "end_of_turn_to_filler" in deltas
