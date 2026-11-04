@@ -1,6 +1,6 @@
 # ADR-037: Say once that the network is gone, then wait for it
 
-Date: Nov 4, 2026. Status: built and tested on fakes only. No paid call. The two clips are not made yet.
+Date: Nov 4, 2026. Status: built and tested on fakes only. The two clips were made on Nov 4, 2026.
 
 ## Context
 
@@ -25,7 +25,7 @@ An error alone does not say whether the network is down or one request was bad (
 - **Recovery:** the failed hosts are probed again after 1, 2, 4, then every 8 s. When all answer, it logs `network_restored` with the outage length and the number of probes, and the next turn runs as usual. `NetworkWatch.on_restored` is a list of hooks for anything that should act then.
 - **The face** shows "Connection lost" and the sad face from `network_lost` until `network_restored`. This is a separate `network_down` flag, because the clip's own audio must not clear it the way reply audio clears `voice_down`.
 - **The spending cap notice is now the stored `cap_reached` clip** ("I've reached today's spending limit, so I have to stop here."), played the same way. It needs no TTS call, so it plays whichever provider hit its cap, where the old spoken notice had to stay quiet when TTS was the capped provider. `recovery.cap_phrase` is replaced by `recovery.cap_clip` and `recovery.network_clip`.
-- **The clips are not made yet.** A missing clip plays the 300 ms placeholder tone and logs `phrase_clip` with `real: 0`. One approved command makes both, about 100 characters, about $0.005: `ME3_LIVE=1 uv run python -m bench.make_phrases --recovery`.
+- **The clips were made on Nov 4, 2026** with `ME3_LIVE=1 uv run python -m bench.make_phrases --recovery`, through `voice-speak` against Cartesia, for $0.0051: `network_lost` 2.64 s at -16.7 dBFS RMS, `cap_reached` 3.44 s at -15.4 dBFS, with 120 to 200 ms of quiet at each end. A missing clip still plays the 300 ms placeholder tone and logs `phrase_clip` with `real: 0`.
 - Settings are under `network:` in `mac.yaml` and `pi.yaml`: `enabled`, `probe_timeout_s`, `probe_attempts`, `backoff_s`.
 
 ## Alternatives

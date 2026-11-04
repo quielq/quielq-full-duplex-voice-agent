@@ -153,12 +153,12 @@ async def test_an_error_frame_from_a_service_starts_the_check():
 
 
 async def test_the_clip_is_raw_audio_and_other_output_is_held_back_while_down():
-    reply = TTSAudioRawFrame(b"\x01\x00" * 320, 16000, 1)
-    up = ClipPlayer(16000, muted=lambda: False)
+    reply = TTSAudioRawFrame(b"\x01\x00" * 320, 24000, 1)
+    up = ClipPlayer(24000, muted=lambda: False)
     down, _ = await run_test(up, frames_to_send=[reply])
     assert [f.audio for f in down if isinstance(f, OutputAudioRawFrame)] == [reply.audio]
 
-    player = ClipPlayer(16000, muted=lambda: True)
+    player = ClipPlayer(24000, muted=lambda: True)
 
     class Trigger(FrameProcessor):
         async def process_frame(self, frame, direction):
