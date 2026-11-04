@@ -9,7 +9,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 ## Next, in order (Nov 4)
 
 1. Live Mac run through both voice servers, `stt=voice_listen,tts=voice_speak`. It is the first live run of `voice-listen` and checks the 1500 ms thinking phrase. Paid and needs Quiel at the mic.
-2. The Cartesia interruption bench through `voice-speak`, paid and small. The direct run and one live `delegate` task are done (Nov 4).
+2. Done Nov 4: the Cartesia interruption bench direct and through `voice-speak`, and one live `delegate` task.
 3. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
 4. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
 5. Pi cooling and power before the demo.
@@ -23,7 +23,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Reply templates stay off: the second LLM call always runs (Nov 4, ADR-020). A natural thinking phrase covers long waits instead
 - [x] Our own command policy replaces the vendored OnIt file (Nov 4, ADR-034): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen
 - [ ] Approve the live Mac run through both voice servers (Next 1), at the mic
-- [ ] Approve the Cartesia bench through `voice-speak` (Next 2). The direct Cartesia bench and one live `delegate` task ran Nov 4
+- [x] The Cartesia bench through `voice-speak`: over-commit 1, stop 277 ms, same as direct (Nov 4, `20261104-202147-ab3d44`, $0.0246)
 - [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)

@@ -65,6 +65,7 @@ Quiel chose B on Nov 4.
   - An idle MCP call over HTTP does not time out: the MCP SDK's SSE read timeout is 300 s, and the server's SSE stream sends a ping every 15 s (sse-starlette's default). Not tested for the full 5 minutes.
   - Flux's drop is also reported as a non-fatal `pipeline_error` ("connection closed by server") by Pipecat, the same as with a direct Flux connection.
   - `upstream_connected` now comes before `stream_ready`, so `bench/voice_hop_probe`'s open time no longer includes the socket handshake, which is under 1 ms.
+- **Interruption through `voice-speak`, live, Nov 4** (`bench.interruption_test --tts voice_speak`, run `20261104-202147-ab3d44`, $0.0246). Cartesia truncates the same through the relay as direct: 9 words heard, 10 committed, over-commit 1, stop 277 ms (direct: 245 ms, mostly VAD onset; flush 7 ms against 9 ms). This was the first live run of a reply cancelled through the relay.
 - The stubs and `bench/voice_bridge_probe.py` stay as they are, for the hop measurement.
 
 ## Sources
