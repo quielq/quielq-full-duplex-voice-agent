@@ -55,7 +55,11 @@ class FillerProcessor(FrameProcessor):
     ):
         """``slow_tools`` limits which tool starts play the clip; None means any tool."""
         super().__init__(**kwargs)
-        self._clips = [clip] if isinstance(clip, (bytes, bytearray)) else list(clip)
+        clips = [clip] if isinstance(clip, (bytes, bytearray)) else list(clip)
+        # Whole 40 ms output chunks, so no chunk mixes a clip with the reply after it and the
+        # latency probe can tell them apart (harness/audio_marks.py, ADR-036).
+        whole = sample_rate // 25 * 2
+        self._clips = [bytes(c) + bytes(-len(c) % whole) for c in clips]
         if not self._clips:
             raise ValueError("the waiting phrase needs at least one clip")
         self._clip = self._clips[0]

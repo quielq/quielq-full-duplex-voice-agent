@@ -100,7 +100,9 @@ class ScriptedMicSource(FrameProcessor):
 
         async def send(c: bytes) -> None:
             nonlocal n
-            await self.push_frame(InputAudioRawFrame(audio=c, sample_rate=sr, num_channels=1))
+            frame = InputAudioRawFrame(audio=c, sample_rate=sr, num_channels=1)
+            frame.capture_ns = int((t0 + n * 0.02) * 1e9)  # its first sample "plays" now (ADR-036)
+            await self.push_frame(frame)
             n += 1
             await asyncio.sleep(max(0.0, t0 + n * 0.02 - time.monotonic()))
 
