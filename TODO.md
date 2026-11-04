@@ -179,7 +179,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] Switch the Pi service and the live command to the voice stages once the live run passes
 - [x] `append_text`, `pause`, `resume`, `interrupt(kind)` dropped: Pipecat sends these as Cartesia messages on the stream (ADR-032)
 - [x] Wire `VoiceEventFrame`s into pipeline actions (ADR-008): dropped. With thin servers, Pipecat's own Flux and Cartesia services act on the provider messages, and the voice events are logged for the benchmark (ADR-032)
-- [ ] Reconnect when a voice server's MCP session or stream drops after a long idle. Pipecat reconnects by calling `listen` or `speak` again, but this is untested
+- [x] Reconnect when a voice server's MCP session or stream drops after a long idle (Nov 4, fakes): provider drop, a refused reconnect, a dead server process, Cartesia's idle timeout, and a stop during a connect all recover, over stdio and HTTP, with no leaked socket, call, or process. A whole bot run heard and spoke a second turn after both streams dropped (ADR-032, `tests/test_voice_reconnect.py`)
 - [x] Due timers announce themselves (done in the bot instead, `harness/timer_watch.py`)
 
 ## Task servers
