@@ -567,10 +567,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--demo", action="store_true", required=True, help="cycle the expressions with no bot")
     ap.add_argument("--profile", choices=["mac", "pi"], default="mac")
+    ap.add_argument("--data-dir", type=Path, help="read devices and agents from here instead of data/")
+    ap.add_argument("--port", type=int, help="override the profile's port")
     args = ap.parse_args()
     cfg = load_config(args.profile).profile
+    data = args.data_dir or REPO_ROOT / cfg["paths"]["data_dir"]
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_serve_demo(cfg["ui"]["host"], cfg["ui"]["port"], REPO_ROOT / cfg["paths"]["data_dir"]))
+        asyncio.run(_serve_demo(cfg["ui"]["host"], args.port or cfg["ui"]["port"], data))
 
 
 if __name__ == "__main__":

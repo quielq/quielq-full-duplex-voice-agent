@@ -5,16 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ME3</title>
 <style>
+  /* One self-contained file: no fonts, images, or scripts from outside (ADR-027).
+     Cheap on the Pi: no filters or blur, motion only on transform and opacity, and each panel
+     section is redrawn only when its data changes (ADR-038). */
   :root {
     --bg: #0d1014;
     --card: #181d23;
+    --card-2: #20262e;
     --line: #2a313a;
     --text: #eef3f7;
     --muted: #93a1ae;
     --glow: #7fd3ee;
-    --glow-edge: #b4f5ff;
+    --glow-edge: color-mix(in srgb, var(--glow) 55%, white);
+    --glow-deep: color-mix(in srgb, var(--glow) 62%, black);
     --lamp: #ffc15e;
     --warn: #ff7b6b;
+    --cool: #6cc3ff;
+    --heat: #ff9a5c;
     --hull: #c4572c;
     --hull-dark: #9e3a1b;
     --hull-deep: #842814;
@@ -22,6 +29,7 @@
     --ink: #0a0a0b;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
   body {
     background: var(--bg);
@@ -33,32 +41,53 @@
   }
   main {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 232px;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px 12px;
     height: 100vh;
     height: 100dvh;
-    padding: 12px;
+    padding: 10px 12px 12px;
   }
+  button {
+    min-height: 48px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--glow); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); color: #1c0805; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* Top bar */
+  .top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  #agent-chip {
+    display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px 0 10px;
+    border-color: color-mix(in srgb, var(--glow) 45%, var(--line));
+  }
+  .swatch { width: 18px; height: 18px; border-radius: 50%; background: var(--glow); flex: none; }
+  #agent-chip small { color: var(--muted); font-weight: 500; }
+  .status { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; color: var(--muted); font-size: 15px; }
+  .status b { color: var(--glow); font-weight: 600; white-space: nowrap; }
+  #step { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--glow); flex: none; }
+  body[data-link="off"] .dot { background: var(--warn); }
+  #mute { padding: 0 16px; }
 
   /* Face column */
   .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .status { display: flex; align-items: center; gap: 8px; height: 26px; color: var(--muted); font-size: 15px; }
-  .status b { color: var(--glow); font-weight: 600; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--glow); }
-  body[data-link="off"] .dot { background: var(--warn); }
   .face-box { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
   #robot { width: 100%; height: 100%; max-height: 100%; animation: bob 4.5s ease-in-out infinite; }
+  body.rest #robot, body.rest .scan, body.rest .pulse { animation-play-state: paused; }
   @keyframes bob { 50% { transform: translateY(-5px); } }
-  .caption { height: 62px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  .caption { height: 64px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
   .caption p { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   #heard { color: var(--muted); font-size: 15px; }
-  #said {
-    font-size: 18px;
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
+  #said { font-size: 18px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
   /* Expressions: every set is drawn, and only the current one shows */
   .set { opacity: 0; transition: opacity 140ms linear; }
@@ -73,6 +102,8 @@
   svg[data-face="muted"] .set.muted { opacity: 1; }
   .glow { fill: var(--glow); stroke: var(--glow-edge); stroke-width: 4; stroke-linejoin: round; }
   .glow-line { fill: none; stroke: var(--glow); stroke-width: 11; stroke-linecap: round; }
+  .lens { fill: var(--glow); }
+  .lens-shade { fill: var(--glow-deep); }
   .eyes { transform-box: fill-box; transform-origin: center; transition: transform 70ms linear; }
   svg.blink .eyes.blinks { transform: scaleY(0.06); }
   svg.talking .mouth { opacity: 0; }
@@ -89,45 +120,127 @@
   svg[data-face="listening"] .ring.later { animation-delay: 0.5s; }
   @keyframes ring { 0% { opacity: 0.8; } 100% { opacity: 0; } }
 
-  /* Device panel */
+  /* Side panel with two tabs */
   .panel { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
-  .card h2 { margin: 0 0 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
-  .light { display: flex; align-items: center; gap: 8px; height: 25px; font-size: 15px; text-transform: capitalize; }
-  .lamp { width: 13px; height: 13px; border-radius: 50%; background: var(--line); }
-  .light.on .lamp { background: var(--lamp); box-shadow: 0 0 8px var(--lamp); }
-  .light span:last-child { margin-left: auto; color: var(--muted); }
-  .temp { display: flex; align-items: baseline; gap: 8px; }
-  .temp strong { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .temp span { color: var(--muted); font-size: 14px; text-transform: capitalize; }
-  .one-line { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 15px; }
-  .timer { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; font-variant-numeric: tabular-nums; }
-  .timer span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .fill { flex: 1; min-height: 0; overflow: hidden; }
-  button {
-    min-height: 52px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--card);
-    color: var(--text);
-    font: inherit;
-    font-weight: 600;
-    touch-action: manipulation;
-  }
-  button[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); color: #1c0805; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .tabs button { min-height: 44px; color: var(--muted); }
+  .tabs button[aria-selected="true"] { color: var(--text); background: var(--card-2); border-color: color-mix(in srgb, var(--glow) 50%, var(--line)); }
+  .tab { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; overflow-y: auto; }
+  .tab[hidden] { display: none; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; }
+  .card h2 { margin: 0 0 6px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+  .empty { color: var(--muted); font-size: 15px; }
 
-  @media (max-width: 620px), (max-aspect-ratio: 1/1) {
+  /* Lights: one bulb per room, filled by brightness */
+  #lights { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+  .bulb { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; background: var(--card-2); }
+  .bulb svg { width: 34px; height: 34px; }
+  .bulb .glass { fill: var(--line); }
+  .bulb.on .glass { fill: var(--lamp); }
+  .bulb .rays { stroke: var(--lamp); stroke-width: 2.5; stroke-linecap: round; opacity: 0; }
+  .bulb.on .rays { opacity: var(--level); }
+  .bulb .base { fill: #59626d; }
+  .bulb b { font-size: 13px; font-weight: 600; text-transform: capitalize; text-align: center; line-height: 1.15; }
+  .bulb span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* Thermostat dial */
+  .thermo { display: flex; align-items: center; gap: 10px; }
+  .thermo svg { width: 118px; height: 74px; flex: none; }
+  .thermo .track { fill: none; stroke: var(--line); stroke-width: 10; stroke-linecap: round; }
+  .thermo .level { fill: none; stroke: var(--mode-color, var(--muted)); stroke-width: 10; stroke-linecap: round; }
+  .thermo text { fill: var(--text); font-size: 22px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+  .mode { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 14px; font-weight: 600;
+          background: color-mix(in srgb, var(--mode-color, var(--muted)) 22%, transparent); color: var(--mode-color, var(--muted)); text-transform: capitalize; }
+  .thermo small { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+
+  /* Music */
+  #music { font-size: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-bottom: 8px; }
+  #music.paused { color: var(--muted); }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .controls button { display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .controls svg { width: 20px; height: 20px; fill: currentColor; }
+  .controls button:disabled { opacity: 0.45; cursor: default; }
+
+  /* Timers and alarms: a ring shows how much is left */
+  .timer { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+  .timer svg { width: 40px; height: 40px; flex: none; transform: rotate(-90deg); }
+  .timer .track { fill: none; stroke: var(--line); stroke-width: 5; }
+  .timer .left { fill: none; stroke: var(--glow); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+  .timer.alarm .left { stroke: var(--lamp); }
+  .timer div { min-width: 0; }
+  .timer b { display: block; font-size: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .timer span { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+  /* Chat history */
+  #chat { display: flex; flex-direction: column; gap: 6px; padding: 2px; user-select: text; -webkit-user-select: text; }
+  .msg { max-width: 88%; padding: 7px 10px; border-radius: 12px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--card-2); border: 1px solid var(--line); border-bottom-right-radius: 4px; }
+  .msg.agent { align-self: flex-start; background: color-mix(in srgb, var(--glow) 16%, var(--card)); border: 1px solid color-mix(in srgb, var(--glow) 35%, var(--line)); border-bottom-left-radius: 4px; }
+  .msg.system { align-self: center; color: var(--muted); font-size: 13px; padding: 2px 8px; }
+
+  /* Agent sheet: the picker and the builder */
+  dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 16px;
+           background: var(--bg); color: var(--text); }
+  dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+  .sheet { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
+  .sheet header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .sheet header h2 { margin: 0; font-size: 18px; flex: 1; }
+  .sheet header button { padding: 0 16px; }
+  .sheet .body { padding: 12px 14px; overflow-y: auto; }
+  #agent-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+  .agent { display: flex; flex-direction: column; align-items: stretch; text-align: left; gap: 4px; padding: 10px 12px; min-height: 92px;
+           border-left: 6px solid var(--c); }
+  .agent[aria-current="true"] { background: color-mix(in srgb, var(--c) 18%, var(--card)); }
+  .agent b { font-size: 16px; }
+  .agent span { color: var(--muted); font-size: 13px; font-weight: 500; }
+  .agent em { color: var(--muted); font-size: 12px; font-style: normal; font-weight: 500; }
+  .agent-row { display: flex; gap: 6px; }
+  .agent-row .agent { flex: 1; }
+  .agent-row .edit { width: 64px; font-size: 14px; }
+  form { display: grid; gap: 12px; }
+  label, legend { font-size: 14px; color: var(--muted); font-weight: 600; }
+  input[type="text"], select { width: 100%; min-height: 48px; margin-top: 4px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px;
+                              background: var(--card); color: var(--text); font: inherit; }
+  fieldset { border: 1px solid var(--line); border-radius: 12px; margin: 0; padding: 8px 10px 10px; min-width: 0; }
+  .colors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .colors label { position: relative; }
+  .colors input { position: absolute; opacity: 0; inset: 0; }
+  .colors span { display: block; width: 44px; height: 44px; border-radius: 50%; background: var(--c); border: 3px solid transparent; }
+  .colors input:checked + span { border-color: var(--text); }
+  .colors input:focus-visible + span { outline: 3px solid var(--text); outline-offset: 2px; }
+  .docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 10px; max-height: 190px; overflow-y: auto; margin-top: 6px; }
+  .docs label { display: flex; align-items: center; gap: 8px; min-height: 40px; color: var(--text); font-weight: 500; overflow-wrap: anywhere; }
+  .docs input { width: 22px; height: 22px; flex: none; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .form-actions button { padding: 0 20px; }
+  .primary { background: var(--glow); border-color: var(--glow); color: #07181d; }
+  .danger { color: var(--warn); }
+  #form-error { color: var(--warn); min-height: 1.3em; margin: 0; font-size: 14px; }
+
+  @media (max-width: 720px), (max-aspect-ratio: 1/1) {
     body { overflow: auto; }
-    main { display: block; height: auto; padding: 16px; }
-    .face-box { height: 46vh; }
+    main { display: block; height: auto; padding: 12px 16px 16px; }
+    .top { flex-wrap: wrap; margin-bottom: 8px; }
+    .top .status { order: 3; flex-basis: 100%; }
+    #agent-chip { flex: 1; }
+    .face-box { height: 42vh; }
     .panel { margin-top: 12px; }
+    .tab { overflow: visible; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #robot, .scan, .pulse, .ring { animation: none !important; }
   }
 </style>
 </head>
 <body data-link="off">
 <main>
+  <div class="top">
+    <button id="agent-chip" aria-haspopup="dialog" aria-label="Choose an agent"><i class="swatch"></i><span id="agent-name">Generalist</span><small>Change</small></button>
+    <div class="status" role="status"><i class="dot"></i><b id="state">Connecting</b><span id="step"></span></div>
+    <button id="mute" aria-pressed="false">Mute mic</button>
+  </div>
+
   <section class="stage">
-    <div class="status"><i class="dot"></i><b id="state">Connecting</b><span id="step"></span></div>
     <div class="face-box">
       <svg id="robot" viewBox="0 0 1000 660" data-face="sad" role="img" aria-label="Robot face" preserveAspectRatio="xMidYMid meet">
         <!-- Shell -->
@@ -147,8 +260,8 @@
         <ellipse class="ring later" cx="878" cy="388" rx="102" ry="158" transform="rotate(5 878 388)"/>
         <ellipse cx="878" cy="388" rx="76" ry="132" transform="rotate(5 878 388)" fill="#2c2c2f" stroke="var(--ink)" stroke-width="6"/>
         <ellipse cx="878" cy="388" rx="60" ry="112" transform="rotate(5 878 388)" fill="#101012"/>
-        <ellipse cx="878" cy="388" rx="42" ry="88" transform="rotate(5 878 388)" fill="#7fd3ee"/>
-        <path d="M866 306 C835 340 830 440 866 470 C888 440 884 340 866 306 Z" fill="#3fa9d8"/>
+        <ellipse cx="878" cy="388" rx="42" ry="88" transform="rotate(5 878 388)" class="lens"/>
+        <path d="M866 306 C835 340 830 440 866 470 C888 440 884 340 866 306 Z" class="lens-shade"/>
 
         <!-- Neutral -->
         <g class="set neutral">
@@ -204,39 +317,93 @@
         <ellipse id="talk" class="glow" cx="372" cy="462" rx="74" ry="12"/>
       </svg>
     </div>
-    <div class="caption">
+    <div class="caption" aria-live="polite">
       <p id="heard"></p>
       <p id="said"></p>
     </div>
   </section>
 
   <aside class="panel">
-    <div class="card"><h2>Lights</h2><div id="lights"></div></div>
-    <div class="card"><h2>Thermostat</h2><div class="temp"><strong id="temp">--</strong><span id="mode"></span></div></div>
-    <div class="card"><h2>Music</h2><div class="one-line" id="music">Nothing playing</div></div>
-    <div class="card fill"><h2>Timers</h2><div id="timers"><div class="one-line">None set</div></div></div>
-    <button id="mute" aria-pressed="false">Mute mic</button>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-home" aria-selected="true" aria-controls="home">Home</button>
+      <button role="tab" id="tab-chat" aria-selected="false" aria-controls="chat-box">Chat</button>
+    </div>
+    <div class="tab" id="home" role="tabpanel" aria-labelledby="tab-home">
+      <div class="card"><h2>Lights</h2><div id="lights"></div></div>
+      <div class="card"><h2>Thermostat</h2><div class="thermo" id="thermo">
+        <svg viewBox="0 0 120 74" aria-hidden="true">
+          <path class="track" d="M12 66 A48 48 0 0 1 108 66"/>
+          <path class="level" id="thermo-level" d="M12 66 A48 48 0 0 1 108 66" pathLength="100" stroke-dasharray="0 100"/>
+          <text x="60" y="64" id="temp">--</text>
+        </svg>
+        <div><span class="mode" id="mode">--</span><small>Range 16 to 30 °C</small></div>
+      </div></div>
+      <div class="card"><h2>Music</h2>
+        <div id="music">Nothing playing</div>
+        <div class="controls">
+          <button id="play" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="play-icon" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><span>Pause</span></button>
+          <button id="next" aria-label="Next track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5l9 7-9 7zM16 5h3v14h-3z"/></svg><span>Next</span></button>
+        </div>
+      </div>
+      <div class="card"><h2>Timers and alarms</h2><div id="timers"><div class="empty">None set</div></div></div>
+    </div>
+    <div class="tab" id="chat-box" role="tabpanel" aria-labelledby="tab-chat" hidden>
+      <div id="chat" aria-live="polite"><div class="msg system">Nothing said yet</div></div>
+    </div>
   </aside>
 </main>
+
+<dialog id="sheet" aria-labelledby="sheet-title">
+  <div class="sheet">
+    <header><h2 id="sheet-title">Choose an agent</h2><button id="new-agent">New agent</button><button id="close-sheet">Close</button></header>
+    <div class="body">
+      <div id="agent-list"></div>
+      <form id="builder" hidden>
+        <label>Name <input type="text" name="name" maxlength="32" autocomplete="off" required></label>
+        <label>What it helps with <input type="text" name="description" maxlength="120" autocomplete="off"></label>
+        <label>Model <select name="model" id="model"></select></label>
+        <fieldset><legend>Colour</legend><div class="colors" id="colors"></div></fieldset>
+        <fieldset><legend>Documents it may answer from</legend><div class="docs" id="docs"></div></fieldset>
+        <p id="form-error" role="alert"></p>
+        <div class="form-actions">
+          <button type="button" class="danger" id="delete-agent" hidden>Delete</button>
+          <button type="button" id="cancel-form">Back</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</dialog>
 
 <script>
   const $ = (id) => document.getElementById(id);
   const robot = $("robot");
   const LABELS = { idle: "Ready", listening: "Listening", thinking: "Thinking", working: "Working",
                    asking: "Waiting for your answer", speaking: "Speaking" };
+  const MODE_COLORS = { cool: "var(--cool)", heat: "var(--heat)", off: "var(--muted)" };
+  const RING = 2 * Math.PI * 16;
+  const REST_AFTER_MS = 60000;
   let timers = [];
   let playerLoaded = false;
+  let last = {};          // what each section last drew, so unchanged sections are left alone
+  let state = null;
+  let idleSince = Date.now();
+  let talkTimer = null;
+  let catalog = null;     // the agent list from /api/agents, while the sheet is open
+  let editing = null;
 
-  function row(parent, cls, cells) {
-    const div = document.createElement("div");
-    div.className = cls;
-    for (const [text, className] of cells) {
-      const span = document.createElement("span");
-      if (className) span.className = className;
-      span.textContent = text;
-      div.append(span);
-    }
-    parent.append(div);
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function changed(key, value) {
+    const json = JSON.stringify(value);
+    if (last[key] === json) return false;
+    last[key] = json;
+    return true;
   }
 
   function clock(seconds) {
@@ -245,42 +412,141 @@
     return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`;
   }
 
+  const SVGNS = robot.namespaceURI;
+  function svg(tag, attrs) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  }
+
+  function drawLights(lights) {
+    const box = $("lights");
+    box.textContent = "";
+    if (!lights.length) { box.append(el("div", "empty", "No lights")); return; }
+    for (const l of lights) {
+      const tile = el("div", "bulb" + (l.is_on ? " on" : ""));
+      const level = l.is_on ? Math.max(0.25, (l.brightness || 0) / 100) : 0;
+      tile.style.setProperty("--level", level);
+      const icon = svg("svg", { viewBox: "0 0 32 32", "aria-hidden": "true" });
+      icon.append(
+        svg("path", { class: "rays", d: "M16 1v3M4 6l2 2M28 6l-2 2M1 15h3M28 15h3" }),
+        svg("path", { class: "glass", d: "M16 6a8 8 0 0 0-5 14.2V23h10v-2.8A8 8 0 0 0 16 6z", "fill-opacity": l.is_on ? 0.35 + 0.65 * level : 1 }),
+        svg("rect", { class: "base", x: 11.5, y: 24, width: 9, height: 4, rx: 1.5 }),
+      );
+      tile.append(icon, el("b", "", l.room), el("span", "", l.is_on ? `${l.brightness}%` : "Off"));
+      tile.setAttribute("aria-label", `${l.room} light ${l.is_on ? "on at " + l.brightness + " percent" : "off"}`);
+      box.append(tile);
+    }
+  }
+
+  function drawThermostat(t) {
+    const c = Number(t.target_c);
+    const share = Math.min(100, Math.max(0, ((c - 16) / 14) * 100));
+    $("thermo-level").setAttribute("stroke-dasharray", `${share} 100`);
+    $("temp").textContent = Number.isFinite(c) ? `${c % 1 ? c.toFixed(1) : c}°` : "--";
+    $("mode").textContent = t.mode || "--";
+    $("thermo").style.setProperty("--mode-color", MODE_COLORS[t.mode] || "var(--muted)");
+    $("thermo").setAttribute("aria-label", `Thermostat set to ${c} degrees, ${t.mode}`);
+  }
+
+  function drawMusic(m) {
+    const box = $("music");
+    box.textContent = m.now_playing ? (m.playing ? m.now_playing : "Paused: " + m.now_playing) : "Nothing playing";
+    box.classList.toggle("paused", !m.playing);
+    const playing = m.playing && !!m.now_playing;
+    $("play").querySelector("span").textContent = playing ? "Pause" : "Play";
+    $("play").setAttribute("aria-label", playing ? "Pause music" : "Play music");
+    $("play-icon").setAttribute("d", playing ? "M7 5h4v14H7zM13 5h4v14h-4z" : "M7 5l12 7-12 7z");
+    $("next").disabled = !m.now_playing;
+  }
+
   function drawTimers() {
     const box = $("timers");
-    box.textContent = "";
     if (!timers.length) {
-      row(box, "one-line", [["None set"]]);
+      if (box.dataset.n !== "0") { box.textContent = ""; box.append(el("div", "empty", "None set")); box.dataset.n = "0"; }
       return;
     }
     const now = Date.now() / 1000;
-    for (const t of timers) row(box, "timer", [[t.label || t.kind], [clock(t.fires_at - now)]]);
+    const key = timers.map((t) => t.fires_at).join();
+    if (box.dataset.key !== key) {   // rebuild only when the set of timers changes
+      box.textContent = "";
+      box.dataset.key = key;
+      box.dataset.n = timers.length;
+      for (const t of timers) {
+        const row = el("div", "timer" + (t.kind === "alarm" ? " alarm" : ""));
+        const ring = svg("svg", { viewBox: "0 0 40 40", "aria-hidden": "true" });
+        ring.append(svg("circle", { class: "track", cx: 20, cy: 20, r: 16 }),
+                    svg("circle", { class: "left", cx: 20, cy: 20, r: 16, "stroke-dasharray": RING }));
+        const text = el("div");
+        text.append(el("b", "", t.label || (t.kind === "alarm" ? "Alarm" : "Timer")), el("span"));
+        row.append(ring, text);
+        box.append(row);
+      }
+      if (state && state.timers_more) box.append(el("div", "empty", `and ${state.timers_more} more`));
+    }
+    box.querySelectorAll(".timer").forEach((row, i) => {
+      const t = timers[i];
+      const left = t.fires_at - now;
+      let share = 1;
+      if (t.kind === "alarm") {
+        const at = new Date(t.fires_at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+        row.querySelector("span").textContent = `${at}, in ${clock(left)}`;
+        if (t.created_at) share = left / (t.fires_at - t.created_at);
+      } else {
+        row.querySelector("span").textContent = `${clock(left)} left`;
+        if (t.created_at) share = left / (t.fires_at - t.created_at);
+      }
+      share = Math.min(1, Math.max(0, share));
+      row.querySelector(".left").setAttribute("stroke-dashoffset", RING * (1 - share));
+    });
+  }
+
+  function drawHistory(entries) {
+    const box = $("chat");
+    const pinned = box.parentElement.scrollHeight - box.parentElement.scrollTop - box.parentElement.clientHeight < 40;
+    box.textContent = "";
+    if (!entries.length) box.append(el("div", "msg system", "Nothing said yet"));
+    for (const e of entries) {
+      const m = el("div", "msg " + e.who, e.text);
+      if (e.who !== "system") m.prepend(el("span", "sr", e.who === "user" ? "You said: " : "Agent said: "));
+      box.append(m);
+    }
+    if (pinned || !$("chat-box").hidden) box.parentElement.scrollTop = box.parentElement.scrollHeight;
+  }
+
+  function setAgent(a) {
+    document.documentElement.style.setProperty("--glow", a.color);
+    $("agent-name").textContent = a.name;
+  }
+
+  function talking(on) {
+    robot.classList.toggle("talking", on);
+    // The mouth follows a made-up rhythm, not the audio: the page never receives audio.
+    if (on && !talkTimer) talkTimer = setInterval(() => $("talk").setAttribute("ry", 10 + Math.random() * 34), 90);
+    if (!on && talkTimer) { clearInterval(talkTimer); talkTimer = null; }
   }
 
   function draw(s) {
+    state = s;
     robot.dataset.face = s.face;
-    robot.classList.toggle("talking", s.talking);
-    $("state").textContent = s.muted ? "Mic muted" : s.network_down ? "Connection lost" : s.voice_down ? "Voice is down" : LABELS[s.activity];
+    talking(s.talking);
+    if (s.activity !== "idle" || s.talking) idleSince = Date.now();
+    $("state").textContent = s.switching ? `Switching to ${s.switching}`
+      : s.muted ? "Mic muted" : s.network_down ? "Connection lost" : s.voice_down ? "Voice is down" : LABELS[s.activity];
     $("step").textContent = s.step;
     $("heard").textContent = s.heard;
     $("said").textContent = s.said;
-    const lights = $("lights");
-    lights.textContent = "";
-    for (const l of s.lights) {
-      row(lights, "light" + (l.is_on ? " on" : ""), [["", "lamp"], [l.room], [l.is_on ? l.brightness + "%" : "Off"]]);
-    }
-    $("temp").textContent = s.thermostat.target_c + "°C";
-    $("mode").textContent = s.thermostat.mode;
+    if (changed("agent", s.agent)) setAgent(s.agent);
+    if (changed("lights", s.lights)) drawLights(s.lights);
+    if (changed("thermostat", s.thermostat)) drawThermostat(s.thermostat);
+    if (changed("music", s.music)) drawMusic(s.music);
+    if (changed("timers", s.timers)) { timers = s.timers; drawTimers(); }
     if (s.spotify_player && !playerLoaded) {   // off by default, so the page stays self-contained
       playerLoaded = true;
       const script = document.createElement("script");
       script.src = "/spotify-player.js";
       document.head.append(script);
     }
-    $("music").textContent = s.music.now_playing
-      ? (s.music.playing ? "" : "Paused: ") + s.music.now_playing
-      : "Nothing playing";
-    timers = s.timers;
-    drawTimers();
     const mute = $("mute");
     mute.textContent = s.muted ? "Mic is muted" : "Mute mic";
     mute.setAttribute("aria-pressed", s.muted);
@@ -290,21 +556,155 @@
     const stream = new EventSource("/events");
     stream.onopen = () => { document.body.dataset.link = "on"; };
     stream.onmessage = (e) => { document.body.dataset.link = "on"; draw(JSON.parse(e.data)); };
+    stream.addEventListener("history", (e) => drawHistory(JSON.parse(e.data)));
     stream.onerror = () => {   // EventSource reconnects by itself
       document.body.dataset.link = "off";
       robot.dataset.face = "sad";
-      robot.classList.remove("talking");
+      talking(false);
       $("state").textContent = "Agent not running";
       $("step").textContent = "";
     };
   }
 
+  async function post(path, body) {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+    if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`);
+    return r.json();
+  }
+
+  // Tabs
+  for (const [tab, panel] of [["tab-home", "home"], ["tab-chat", "chat-box"]]) {
+    $(tab).addEventListener("click", () => {
+      for (const [t, p] of [["tab-home", "home"], ["tab-chat", "chat-box"]]) {
+        $(t).setAttribute("aria-selected", t === tab);
+        $(p).hidden = t !== tab;
+      }
+      if (panel === "chat-box") $("chat-box").scrollTop = $("chat-box").scrollHeight;
+    });
+  }
+
+  // Music buttons: the bot runs the music tools through the tool policy.
+  $("play").addEventListener("click", () => {
+    const playing = state && state.music.playing && state.music.now_playing;
+    post("/api/music", { action: playing ? "pause" : "play" }).catch(() => {});
+  });
+  $("next").addEventListener("click", () => post("/api/music", { action: "next" }).catch(() => {}));
   $("mute").addEventListener("click", () => fetch("/api/mute", { method: "POST" }));
 
-  // The mouth follows a made-up rhythm, not the audio: the page never receives audio.
-  setInterval(() => {
-    if (robot.classList.contains("talking")) $("talk").setAttribute("ry", 10 + Math.random() * 34);
-  }, 90);
+  // Agent sheet
+  function shortModel(id) {
+    return id === "direct" ? "Default model" : (catalog.models[id] || id).split(",")[0];
+  }
+
+  function drawAgents() {
+    const list = $("agent-list");
+    list.textContent = "";
+    for (const a of catalog.agents) {
+      const row = el("div", "agent-row");
+      const b = el("button", "agent");
+      b.style.setProperty("--c", a.color);
+      b.setAttribute("aria-current", a.id === catalog.active);
+      b.append(el("b", "", a.name), el("span", "", a.description || a.documents.join(", ")),
+               el("em", "", (a.kind === "generalist" ? "All tools" : "Documents only") + ", " + shortModel(a.model)));
+      b.addEventListener("click", async () => {
+        try { await post("/api/agents/active", { id: a.id }); $("sheet").close(); } catch (e) { alert(e.message); }
+      });
+      row.append(b);
+      if (!a.builtin) {
+        const edit = el("button", "edit", "Edit");
+        edit.setAttribute("aria-label", `Edit ${a.name}`);
+        edit.addEventListener("click", () => openForm(a));
+        row.append(edit);
+      }
+      list.append(row);
+    }
+  }
+
+  function openForm(agent) {
+    editing = agent;
+    const f = $("builder");
+    f.reset();
+    $("form-error").textContent = "";
+    $("sheet-title").textContent = agent ? `Edit ${agent.name}` : "New agent";
+    $("agent-list").hidden = true;
+    $("new-agent").hidden = true;
+    f.hidden = false;
+    $("delete-agent").hidden = !agent;
+    const model = $("model");
+    model.textContent = "";
+    for (const [id, label] of Object.entries(catalog.models)) model.append(Object.assign(el("option", "", label), { value: id }));
+    model.value = agent ? agent.model : "anthropic/claude-haiku-5.5";
+    const colors = $("colors");
+    colors.textContent = "";
+    const pick = agent ? agent.color : Object.keys(catalog.colors)[3];
+    for (const [hex, name] of Object.entries(catalog.colors)) {
+      const label = el("label");
+      const input = Object.assign(document.createElement("input"), { type: "radio", name: "color", value: hex, checked: hex === pick });
+      input.setAttribute("aria-label", name);
+      const dot = el("span");
+      dot.style.setProperty("--c", hex);
+      label.append(input, dot);
+      colors.append(label);
+    }
+    const docs = $("docs");
+    docs.textContent = "";
+    if (!catalog.documents.length) docs.append(el("div", "empty", "Put files in data/documents first"));
+    for (const d of catalog.documents) {
+      const label = el("label");
+      const input = Object.assign(document.createElement("input"), { type: "checkbox", name: "documents", value: d });
+      input.checked = !!agent && agent.documents.some((x) => x === d.replace(/\/$/, ""));
+      label.append(input, document.createTextNode(d.endsWith("/") ? `${d} (folder)` : d));
+      docs.append(label);
+    }
+    f.elements.name.value = agent ? agent.name : "";
+    f.elements.description.value = agent ? agent.description : "";
+    f.elements.name.focus();
+  }
+
+  function showList() {
+    $("builder").hidden = true;
+    $("agent-list").hidden = false;
+    $("new-agent").hidden = false;
+    $("sheet-title").textContent = "Choose an agent";
+  }
+
+  async function openSheet() {
+    try {
+      const r = await fetch("/api/agents");
+      if (!r.ok) throw new Error(await r.text());
+      catalog = await r.json();
+    } catch (e) { alert("Agents are not available: " + e.message); return; }
+    drawAgents();
+    showList();
+    $("sheet").showModal();
+  }
+
+  $("agent-chip").addEventListener("click", openSheet);
+  $("close-sheet").addEventListener("click", () => $("sheet").close());
+  $("new-agent").addEventListener("click", () => openForm(null));
+  $("cancel-form").addEventListener("click", showList);
+  $("delete-agent").addEventListener("click", async () => {
+    if (!editing || !confirm(`Delete ${editing.name}? Its documents stay where they are.`)) return;
+    try { await post("/api/agents/delete", { id: editing.id }); await openSheet(); } catch (e) { $("form-error").textContent = e.message; }
+  });
+  $("builder").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const body = {
+      id: editing ? editing.id : undefined,
+      name: f.elements.name.value.trim(),
+      description: f.elements.description.value.trim(),
+      model: f.elements.model.value,
+      color: (f.querySelector('input[name="color"]:checked') || {}).value,
+      documents: [...f.querySelectorAll('input[name="documents"]:checked')].map((i) => i.value),
+    };
+    try {
+      await post("/api/agents/save", body);
+      catalog = await (await fetch("/api/agents")).json();
+      drawAgents();
+      showList();
+    } catch (e) { $("form-error").textContent = e.message; }
+  });
 
   (function blink() {
     setTimeout(() => {
@@ -313,7 +713,11 @@
     }, 2500 + Math.random() * 3500);
   })();
 
-  setInterval(() => { if (timers.length) drawTimers(); }, 1000);
+  // One tick a second: timer text and rings, and resting the idle motion after a minute.
+  setInterval(() => {
+    if (timers.length) drawTimers();
+    document.body.classList.toggle("rest", Date.now() - idleSince > REST_AFTER_MS);
+  }, 1000);
   connect();
 </script>
 </body>
