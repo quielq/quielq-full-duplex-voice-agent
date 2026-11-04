@@ -68,6 +68,26 @@ def _in_scope_sql(roots: list[Path]) -> tuple[str, list]:
     return " OR ".join(parts), args
 
 
+def snippet(text: str, words: set[str]) -> str:
+    """The lines of a chunk that match the query, best first, up to SNIPPET_CHARS. A chunk of CSV
+    rows is about 1,600 characters, so its first 500 often miss the row that matched."""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    scored = []
+    for i, line in enumerate(lines):
+        found = re.findall(r"\w+", line.lower())
+        if hits := sum(found.count(w) for w in words):
+            scored.append((-hits, i, line))
+    if not scored:
+        return text[:SNIPPET_CHARS]
+    picked, size = [], 0
+    for _, i, line in sorted(scored):
+        if picked and size + len(line) > SNIPPET_CHARS:
+            break
+        picked.append((i, line[:SNIPPET_CHARS]))
+        size += len(line) + 1
+    return "\n".join(line for _, line in sorted(picked))  # back in document order
+
+
 def _shown(path: Path) -> str:
     """The name the model sees: relative to the documents folder when scoped, else the file name."""
     if scope() is not None:
@@ -209,7 +229,8 @@ def local_search(
             "ORDER BY bm25(chunks) LIMIT ?",
             (match, *args, top_k),
         ).fetchall()
-    return {"results": [{"path": _shown(Path(p)), "text": t[:SNIPPET_CHARS], "score": round(-s, 3)}
+    lowered = {w.lower() for w in words}
+    return {"results": [{"path": _shown(Path(p)), "text": snippet(t, lowered), "score": round(-s, 3)}
                         for p, t, s in rows]}  # fmt: skip
 
 
@@ -301,7 +322,7 @@ def search_document(
         if score := sum(found.count(w) for w in words):
             scored.append((score, section))
     scored.sort(key=lambda s: -s[0])
-    return {"matches": [{"text": s[:SNIPPET_CHARS], "score": n} for n, s in scored[:max_matches]],
+    return {"matches": [{"text": snippet(s, words), "score": n} for n, s in scored[:max_matches]],
             "total": len(scored)}  # fmt: skip
 
 

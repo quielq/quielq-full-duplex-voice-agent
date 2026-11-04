@@ -478,7 +478,7 @@ def test_scope_outside_documents_is_refused(data, monkeypatch):
 def test_csv_rows_keep_their_column_names(data):
     _doc(data, "c.csv", "customer_id,company,status\nC-1,Mayon Builders,Active\nC-2,Taal Foods,Churned\n")
     hit = docs.local_search("Taal")["results"][0]["text"]
-    assert hit.splitlines()[1] == "customer_id: C-2; company: Taal Foods; status: Churned"
+    assert hit == "customer_id: C-2; company: Taal Foods; status: Churned"
     assert docs.read_document("c.csv")["text"].startswith("customer_id: C-1")
     assert docs.search_document("c.csv", mode="pattern", pattern="Churned")["matches"][0]["line"] == 2
 
@@ -487,3 +487,14 @@ def test_read_document_pages_long_text(data):
     _doc(data, "long.md", "x" * (docs.READ_CHARS + 10))
     first = docs.read_document("long.md")
     assert first["pages"] == 2 and len(docs.read_document("long.md", page=2)["text"]) == 10
+
+
+def test_a_match_deep_in_a_chunk_reaches_the_snippet(data):
+    rows = "\n".join(f"C-{i},Filler Company Number {i},Retail,Somewhere Long City Name" for i in range(30))
+    _doc(data, "c.csv", "customer_id,company,industry,city\n" + rows + "\nC-99,Mayon Builders,Construction,Davao\n")
+    assert "Mayon Builders" in docs.local_search("Mayon Builders")["results"][0]["text"]
+    assert "Mayon Builders" in docs.search_document("c.csv", query="Mayon")["matches"][0]["text"]
+
+
+def test_prose_snippets_still_start_at_the_chunk_when_nothing_matches_a_line():
+    assert docs.snippet("x" * 900, {"absent"}) == "x" * docs.SNIPPET_CHARS
