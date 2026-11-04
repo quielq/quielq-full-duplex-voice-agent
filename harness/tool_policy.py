@@ -142,6 +142,9 @@ def _reply_fields(args: dict, result: Any) -> dict:
     return fields
 
 
+SCREEN_TOOLS = frozenset({"stop_music", "resume_music", "next_track"})
+
+
 class DuplicateToolName(RuntimeError):
     """Two servers advertise one tool name. Pipecat flattens names, so one would be lost."""
 
@@ -273,6 +276,8 @@ class ToolPolicy:
         self._critical_refusals = 0
         self.contained = False
         self.rules: dict[str, ToolRule] = {}
+        self._inner: dict[str, Any] = {}  # each tool's MCP handler, for run_from_screen
+        self._screen_calls = 0
         self.decisions: list[dict] = []
         self._held: list[HeldAction] = []
         self._background: set[asyncio.Task] = set()
@@ -312,6 +317,7 @@ class ToolPolicy:
                 if rule.permission == "disabled":
                     self._decide(tool.name, "removed_from_schema", server=server)
                     continue
+                self._inner[tool.name] = tool.handler
                 kept.append(
                     FunctionSchema(
                         name=tool.name,
@@ -329,6 +335,25 @@ class ToolPolicy:
     @staticmethod
     async def _list(client: MCPClient) -> tuple[ToolsSchema, dict]:
         return await client.tools(), await tool_hints(client)
+
+    async def run_from_screen(self, name: str) -> Any:
+        """Run a tool for a button on the robot face (ADR-038). Only the screen tools, only with no
+        arguments, and only when the policy would run them at once anyway: anything that would be
+        held, asked about, or guarded is refused, so the screen never skips a question."""
+        rule, inner = self.rules.get(name), self._inner.get(name)
+        runs_at_once = rule is not None and rule.permission == "auto" and rule.undo_s == 0 and not rule.guard
+        if name not in SCREEN_TOOLS or inner is None or not runs_at_once or (
+            self.contained and name in self._contain_tools
+        ):
+            self._decide(name, "denied_screen")
+            return {"status": "denied", "reason": "not available from the screen"}
+        self._decide(name, "allowed", args={}, by="screen")
+        self._screen_calls += 1
+        params = FunctionCallParams(
+            function_name=name, tool_call_id=f"screen-{self._screen_calls}", arguments={},
+            llm=None, pipeline_worker=None, context=None, result_callback=None,
+        )  # fmt: skip
+        return await self._call(rule, inner, params)
 
     async def deny_unknown(self, params: FunctionCallParams) -> None:
         """Catch-all handler: a model that calls a disabled or invented tool reaches no server."""

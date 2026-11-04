@@ -64,7 +64,8 @@ def _view(item: dict, now: float) -> dict:
 
 
 def _add(kind: str, fires_at: float, label: str) -> dict:
-    item = {"id": uuid.uuid4().hex[:8], "kind": kind, "label": label, "fires_at": fires_at}
+    # created_at lets the robot face draw how much of a timer is left (ADR-038).
+    item = {"id": uuid.uuid4().hex[:8], "kind": kind, "label": label, "fires_at": fires_at, "created_at": time.time()}
     with _lock:
         items = _load()
         items[item["id"]] = item

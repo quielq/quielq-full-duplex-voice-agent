@@ -1,0 +1,68 @@
+# The agents a user can pick on the robot face (ADR-039).
+#
+# The generalist is the full assistant with every task server. A document agent gets only
+# the docs server, scoped to its folders under data/documents, and answers only from them.
+# Custom agents made in the face's builder live in data/agents/custom.json, never in git.
+#
+# model: "direct" keeps the run's own LLM stage (for the generalist, Haiku 5.5 on Anthropic).
+# Any other value is an OpenRouter model from providers.openrouter.models. Models apply only
+# on a live run: when the run's LLM stage is fake, every agent stays fake and spends nothing.
+
+default: generalist
+
+# The colours the builder offers. Each keeps the face readable on its dark background.
+colors:
+  "#7fd3ee": Sky
+  "#7ee0a1": Mint
+  "#ffc15e": Amber
+  "#ff8fab": Rose
+  "#b9a2ff": Violet
+  "#ff9a5c": Tangerine
+  "#5ee0d4": Teal
+  "#e6e6e6": Silver
+
+# Sample documents copied into data/documents/<folder> on first run when missing.
+sample_documents: assets/sample_documents
+
+agents:
+  generalist:
+    name: Generalist
+    kind: generalist
+    model: direct
+    color: "#7fd3ee"
+    description: Timers, notes, lights, music, the web, files, and documents.
+  policy_desk:
+    name: Policy Desk
+    kind: documents
+    model: anthropic/claude-haiku-5.5
+    color: "#7ee0a1"
+    documents: [company_policy]
+    description: Leave, pay, benefits, conduct, and travel rules.
+  it_helpdesk:
+    name: IT Helpdesk
+    kind: documents
+    model: openai/gpt-oss-120b
+    color: "#b9a2ff"
+    documents: [it_policy]
+    description: Passwords, devices, software, data handling, and incidents.
+  contracts:
+    name: Contracts
+    kind: documents
+    model: anthropic/claude-haiku-5.5
+    color: "#ffc15e"
+    documents: [contract_law]
+    description: Contract law basics and the company's standard terms.
+  customers:
+    name: Customers
+    kind: documents
+    model: anthropic/claude-haiku-5.5
+    color: "#5ee0d4"
+    documents: [customers]
+    description: Who the customers are, their plans, renewals, and contacts.
+  coach:
+    name: Coach
+    kind: documents
+    model: anthropic/claude-haiku-5.5
+    color: "#ff9a5c"
+    documents: [workouts]
+    description: Your workout log and training reference.
