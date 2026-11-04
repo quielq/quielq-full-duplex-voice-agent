@@ -56,6 +56,7 @@ from harness.addressing import (
     MicGate,
 )
 from harness.audio_hops import AudioHops, trace_writes
+from harness.audio_marks import InputVoiceTap, OutputVoiceTap, stamp_capture
 from harness.audio_io import EchoRisk, local_transport
 from harness.config import Config, load_config
 from harness.costs import CostObserver
@@ -374,17 +375,22 @@ async def run_bot(
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain, on_event=log.emit)
             trace_writes(transport.output(), hops)
+            # Headline latency comes from these sample-level marks (ADR-036).
+            OutputVoiceTap(log.emit).attach(transport.output())
+            stamp_capture(transport.input())
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts, forced=forced, voice=voice)
-            front = [transport.input(), mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
+            front = [transport.input(), InputVoiceTap(log.emit, adaptive=True), mic_gate, _vad(cfg), stt,
+                     gate, *address_procs, *duck_procs]  # fmt: skip
             back = [*filler_procs, clips, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts,
                             forced=forced, voice=voice)  # fmt: skip
-            front = [source, mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
+            front = [source, InputVoiceTap(log.emit), mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
             )
+            OutputVoiceTap(log.emit, device_latency_s=0.0).attach(output)
             back = [*filler_procs, clips, output]
         elif input_mode == "text":
             front, back = [], [clips]  # no output device: the clip is logged and goes nowhere

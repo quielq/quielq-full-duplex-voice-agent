@@ -11,7 +11,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 1. Live Mac run through both voice servers, `stt=voice_listen,tts=voice_speak`. It is the first live run of `voice-listen` and checks the 1500 ms thinking phrase. Paid and needs Quiel at the mic.
 2. The Cartesia interruption bench through `voice-speak`, and one live `delegate` task. Both are paid and small.
 3. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
-4. The latency benchmark (spec item 6, graded): a full `latency_probe` from real audio over 30 or more runs, with cost per successful task.
+4. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
 5. Pi cooling and power before the demo.
 
 ## Waiting on Quiel
@@ -150,7 +150,7 @@ Waiting phrase (Nov 2):
 
 ## Latency (target p50 under 1.0 s)
 
-Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by framework events: p50 1.84 s, or 1.08 s when no tool ran first and 2.31 s when one did. Worst 5.7 s. These start at end of turn, so they leave out the end-of-turn wait.
+Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by framework events: p50 1.84 s, or 1.08 s when no tool ran first and 2.31 s when one did. Worst 5.7 s. These start at end of turn, so they leave out the end-of-turn wait. From Nov 4 the headline is end of speech to first reply audio from the samples (ADR-036); on fakes it is about 0.35 s, almost all end-of-turn wait.
 
 - [x] Tune Flux end of turn: `eot_threshold` stays 0.7, timeout unchanged, eager stays off (ADR-018)
 - [x] Spike `ForceEndTurn` with Smart Turn: built as `turn.stop: flux_forced`, failed the 300 ms rule on questions, stays off (ADR-019)
@@ -158,7 +158,10 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] Check mid-sentence pauses on the live mic: `say` pauses may be harsher than a person (ADR-018)
 - [ ] Add Deepgram Nova-3 so Smart Turn can be A/B tested against Flux fairly
 - [x] Build reply templates to skip the second LLM call: off by default, saved 296 ms against a 300 ms bar on 120b (ADR-020)
-- [ ] Measure from real audio, not framework events: full `latency_probe`, p50/p90/p95 over 30+ runs
+- [x] Measure from real audio, not framework events: `latency_probe` reads sample-level marks at the input and output, drops three warm-up turns per session, and reports p50/p90/p95 for tool and no-tool turns with cost per turn; `latency_bench` makes the runs on fakes (ADR-036, branch `claude/latency-bench-e97788`)
+- [ ] Run `latency_bench` live for 30 or more kept turns per condition, with `ME3_LIVE=1` and approval, at two times of day
+- [ ] Stop latency from the same audio marks: interrupter onset to output silence
+- [ ] Cost per successful task: join the task judge to the probe's cost per turn
 - [ ] Try Anthropic prompt caching: the tool schemas repeat on every call, so it may cut cost and first token (ADR-025)
 - [ ] Shorten the gap after tool calls, the largest remaining cost on tool turns
 

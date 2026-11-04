@@ -41,7 +41,7 @@ Running the full agent on the Mac: `docs/quickstart-mac.md`. The Pi port order: 
 ```
 harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py, delegate_watch.py
 servers/        voice_listen/, voice_speak/ (Flux and Cartesia relays, ADR-032, plus the stubs), voice_relay.py, tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (built on fakes, ADR-035)
-bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py (skeleton), interruption_test.py, voice_bridge_probe.py, voice_hop_probe.py, voice_fakes.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
+bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py and latency_bench.py (ADR-036), interruption_test.py, voice_bridge_probe.py, voice_hop_probe.py, voice_fakes.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
 docs/           architecture.md, tools.md, research.md, prompt.md, decisions/
 ```
@@ -58,7 +58,8 @@ uv run python -m bench.doctor [--quick] [--offline]       # health check, no spe
 uv run python -m bench.run_report [--live] [<run id>]     # timeline and anomalies for one run
 uv run python -m bench.run_report --list 20               # one line per recent run
 uv run python -m bench.cost_ledger                        # today's spend per provider
-uv run python -m bench.latency_probe logs/events-<id>.jsonl
+uv run python -m bench.latency_probe <logs or run ids> [--last N]   # headline from audio marks, p50/p90/p95, warm-up dropped (ADR-036)
+uv run python -m bench.latency_bench --sessions 3 --turns 8          # scripted wav turns on fakes, then the probe, no spend
 uv run python -m bench.interruption_test --tts fake_words [--barge-in duck]   # step 4 and 5
 uv run python -m bench.voice_bridge_probe                 # step 6, MCP hop cost
 uv run python -m bench.voice_hop_probe [--frames 250]     # audio hop through the voice servers, loopback fakes, no spend (ADR-032)
