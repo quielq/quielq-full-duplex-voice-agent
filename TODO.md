@@ -9,7 +9,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 ## Next, in order (Nov 4)
 
 1. Live Mac run through both voice servers, `stt=voice_listen,tts=voice_speak`. It is the first live run of `voice-listen` and checks the 1500 ms thinking phrase. Paid and needs Quiel at the mic.
-2. The Cartesia interruption bench through `voice-speak`, and one live `delegate` task. Both are paid and small.
+2. The Cartesia interruption bench through `voice-speak`, paid and small. The direct run and one live `delegate` task are done (Nov 4).
 3. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
 4. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
 5. Pi cooling and power before the demo.
@@ -23,7 +23,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Reply templates stay off: the second LLM call always runs (Nov 4, ADR-020). A natural thinking phrase covers long waits instead
 - [x] Our own command policy replaces the vendored OnIt file (Nov 4, ADR-034): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen
 - [ ] Approve the live Mac run through both voice servers (Next 1), at the mic
-- [ ] Approve the Cartesia bench through `voice-speak` and one live `delegate` task (Next 2)
+- [ ] Approve the Cartesia bench through `voice-speak` (Next 2). The direct Cartesia bench and one live `delegate` task ran Nov 4
 - [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
@@ -92,7 +92,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 ## Finish the first spike
 
 - [x] Step 4, Cartesia arm (ADR-006): ran Nov 3. It truncates. The reported 4 and 5 extra words (immediate, stop 279 ms; duck, stop 1,298 ms) came from the bench's 850 characters a minute guess: Cartesia speaks about 1,000 to 1,150, so the real extra is 1 to 2, as on `fake_words` (research.md, Nov 4). The bench now counts heard words from the word timestamps, and `fake_words_fast` covers it
-- [ ] Optional: one `--tts cartesia` run with the fixed bench (about $0.025, needs a go) to confirm the 1 to 2 words
+- [x] One `--tts cartesia` run with the fixed bench confirmed it: over-commit 1 word, stop 245 ms (Nov 4, `20261104-201942-2a1054`, $0.0246)
 - [ ] Step 7, Pi port (needs a go):
   - [x] Write `scripts/pi_setup.sh`, the `me3-bot` service, the kiosk launcher, and `docs/quickstart-pi.md` (ADR-030), not run on a Pi
   - [x] Run the setup and tests on the Pi: Bookworm, not Trixie, 450 passed, and the `say` failures fixed
@@ -202,7 +202,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] `comms` phone bridge built, dry run only (ADR-024, real send waits on approval)
 - [x] Read-back from real arguments for open world destructive tools (ADR-024)
 - [x] `delegate` on fakes: own worker loop on Haiku 5.5, only what needs no yes, step and cost caps, announced at a quiet moment (ADR-035)
-- [ ] One live `delegate` task with `ME3_TOOL_STAGES=delegate=anthropic` (needs approval, likely under $0.01)
+- [x] One live `delegate` task on Haiku 5.5: wrote two files and listed them, 3 model calls, 4.6 s, $0.00095 (Nov 4, from a script, not by voice)
 
 ## No-wake-word addressing
 
@@ -230,7 +230,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 ## Reliability and operations
 
 - [x] Network-loss detection: a TCP probe tells an outage from a bad request, `network_lost` plays once, the face shows it, recovery is logged (Nov 4, ADR-037, fakes only)
-- [ ] Make the `network_lost` and `cap_reached` clips (paid, about $0.005, needs a yes): `ME3_LIVE=1 uv run python -m bench.make_phrases --recovery`
+- [x] Make the `network_lost` and `cap_reached` clips (Nov 4, $0.0051)
 - [ ] Provider failover per stage, reconnect with backoff, health log
 - [ ] systemd services with restart on failure, auto-start on boot, a watchdog
 - [x] Notice when the daily cap is hit, now the stored `cap_reached` clip, so it plays even when TTS is the capped provider (ADR-037)

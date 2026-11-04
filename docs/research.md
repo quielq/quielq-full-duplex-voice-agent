@@ -333,7 +333,7 @@ On Nov 3, `bench.interruption_test --tts cartesia` reported 4 words committed pa
 
 Fix: `PacedNullOutputTransport` keeps each timed `TTSTextFrame`, and the bench counts a word as heard once the next word has started, measured from the first loud sample to the last loud sample before the cut (`heard_source: word_timestamps`). The pace estimate stays as the fallback for TTS without timestamps and is reported as `heard_words_pace`. A new `fake_words_fast` stage (45 ms a character, 1,333 a minute) reproduces the old error on fakes: the pace estimate says 6 heard words where the timestamps say 11, and the real over-commit is 1 (`tests/test_interruption.py`).
 
-Open: one more `--tts cartesia` run (immediate, about $0.025) with the fixed bench would confirm the 1 to 2 word figure. It is not needed to decide the cause, and it would still trust Cartesia's own timestamps for "heard". Checking those timestamps against the audio needs a run that lets the story play to the end and compares the last word's start with the audio length.
+Confirmed live, Nov 4 (`20261104-201942-2a1054`, `--tts cartesia`, immediate, $0.0246): 2.68 s played, 9 words heard from the timestamps where the pace estimate says 6, 10 committed, so the over-commit is 1 word. Stop took 245 ms. The figure still trusts Cartesia's own timestamps for "heard". Checking those against the audio needs a run that lets the story play to the end and compares the last word's start with the audio length.
 
 ## Cost model
 

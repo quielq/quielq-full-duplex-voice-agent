@@ -96,7 +96,7 @@ Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by de
 
 Reply templates skip the second LLM call on simple tools, off by default (`--reply-templates`, ADR-020). `flux_forced` is built and off (ADR-019).
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, the model comparison. `delegate` is built on fakes only (ADR-035): a live worker needs `ME3_TOOL_STAGES=delegate=anthropic` and approval.
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, the model comparison. `delegate` is built on fakes (ADR-035), and one live Haiku task ran from a script on Nov 4: a live worker needs `ME3_TOOL_STAGES=delegate=anthropic`.
 
 Voice servers (ADR-032): `stt=voice_listen,tts=voice_speak` routes Flux and Cartesia through our MCP servers, which hold the keys. The provider messages ride a Unix socket per stream, and playback, ducking, and AEC stay in the harness. Tested on fakes only.
 
@@ -104,4 +104,4 @@ Pi scripts are built and have not run on a Pi (ADR-030): the service stays on fa
 
 The waiting phrase is on (ADR-033): five clips rotate, after 1500 ms with no reply audio or when a slow tool starts, and the prompt tells the model not to say one itself. The clips are in `assets/fallback_wavs/` (Cartesia Skylar through voice-speak, Nov 4, $0.0029). Remake them with `ME3_LIVE=1 uv run python -m bench.make_phrases` if the voice changes.
 
-Network loss (ADR-037): an STT, LLM, or TTS error starts a TCP probe of that provider's host (never an API call). If it fails, the stored `network_lost` clip plays once, other output is held, and the host is probed with backoff until `network_restored`. The spending-cap notice is the stored `cap_reached` clip. Neither clip is made yet (a tone plays); `ME3_LIVE=1 uv run python -m bench.make_phrases --recovery` makes both, after approval.
+Network loss (ADR-037): an STT, LLM, or TTS error starts a TCP probe of that provider's host (never an API call). If it fails, the stored `network_lost` clip plays once, other output is held, and the host is probed with backoff until `network_restored`. The spending-cap notice is the stored `cap_reached` clip. Both clips were made Nov 4; `ME3_LIVE=1 uv run python -m bench.make_phrases --recovery` remakes them if the voice changes.

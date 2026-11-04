@@ -1,6 +1,6 @@
 # ADR-035: The delegate server and its background worker
 
-Date: Nov 4, 2026. Status: built and tested on fakes only. No live model call has run. Quiel ranks this as the first step to cut if time runs short, so it is kept small.
+Date: Nov 4, 2026. Status: built and tested on fakes. One live task ran on Haiku 5.5 on Nov 4, 2026. Quiel ranks this as the first step to cut if time runs short, so it is kept small.
 
 ## Context
 
@@ -44,7 +44,8 @@ The worker (`worker.py`) is a manual tool loop:
 - Cancel stops the loop between steps. A `bash` call already running finishes (it is capped at 25 s); its result is dropped.
 - Text the worker reads from files can steer it. The system prompt says file text is data, but the real limit is that the worker can only do what needs no yes.
 - A task running when the server stops cannot resume. On restart it is marked failed, quietly.
-- Not done: a live run on Haiku 5.5 (needs approval, likely under $0.01 a task), a task case that checks files written by a worker, and the Pi.
+- **Live, Nov 4, 2026:** one task on Haiku 5.5, called from a script through `worker.run_task` with the server's own `make_model()`, not by voice. The goal was two files in a new folder, then a listing. It wrote both files correctly and listed them: 3 model calls, 4.6 s, $0.00095, state `done`.
+- Not done: a live task started by voice, a live task that stops on "needs your yes", a task case that checks files written by a worker, and the Pi.
 
 ## Sources
 
