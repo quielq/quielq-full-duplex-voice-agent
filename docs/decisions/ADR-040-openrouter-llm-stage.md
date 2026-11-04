@@ -1,6 +1,6 @@
 # ADR-040: OpenRouter as an LLM stage, with a curated and priced model list
 
-Date: Nov 4, 2026. Status: built and tested on fakes only. No OpenRouter call has been made: the account has no credits yet.
+Date: Nov 4, 2026. Status: built, and smoke-tested live on six models on Nov 4, 2026 (results below).
 
 ## Context
 
@@ -45,6 +45,21 @@ Two checks on Nov 4, 2026:
 - **Live use needs credits and approval.** Recommended: $10, which also lifts the free-model limit from 50 to 1,000 requests a day.
 - **Before a model goes live:** a small smoke test per model, a tool call and a short answer, at about $0.01 in total, then `bench.latency_probe`. Slow models leave the list.
 - **Usage metrics.** OpenRouter reports usage through the OpenAI streaming format, which Pipecat turns into `LLMUsageMetricsData`. Not yet checked against a live response.
+
+## Live smoke test, Nov 4, 2026
+
+$20 of credits were loaded. One run per model as the Customers agent (ADR-039), text input and fake TTS, two turns: "Who is the account manager for Mayon Builders?" (answer: Lea Manalo) and "What is the capital of France?" (should be refused). Total $0.0095 by the ledger.
+
+| Model | Lookup | Refusal | Cost | Run time |
+|---|---|---|---|---|
+| `anthropic/claude-haiku-5.5` | Right | Right | $0.0022 | 10.4 s |
+| `openai/gpt-oss-120b` | Said it was not in the documents | Right | $0.0020 | 9.3 s |
+| `openai/gpt-oss-20b` | No reply in 45 s, five searches | Not reached | $0.0006 | 46.0 s |
+| `qwen/qwen3.8-flash` | Right | Right | $0.0012 | 23.5 s |
+| `deepseek/deepseek-v4.1-flash` | Right | Right | $0.0005 | 6.8 s |
+| `google/gemini-3.1-flash-lite` | Said it was not in the documents | Right | $0.0031 | 11.6 s |
+
+The misses were a bug in the docs server, not the models. Every search found the right chunk, but each result was cut to its first 500 characters, and the Mayon Builders row sat about 900 characters into a chunk of CSV rows. Snippets are now built from the lines that match the query (`snippet` in `servers/tasks/docs/server.py`). The three models that missed have not been run again since the fix. Sonnet 5.5 was not run, to keep within the approved spend. Run times are whole sessions, including MCP server start, not reply latency.
 
 ## Sources
 
