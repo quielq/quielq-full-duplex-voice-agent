@@ -91,7 +91,8 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 
 ## Finish the first spike
 
-- [ ] Step 4, Cartesia arm (ADR-006): ran Nov 3. It truncates, but commits 4 words past what was heard (immediate, stop 279 ms) and 5 in duck mode (stop 1,298 ms), against 1 on `fake_words`. Check whether the heard-word estimate or Cartesia's timestamps cause it
+- [x] Step 4, Cartesia arm (ADR-006): ran Nov 3. It truncates. The reported 4 and 5 extra words (immediate, stop 279 ms; duck, stop 1,298 ms) came from the bench's 850 characters a minute guess: Cartesia speaks about 1,000 to 1,150, so the real extra is 1 to 2, as on `fake_words` (research.md, Nov 4). The bench now counts heard words from the word timestamps, and `fake_words_fast` covers it
+- [ ] Optional: one `--tts cartesia` run with the fixed bench (about $0.025, needs a go) to confirm the 1 to 2 words
 - [ ] Step 7, Pi port (needs a go):
   - [x] Write `scripts/pi_setup.sh`, the `me3-bot` service, the kiosk launcher, and `docs/quickstart-pi.md` (ADR-030), not run on a Pi
   - [x] Run the setup and tests on the Pi: Bookworm, not Trixie, 450 passed, and the `say` failures fixed
