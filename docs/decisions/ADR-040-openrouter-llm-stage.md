@@ -59,7 +59,17 @@ $20 of credits were loaded. One run per model as the Customers agent (ADR-039), 
 | `deepseek/deepseek-v4.1-flash` | Right | Right | $0.0005 | 6.8 s |
 | `google/gemini-3.1-flash-lite` | Said it was not in the documents | Right | $0.0031 | 11.6 s |
 
-The misses were a bug in the docs server, not the models. Every search found the right chunk, but each result was cut to its first 500 characters, and the Mayon Builders row sat about 900 characters into a chunk of CSV rows. Snippets are now built from the lines that match the query (`snippet` in `servers/tasks/docs/server.py`). The three models that missed have not been run again since the fix. Sonnet 5.5 was not run, to keep within the approved spend. Run times are whole sessions, including MCP server start, not reply latency.
+The misses were a bug in the docs server, not the models. Every search found the right chunk, but each result was cut to its first 500 characters, and the Mayon Builders row sat about 900 characters into a chunk of CSV rows. Snippets are now built from the lines that match the query (`snippet` in `servers/tasks/docs/server.py`).
+
+The three that missed were run again after the fix, for $0.0017 in total:
+
+| Model | Lookup | Refusal | Searches | Cost | Run time |
+|---|---|---|---|---|---|
+| `openai/gpt-oss-120b` | Right | Right | 1 | $0.0006 | 7.8 s |
+| `google/gemini-3.1-flash-lite` | Right | Right | 1 | $0.0009 | 8.5 s |
+| `openai/gpt-oss-20b` | Right | Right | 2 | $0.0002 | 14.3 s |
+
+So all six answer and refuse correctly on this case. Two style slips: GPT-OSS 20B put the file path in parentheses, and GPT-OSS 120B named the file rather than its title, though the prompt asks for neither. TTS would read both aloud. Sonnet 5.5 was not run, to keep within the approved spend. One question per model is a smoke test, not a comparison. Run times are whole sessions, including MCP server start, not reply latency.
 
 ## Sources
 
