@@ -139,6 +139,9 @@ async def test_listen_relays_audio_and_turns(upstreams, tmp_path, transport):
     assert flux.seen[0]["auth"] == f"Token {DUMMY}"
     names = [name for name, _ in events]
     assert {"voice_stream_ready", "voice_upstream_connected", "voice_speech_started", "voice_transcript_final"} <= set(names)
+    order = [n for n in names if n != "voice_stream_closed"]
+    assert order.index("voice_speech_started") < order.index("voice_transcript_final")  # queued, still in order
+    assert names[-1] == "voice_stream_closed"
     final = next(d for n, d in events if n == "voice_transcript_final")
     assert final["text"] == TRANSCRIPT
     logged = json.dumps(events)

@@ -153,13 +153,25 @@ class Relay:
         try:
             async with websockets.connect(url, additional_headers=headers, open_timeout=CONNECT_TIMEOUT_S) as ws:
                 await emit(ctx, "upstream_connected", session=session.sid, connect_ms=round((time.monotonic() - t0) * 1000))
+                # Events go out in order from their own task, so a slow MCP send never holds up
+                # the next audio message on the socket.
+                events: asyncio.Queue = asyncio.Queue()
+
+                async def send_events():
+                    while True:
+                        name, data = await events.get()
+                        with contextlib.suppress(Exception):
+                            await emit(ctx, name, session=session.sid, **data)
+                        events.task_done()
+
+                emitter = asyncio.create_task(send_events())
 
                 async def down():  # provider to harness
                     async for message in ws:
                         write_frame(writer, message)
                         await writer.drain()
                         if isinstance(message, str) and (named := self._event(message)):
-                            await emit(ctx, named[0], session=session.sid, **named[1])
+                            events.put_nowait(named)
 
                 async def up():  # harness to provider
                     while True:
@@ -171,6 +183,9 @@ class Relay:
                 finished, _ = await asyncio.wait([*tasks, stopper], return_when=asyncio.FIRST_COMPLETED)
                 for task in [*tasks, stopper]:
                     task.cancel()
+                with contextlib.suppress(TimeoutError):  # let queued events out before stream_closed
+                    await asyncio.wait_for(events.join(), 1.0)
+                emitter.cancel()
                 if not session.reason:
                     session.reason = "stopped" if stopper in finished else _why(finished)
         except Exception as e:
