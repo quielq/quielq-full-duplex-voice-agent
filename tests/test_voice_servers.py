@@ -29,8 +29,9 @@ DUMMY = "dummy-test-value"
 @pytest.fixture
 async def upstreams(monkeypatch, tmp_path):
     flux, cartesia = FakeFlux(), FakeCartesia()
-    async with (websockets.serve(flux.handler, "127.0.0.1", 0) as f,
-                websockets.serve(cartesia.handler, "127.0.0.1", 0) as c):  # fmt: skip
+    async with (websockets.serve(flux.handler, "127.0.0.1", 0, process_request=flux.process_request) as f,
+                websockets.serve(cartesia.handler, "127.0.0.1", 0,
+                                 process_request=cartesia.process_request) as c):  # fmt: skip
         fport, cport = f.sockets[0].getsockname()[1], c.sockets[0].getsockname()[1]
         monkeypatch.setenv("ME3_VOICE_LISTEN_UPSTREAM", f"ws://127.0.0.1:{fport}/v2/listen")
         monkeypatch.setenv("ME3_VOICE_SPEAK_UPSTREAM", f"ws://127.0.0.1:{cport}/tts/websocket")
@@ -134,10 +135,11 @@ def test_query_cannot_change_the_path(monkeypatch):
             relay._url(bad)
 
 
-async def test_wrong_token_is_dropped(monkeypatch, tmp_path):
-    monkeypatch.setenv("ME3_DATA_DIR", str(tmp_path))
+async def test_wrong_token_is_dropped(upstreams, monkeypatch):
+    import os
+
     monkeypatch.setenv("ME3_TEST_KEY", DUMMY)
-    monkeypatch.setenv("ME3_TEST_UP", "ws://127.0.0.1:9/x")
+    monkeypatch.setenv("ME3_TEST_UP", os.environ["ME3_VOICE_LISTEN_UPSTREAM"])
     relay = Relay("t", Upstream("deepgram", "wss://api.deepgram.com/v2/listen", "ME3_TEST_KEY", lambda k: {}, "ME3_TEST_UP"))
     ready: asyncio.Future = asyncio.get_running_loop().create_future()
 

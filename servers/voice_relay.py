@@ -16,10 +16,12 @@ The first frame from the harness is the session token, as text.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import contextlib
 import json
 import os
 import secrets
+import shutil
 import struct
 import tempfile
 import time
@@ -79,6 +81,7 @@ class _Session:
     token: str
     done: asyncio.Event = field(default_factory=asyncio.Event)
     reason: str = ""
+    connect_ms: int = 0
 
 
 class Relay:
@@ -88,6 +91,7 @@ class Relay:
         self._ledger = ledger
         self._dir = Path(tempfile.mkdtemp(prefix=f"me3-{name}-"))
         os.chmod(self._dir, 0o700)
+        atexit.register(shutil.rmtree, self._dir, True)
         self._sessions: dict[str, _Session] = {}
 
     def _url(self, query: str) -> str:
@@ -99,7 +103,11 @@ class Relay:
         return f"{base}?{query}" if query else base
 
     async def open(self, ctx: Context, query: str = "", headers: dict | None = None) -> dict:
-        """Open one provider stream and relay it until either end closes. Blocks while it lives."""
+        """Open one provider stream and relay it until either end closes. Blocks while it lives.
+
+        The provider is reached before the stream is offered, so a refused connect fails this
+        call, the way a refused WebSocket fails Pipecat's own connect, and Pipecat retries.
+        """
         extra = {k: str(v) for k, v in (headers or {}).items() if k in self._up.headers}
         try:
             url = self._url(query)
@@ -113,7 +121,45 @@ class Relay:
 
         sid = secrets.token_hex(4)
         session = _Session(sid, self._dir / f"{sid}.sock", secrets.token_hex(16))
-        self._sessions[sid] = session
+        self._sessions[sid] = session  # from here a stop reaches it, even while it connects
+        try:
+            ws = await self._connect_upstream(session, url, {**self._up.auth(key), **extra})
+        except BaseException as e:
+            self._sessions.pop(sid, None)
+            if not isinstance(e, Exception):
+                raise
+            reason = f"upstream: {type(e).__name__}: {e}"[:200]
+            await emit(ctx, "stream_refused", session=sid, reason=reason)
+            return {"opened": False, "error": reason}
+        if ws is not None:
+            await self._offer(ctx, session, ws)
+        self._sessions.pop(sid, None)
+        await emit(ctx, "stream_closed", session=sid, reason=session.reason)
+        return {"opened": ws is not None, "session": sid, "reason": session.reason}
+
+    async def _connect_upstream(self, session: _Session, url: str, headers: dict):
+        """The provider's WebSocket, or None if the stream was stopped while it connected."""
+        t0 = time.monotonic()
+        connect = asyncio.ensure_future(websockets.connect(url, additional_headers=headers,
+                                                           open_timeout=CONNECT_TIMEOUT_S))  # fmt: skip
+        stopper = asyncio.ensure_future(session.done.wait())
+        try:
+            await asyncio.wait({connect, stopper}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            stopper.cancel()
+            if not connect.done():
+                connect.cancel()
+            elif session.done.is_set() and not connect.cancelled() and not connect.exception():
+                with contextlib.suppress(Exception):  # stopped as it answered: hang up
+                    await asyncio.wait_for(connect.result().close(), 2.0)
+        if session.done.is_set():
+            return None
+        session.connect_ms = round((time.monotonic() - t0) * 1000)
+        return connect.result()
+
+    async def _offer(self, ctx: Context, session: _Session, ws) -> None:
+        """Offer the open provider stream on a private socket and relay it until it ends."""
+        await emit(ctx, "upstream_connected", session=session.sid, connect_ms=session.connect_ms)
         ready = asyncio.Event()
 
         async def on_local(reader, writer):
@@ -128,12 +174,13 @@ class Relay:
                 writer.close()
                 return
             ready.set()
-            await self._pump(ctx, session, url, {**self._up.auth(key), **extra}, reader, writer)
+            await self._pump(ctx, session, ws, reader, writer)
 
-        server = await asyncio.start_unix_server(on_local, path=str(session.path))
-        os.chmod(session.path, 0o600)
+        server = None
         try:
-            await emit(ctx, "stream_ready", session=sid, path=str(session.path), token=session.token)
+            server = await asyncio.start_unix_server(on_local, path=str(session.path))
+            os.chmod(session.path, 0o600)
+            await emit(ctx, "stream_ready", session=session.sid, path=str(session.path), token=session.token)
             try:
                 await asyncio.wait_for(ready.wait(), CONNECT_TIMEOUT_S)
             except TimeoutError:
@@ -141,53 +188,59 @@ class Relay:
             else:
                 await session.done.wait()
         finally:
-            server.close()
+            # Also on cancel, when the harness's MCP session goes away: end the pump, close
+            # the provider stream and the socket, and leave nothing in the private folder.
+            if not session.reason:
+                session.reason = "the harness went away"
+            session.done.set()
+            if server is not None:
+                server.close()
+                server.close_clients()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(ws.close(), 2.0)
             with contextlib.suppress(FileNotFoundError):
                 session.path.unlink()
-            self._sessions.pop(sid, None)
-        await emit(ctx, "stream_closed", session=sid, reason=session.reason)
-        return {"opened": True, "session": sid, "reason": session.reason}
+            self._sessions.pop(session.sid, None)
 
-    async def _pump(self, ctx, session, url, headers, reader, writer) -> None:
-        t0 = time.monotonic()
+    async def _pump(self, ctx, session, ws, reader, writer) -> None:
         try:
-            async with websockets.connect(url, additional_headers=headers, open_timeout=CONNECT_TIMEOUT_S) as ws:
-                await emit(ctx, "upstream_connected", session=session.sid, connect_ms=round((time.monotonic() - t0) * 1000))
-                # Events go out in order from their own task, so a slow MCP send never holds up
-                # the next audio message on the socket.
-                events: asyncio.Queue = asyncio.Queue()
+            # Events go out in order from their own task, so a slow MCP send never holds up
+            # the next audio message on the socket.
+            events: asyncio.Queue = asyncio.Queue()
 
-                async def send_events():
-                    while True:
-                        name, data = await events.get()
-                        with contextlib.suppress(Exception):
-                            await emit(ctx, name, session=session.sid, **data)
-                        events.task_done()
+            async def send_events():
+                while True:
+                    name, data = await events.get()
+                    with contextlib.suppress(Exception):
+                        await emit(ctx, name, session=session.sid, **data)
+                    events.task_done()
 
-                emitter = asyncio.create_task(send_events())
+            emitter = asyncio.create_task(send_events())
 
-                async def down():  # provider to harness
-                    async for message in ws:
-                        write_frame(writer, message)
-                        await writer.drain()
-                        if isinstance(message, str) and (named := self._event(message)):
-                            events.put_nowait(named)
+            async def down():  # provider to harness
+                async for message in ws:
+                    write_frame(writer, message)
+                    await writer.drain()
+                    if isinstance(message, str) and (named := self._event(message)):
+                        events.put_nowait(named)
 
-                async def up():  # harness to provider
-                    while True:
-                        kind, payload = await read_frame(reader)
-                        await ws.send(payload.decode() if kind == b"T" else payload)
+            async def up():  # harness to provider
+                while True:
+                    kind, payload = await read_frame(reader)
+                    await ws.send(payload.decode() if kind == b"T" else payload)
 
-                tasks = [asyncio.create_task(down()), asyncio.create_task(up())]
-                stopper = asyncio.create_task(session.done.wait())
+            tasks = [asyncio.create_task(down()), asyncio.create_task(up())]
+            stopper = asyncio.create_task(session.done.wait())
+            try:
                 finished, _ = await asyncio.wait([*tasks, stopper], return_when=asyncio.FIRST_COMPLETED)
+            finally:
                 for task in [*tasks, stopper]:
                     task.cancel()
-                with contextlib.suppress(TimeoutError):  # let queued events out before stream_closed
-                    await asyncio.wait_for(events.join(), 1.0)
-                emitter.cancel()
-                if not session.reason:
-                    session.reason = "stopped" if stopper in finished else _why(finished)
+            with contextlib.suppress(TimeoutError):  # let queued events out before stream_closed
+                await asyncio.wait_for(events.join(), 1.0)
+            emitter.cancel()
+            if not session.reason:
+                session.reason = "stopped" if stopper in finished else _why(finished, ws)
         except Exception as e:
             session.reason = f"upstream: {type(e).__name__}: {e}"[:200]
         finally:
@@ -209,15 +262,18 @@ class Relay:
         return {"stopped": stopped}
 
     def status(self) -> dict:
-        return {"server": self._name, "provider": self._up.provider, "streams": len(self._sessions)}
+        """Open streams, and the sockets left in the private folder (none once they close)."""
+        return {"server": self._name, "provider": self._up.provider, "streams": len(self._sessions),
+                "sockets": len(list(self._dir.glob("*.sock")))}  # fmt: skip
 
 
-def _why(finished: set[asyncio.Task]) -> str:
+def _why(finished: set[asyncio.Task], ws) -> str:
     for task in finished:
         if task.cancelled():
             continue
-        if (error := task.exception()) is None:
-            return "provider closed the stream"
+        if (error := task.exception()) is None or isinstance(error, websockets.ConnectionClosed):
+            code, why = ws.close_code, ws.close_reason
+            return f"provider closed the stream ({code}{' ' + why if why else ''})"[:200]
         if isinstance(error, asyncio.IncompleteReadError):
             return "harness closed the stream"
         return f"{type(error).__name__}: {error}"[:200]
