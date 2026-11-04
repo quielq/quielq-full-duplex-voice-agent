@@ -55,29 +55,33 @@ def test_a_failed_llm_call_is_spoken_once(cfg, tmp_path, monkeypatch):
 
 
 
-def test_the_cap_notice_is_spoken_when_tts_is_not_the_capped_provider(cfg, tmp_path, monkeypatch):
-    from harness import costs
-
-    async def over(self, provider, kind, units, usd):
-        await self._on_cap_reached("groq")
-
-    monkeypatch.setattr(costs.CostObserver, "flush_tts", lambda self: over(self, "groq", "x", 0, 0))
-    result = run(cfg, tmp_path, say="hello")
-    assert [e for e in events(result) if e["event"] == "spend_cap_reached"]
-    assert cfg.profile["recovery"]["cap_phrase"] in result.spoken_text
-
-
-def test_the_cap_notice_never_spends_on_the_capped_tts(cfg, tmp_path, monkeypatch):
+def _cap_hit_by(provider, monkeypatch):
     from harness import costs
 
     async def over(self):
-        await self._on_cap_reached("cartesia")
+        await self._on_cap_reached(provider)
 
     monkeypatch.setattr(costs.CostObserver, "flush_tts", over)
+
+
+def test_the_cap_notice_is_a_stored_clip(cfg, tmp_path, monkeypatch):
+    _cap_hit_by("groq", monkeypatch)
+    result = run(cfg, tmp_path, say="hello")
+    evs = events(result)
+    assert [e for e in evs if e["event"] == "spend_cap_reached"]
+    played = [e["phrase"] for e in evs if e["event"] == "phrase_played"]
+    assert played == [cfg.profile["recovery"]["cap_clip"]] == ["cap_reached"]
+
+
+def test_the_cap_notice_never_spends_on_the_capped_tts(cfg, tmp_path, monkeypatch):
+    _cap_hit_by("cartesia", monkeypatch)
     monkeypatch.setattr("harness.bot.build_tts", lambda *a, **k: build_tts({**cfg.providers, "stages": {"tts": "fake"}}, a[1], **k))
     cfg.providers["stages"]["tts"] = "cartesia"
     result = run(cfg, tmp_path, say="hello")
-    assert cfg.profile["recovery"]["cap_phrase"] not in result.spoken_text
+    evs = events(result)
+    # The clip plays, and no text went to the TTS for it.
+    assert [e["phrase"] for e in evs if e["event"] == "phrase_played"] == ["cap_reached"]
+    assert "limit" not in result.spoken_text
 
 
 async def test_a_tts_error_is_logged_as_a_voice_failure(tmp_path):

@@ -60,9 +60,18 @@ addressing:
     pre_roll_ms: 400
 
 recovery:
-  # Fixed text, no LLM call (harness/recovery.py). The cap notice is skipped if TTS is the capped provider.
+  # Fixed text, no LLM call (harness/recovery.py).
   llm_error_phrase: "Sorry, I had trouble with that. Could you say it again?"
-  cap_phrase: "I've hit today's spending limit, so I'm stopping now."
+  # Stored clips from harness/phrase_cache.py, played with no TTS call (ADR-037).
+  cap_clip: cap_reached
+  network_clip: network_lost
+
+network:
+  # Network-loss detection (harness/network.py, ADR-037). TCP connects only, never an API call.
+  enabled: true
+  probe_timeout_s: 1.5
+  probe_attempts: 2        # a host must miss this many connects in a row to count as down
+  backoff_s: [1, 2, 4, 8]  # between probes while down; the last repeats
 
 ui:
   # Robot face and device panel in a browser (harness/ui.py, ADR-027). Also on with --ui.

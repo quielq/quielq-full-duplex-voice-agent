@@ -4,6 +4,9 @@ Groq rejected a ``set_timer`` of 0 seconds at schema validation (run 20261031-15
 Pipecat pushed an ErrorFrame, no reply followed, and nothing was spoken. The phrase here is
 fixed text with no LLM call, spoken at most once per turn. Pipeline errors stay in the event
 log either way (``pipeline_error``, see bench/run_report.py).
+
+With a ``NetworkWatch`` (ADR-037) the error is checked first: if the provider host cannot be
+reached, the network phrase is said instead and this phrase is not, since it would need TTS.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ class LLMErrorRecovery(BaseObserver):
         speak: Callable[[str], Awaitable[None]],
         turn_id: Callable[[], int],
         on_event: Callable[..., object] | None = None,
+        network=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -30,9 +34,12 @@ class LLMErrorRecovery(BaseObserver):
         self._turn_id = turn_id
         self._on_event = on_event or (lambda *a, **k: None)
         self._spoken_turn: int | None = None
+        self._network = network
 
     async def on_push_frame(self, data: FramePushed):
         if not isinstance(data.frame, ErrorFrame) or not isinstance(data.source, LLMService):
+            return
+        if self._network is not None and await self._network.check("llm", data.frame.error):
             return
         turn = self._turn_id()
         if turn == self._spoken_turn:
