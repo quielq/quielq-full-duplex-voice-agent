@@ -430,3 +430,60 @@ def test_a_rewrite_keeps_the_old_version(tmp_path, monkeypatch):
     assert (tmp_path / "workspace" / kept).read_text() == "one"
     assert workspace.edit_file("a.txt", "two", "three")["previous_version"].startswith(".versions/")
     assert [f["path"] for f in workspace.list_files()["files"]] == ["a.txt"]
+
+
+@pytest.fixture
+def scoped(data, monkeypatch):
+    """Two agents' folders, with this server scoped to the first (ADR-039)."""
+    root = data / "documents"
+    (root / "it_policy").mkdir(parents=True)
+    (root / "workouts").mkdir()
+    (root / "it_policy" / "security.md").write_text("Passwords are at least 14 characters long.")
+    (root / "workouts" / "plan.md").write_text("Squat passwords at 100 kg for five sets.")
+    (root / "it_policy_old.md").write_text("Passwords are 8 characters.")  # a sibling that shares the prefix
+    monkeypatch.setenv("ME3_DOC_SCOPE", "it_policy")
+    monkeypatch.setattr(docs, "_scope_indexed", False)
+    return root
+
+
+def test_scoped_search_sees_only_its_folder(scoped):
+    results = docs.local_search("passwords")["results"]
+    assert [r["path"] for r in results] == ["it_policy/security.md"]
+
+
+def test_scoped_search_skips_files_another_agent_indexed(scoped, monkeypatch):
+    monkeypatch.delenv("ME3_DOC_SCOPE")
+    assert len(docs.index_documents()["failed"]) == 0  # the generalist indexes everything
+    monkeypatch.setenv("ME3_DOC_SCOPE", "it_policy")
+    assert {r["path"] for r in docs.local_search("passwords")["results"]} == {"it_policy/security.md"}
+
+
+def test_scoped_tools_refuse_other_folders(scoped):
+    assert "outside" in docs.read_document("workouts/plan.md")["error"]
+    assert "outside" in docs.search_document("../workouts/plan.md", query="squat")["error"]
+    assert "outside" in docs.read_document("it_policy_old.md")["error"]
+    assert [d["path"] for d in docs.list_documents()["documents"]] == ["it_policy/security.md"]
+
+
+def test_scoped_read_finds_a_bare_file_name(scoped):
+    assert "14 characters" in docs.read_document("security.md")["text"]
+
+
+def test_scope_outside_documents_is_refused(data, monkeypatch):
+    monkeypatch.setenv("ME3_DOC_SCOPE", "../workspace")
+    with pytest.raises(docs.ScopeError):
+        docs.scope()
+
+
+def test_csv_rows_keep_their_column_names(data):
+    _doc(data, "c.csv", "customer_id,company,status\nC-1,Mayon Builders,Active\nC-2,Taal Foods,Churned\n")
+    hit = docs.local_search("Taal")["results"][0]["text"]
+    assert hit.splitlines()[1] == "customer_id: C-2; company: Taal Foods; status: Churned"
+    assert docs.read_document("c.csv")["text"].startswith("customer_id: C-1")
+    assert docs.search_document("c.csv", mode="pattern", pattern="Churned")["matches"][0]["line"] == 2
+
+
+def test_read_document_pages_long_text(data):
+    _doc(data, "long.md", "x" * (docs.READ_CHARS + 10))
+    first = docs.read_document("long.md")
+    assert first["pages"] == 2 and len(docs.read_document("long.md", page=2)["text"]) == 10
