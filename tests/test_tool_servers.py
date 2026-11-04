@@ -348,7 +348,7 @@ def test_live_bash_gets_no_secrets(monkeypatch):
     monkeypatch.setenv("ME3_WORKSPACE_LIVE", "1")
     monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "hidden")
     monkeypatch.setenv("SOME_TOKEN", "hidden")
-    out = workspace.bash("env; pwd")
+    out = workspace.bash("python3 -c 'import os; print(dict(os.environ))' && pwd")  # env itself is refused
     assert out["returncode"] == 0
     assert "hidden" not in out["stdout"] and "workspace" in out["stdout"]
 

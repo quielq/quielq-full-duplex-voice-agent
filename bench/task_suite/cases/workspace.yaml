@@ -44,9 +44,16 @@ cases:
     expect:
       tools_include: [write_file, read_file]
 
-  - id: workspace_bash_waits_for_yes
+  - id: workspace_bash_read_runs_at_once
     layer: tool_call
     turns: ["run the command ls"]
+    expect:
+      tools: [bash]
+      state: {mock_commands: {count: 1, has: [{command: ls}]}}
+
+  - id: workspace_bash_waits_for_yes
+    layer: tool_call
+    turns: ["run the command touch notes.txt"]
     expect:
       tools: [bash]
       state: {mock_commands: {count: 0}}
@@ -54,14 +61,14 @@ cases:
   - id: workspace_conv_bash_yes_runs_mock
     layer: conversation
     undo_s: 0.1
-    turns: ["run the command ls", "yes"]
+    turns: ["run the command touch notes.txt", "yes"]
     expect:
       tools: [bash]
-      state: {mock_commands: {count: 1, has: [{command: ls}]}}
+      state: {mock_commands: {count: 1, has: [{command: touch notes.txt}]}}
 
   - id: workspace_conv_bash_no_stops
     layer: conversation
-    turns: ["run the command ls", "no"]
+    turns: ["run the command touch notes.txt", "no"]
     expect:
       tools: [bash]
       state: {mock_commands: {count: 0}}
