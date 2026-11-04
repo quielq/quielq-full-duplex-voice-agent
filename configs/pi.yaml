@@ -34,10 +34,13 @@ barge_in:
   allowlist: ["stop", "wait", "no", "cancel", "pause"]   # quoted: bare no is a YAML boolean
 
 filler:
-  # Waiting phrase (harness/filler.py, ADR-009). Off until tested. Never counts toward latency.
-  enabled: false
-  after_ms: 600      # hypothesis to tune: no reply audio this long after end of turn
-  phrase: one_sec    # from harness/phrase_cache.py
+  # Waiting phrase (harness/filler.py, ADR-009, ADR-033). Never counts toward latency.
+  enabled: true
+  after_ms: 1500     # no reply audio this long after end of turn (ADR-033)
+  # Rotated, never the same one twice in a row. From harness/phrase_cache.py.
+  phrases: [one_sec, just_a_moment, let_me_see, on_it, working_on_it]
+  # Only these tools play it when they start; a quick tool's reply comes before it would end.
+  slow_tools: [search, fetch_content, get_weather, index_documents, bash, serve, write_file, play_music]
 
 addressing:
   # No wake word (harness/addressing.py, ADR-016). Off until tuned on real rooms.

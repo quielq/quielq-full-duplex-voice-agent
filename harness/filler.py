@@ -1,8 +1,9 @@
 """Waiting phrase (ADR-009): a short local clip while the agent is working.
 
-Sits between the TTS and the output. It plays when a tool call starts, or when no reply audio
+Sits between the TTS and the output. It plays when a slow tool starts, or when no reply audio
 has started ``after_ms`` after end of turn. At most once per turn, never once the reply has
-started, and queued clip audio is flushed by any interruption like other output audio.
+started, and queued clip audio is flushed by any interruption like other output audio. With
+several clips it rotates, and never plays the same one twice in a row.
 
 It is raw output audio with no text, so it never enters the LLM context or the
 ``played_up_to`` word count. The timer needs ``is_active``, so that with ACTIVE/IDLE built it
@@ -19,8 +20,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import random
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
@@ -40,17 +42,26 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 class FillerProcessor(FrameProcessor):
     def __init__(
         self,
-        clip: bytes,
+        clip: bytes | Sequence[bytes],
         sample_rate: int,
         *,
         after_ms: float = 600,
         is_active: Callable[[], bool] = lambda: True,
         never_tools: Sequence[str] = ("stay_silent",),
+        slow_tools: Collection[str] | None = None,
+        rng: random.Random | None = None,
         on_event: Callable[..., object] | None = None,
         **kwargs,
     ):
+        """``slow_tools`` limits which tool starts play the clip; None means any tool."""
         super().__init__(**kwargs)
-        self._clip = clip
+        self._clips = [clip] if isinstance(clip, (bytes, bytearray)) else list(clip)
+        if not self._clips:
+            raise ValueError("the waiting phrase needs at least one clip")
+        self._clip = self._clips[0]
+        self._last_clip = -1
+        self._rng = rng or random.Random()
+        self._slow_tools = None if slow_tools is None else set(slow_tools)
         self._sample_rate = sample_rate
         self._after_s = after_ms / 1000
         self._is_active = is_active
@@ -92,7 +103,8 @@ class FillerProcessor(FrameProcessor):
             self._end_ns = 0
             self._awaiting_bot_start = False
         elif isinstance(frame, FunctionCallInProgressFrame):
-            if frame.function_name not in self._never_tools:
+            name = frame.function_name
+            if name not in self._never_tools and (self._slow_tools is None or name in self._slow_tools):
                 await self._cancel_timer()
                 await self._trigger("tool_call")
         elif isinstance(frame, BotStartedSpeakingFrame):
@@ -112,6 +124,9 @@ class FillerProcessor(FrameProcessor):
         if self._played or self._reply_started:
             return
         self._played = True
+        choices = [i for i in range(len(self._clips)) if i != self._last_clip] or [0]
+        self._last_clip = self._rng.choice(choices)
+        self._clip = self._clips[self._last_clip]
         self._bot_stopped_since_clip = False
         self._clip_started.clear()
         # With the bot already speaking there is no new start to claim.
@@ -119,7 +134,7 @@ class FillerProcessor(FrameProcessor):
         if self._bot_speaking:
             self._clip_started.set()
         self._end_ns = time.monotonic_ns() + self._clip_ns
-        self._on_event("filler_trigger", reason=reason)
+        self._on_event("filler_trigger", reason=reason, clip=self._last_clip)
         chunk = self._sample_rate // 50 * 2  # 20 ms of 16-bit samples
         for i in range(0, len(self._clip), chunk):
             await self.push_frame(

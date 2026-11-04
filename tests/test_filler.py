@@ -11,6 +11,7 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     FunctionCallInProgressFrame,
     InterruptionFrame,
+    UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
 )
 from pipecat.tests.utils import SleepFrame, run_test
@@ -32,6 +33,7 @@ def cfg(tmp_path):
     cfg.providers["stages"] = {"stt": "fake", "llm": "fake", "tts": "fake"}
     cfg.profile["paths"] = {"logs_dir": str(tmp_path / "logs"), "data_dir": str(tmp_path / "data")}
     cfg.profile["filler"]["enabled"] = True
+    cfg.profile["filler"]["slow_tools"] = ["set_timer"]  # the fake LLM's one tool
     return cfg
 
 
@@ -44,7 +46,7 @@ def clip(tmp_path_factory):
 
 class SlowLLM(RuleBasedLLMService):
     async def _respond(self, context):
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(2.0)  # past after_ms (1500)
         await super()._respond(context)
 
 
@@ -58,9 +60,16 @@ def named(events, name):
     return [e for e in events if e["event"] == name]
 
 
-def test_off_in_both_profiles():
+def test_on_in_both_profiles_for_slow_tools_only():
     for profile in ("mac", "pi"):
-        assert load_config(profile).profile["filler"]["enabled"] is False
+        f = load_config(profile).profile["filler"]
+        assert f["enabled"] is True and f["after_ms"] == 1500
+        assert len(f["phrases"]) >= 4 and set(f["phrases"]) <= set(PHRASES)
+        assert "search" in f["slow_tools"] and "set_timer" not in f["slow_tools"]
+
+
+def test_the_prompt_leaves_waiting_to_the_device():
+    assert "Never open a reply with a waiting phrase" in bot.SYSTEM_PROMPT
 
 
 def test_missing_clip_is_a_placeholder(tmp_path):
@@ -80,7 +89,7 @@ async def test_plays_once_on_a_tool_call_and_stays_out_of_context(cfg, tmp_path,
     assert "Timer set" in r.spoken_text
     text = json.dumps(r.context_messages).lower()
     assert "one sec" not in text
-    assert named(ev, "filler_clip")[0]["real"] is False
+    assert named(ev, "filler_clip")[0]["real"] == 0
     assert filler_rate(ev) == (1, 1)
     deltas = next(iter(stage_deltas(ev).values()))
     assert "end_of_turn_to_filler" in deltas
@@ -125,6 +134,32 @@ async def test_stay_silent_never_triggers():
 
     assert await _triggers([call("stay_silent"), SleepFrame(0.05)]) == []
     assert await _triggers([call("set_timer"), SleepFrame(0.05)]) == ["tool_call"]
+
+
+def _call(name):
+    return FunctionCallInProgressFrame(function_name=name, tool_call_id="c", arguments={})
+
+
+async def test_only_slow_tools_trigger_on_start():
+    slow = {"slow_tools": ["search"]}
+    assert await _triggers([_call("set_timer"), SleepFrame(0.05)], **slow) == []
+    assert await _triggers([_call("search"), SleepFrame(0.05)], **slow) == ["tool_call"]
+    # A quick tool still gets the timer if the reply is slow after it.
+    assert await _triggers([UserStoppedSpeakingFrame(), _call("set_timer"), SleepFrame(0.1)], **slow) == ["timer"]
+
+
+async def test_clips_rotate_without_repeats():
+    import random
+
+    picked = []
+    proc = FillerProcessor([b"\0\0" * 48, b"\1\0" * 48, b"\2\0" * 48], 24000, after_ms=1,
+                           rng=random.Random(7), on_event=lambda name, **f: picked.append(f.get("clip")))  # fmt: skip
+    frames = []
+    for _ in range(12):  # one clip per user turn
+        frames += [UserStartedSpeakingFrame(), UserStoppedSpeakingFrame(), SleepFrame(0.02)]
+    await run_test(proc, frames_to_send=frames, expected_down_frames=None)
+    assert len(picked) == 12 and set(picked) == {0, 1, 2}
+    assert all(a != b for a, b in zip(picked, picked[1:]))
 
 
 async def test_late_bot_start_still_belongs_to_the_clip():

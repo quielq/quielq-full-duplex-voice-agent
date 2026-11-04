@@ -88,6 +88,8 @@ SYSTEM_PROMPT = (
     "To read a web page use fetch_content, never bash: bash has no network access. "
     "To show an HTML file use open_in_browser, never bash: bash has no desktop. "
     "Call a tool straight away, with no words before it. "
+    "Never open a reply with a waiting phrase such as one moment, let me check, or on it: the "
+    "device already plays one while you work, so start with the answer. "
     "The one exception is a job of several steps, such as planning and building a website: say in "
     "one short sentence what you will make, then keep calling tools until it is finished, without "
     "asking whether to continue. Give the job its own folder and write a short plan.md there "
@@ -198,12 +200,16 @@ def _filler(cfg: Config, log: EventLog, addressing: Addressing | None = None) ->
     if not f["enabled"]:
         return None
     rate = cfg.profile["audio"]["out_sample_rate"]
-    clip, real = load_phrase(f["phrase"], rate)
-    if not real:
-        logger.warning(f"no clip for {f['phrase']}: the waiting phrase is a placeholder tone")
-    log.emit("filler_clip", phrase=f["phrase"], real=real)
+    names = f.get("phrases") or [f["phrase"]]
+    loaded = [load_phrase(name, rate) for name in names]
+    clips = [pcm for pcm, real in loaded if real] or [loaded[0][0]]  # a tone when none exist yet
+    missing = [n for n, (_, real) in zip(names, loaded) if not real]
+    if missing:
+        logger.warning(f"no clip for {', '.join(missing)}: run bench.make_phrases (paid), or hear a tone")
+    log.emit("filler_clip", phrases=names, real=len(names) - len(missing))
     is_active = (lambda: addressing.state.active) if addressing else (lambda: True)
-    return FillerProcessor(clip, rate, after_ms=f["after_ms"], on_event=log.emit, is_active=is_active)
+    return FillerProcessor(clips, rate, after_ms=f["after_ms"], on_event=log.emit, is_active=is_active,
+                           slow_tools=f.get("slow_tools"))  # fmt: skip
 
 
 def _vad(cfg: Config) -> VADProcessor:

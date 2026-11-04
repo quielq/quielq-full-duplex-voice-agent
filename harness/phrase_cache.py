@@ -17,7 +17,12 @@ from harness.file_input import read_pcm
 
 PHRASE_DIR = REPO_ROOT / "assets" / "fallback_wavs"
 PHRASES = {
+    # Waiting phrases, rotated (ADR-033). Short, and none promises an answer.
     "one_sec": "One sec.",
+    "just_a_moment": "Just a moment.",
+    "let_me_see": "Hmm, let me see.",
+    "on_it": "On it.",
+    "working_on_it": "Working on it.",
     "network_lost": "I've lost my connection. Give me a moment.",
     "cap_reached": "I've reached today's spending limit, so I have to stop here.",
 }
