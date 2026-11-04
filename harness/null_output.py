@@ -22,6 +22,7 @@ from pipecat.frames.frames import (
     OutputAudioRawFrame,
     StartFrame,
     TTSAudioRawFrame,
+    TTSTextFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.transports.base_output import BaseOutputTransport
@@ -45,6 +46,13 @@ class PlayedChunk:
     context_id: str | None
 
 
+@dataclass
+class TimedWord:
+    pts_ns: int  # pipeline clock time Pipecat releases the word at (start of its audio)
+    text: str
+    context_id: str | None
+
+
 class PacedNullOutputTransport(BaseOutputTransport):
     def __init__(self, sample_rate: int, on_event=None, audio_out_filter=None, **kwargs):
         params = TransportParams(
@@ -56,6 +64,9 @@ class PacedNullOutputTransport(BaseOutputTransport):
         self.played: list[PlayedChunk] = []
         # Seconds of TTS audio received per context (generated), for heard-fraction checks.
         self.generated_s: dict[str, float] = {}
+        # Words with a TTS timestamp, in arrival order, so a bench can tell from the
+        # provider's own timing which words had played by a given moment.
+        self.words: list[TimedWord] = []
         self._last_voiced_ns: int | None = None
         self.interruptions_ns: list[int] = []
         self._voiced_since_interrupt = False
@@ -68,6 +79,8 @@ class PacedNullOutputTransport(BaseOutputTransport):
         if isinstance(frame, TTSAudioRawFrame) and frame.context_id:
             dur = len(frame.audio) / 2 / frame.sample_rate
             self.generated_s[frame.context_id] = self.generated_s.get(frame.context_id, 0.0) + dur
+        elif isinstance(frame, TTSTextFrame) and frame.pts:
+            self.words.append(TimedWord(frame.pts, frame.text, frame.context_id))
         elif isinstance(frame, InterruptionFrame):
             self.interruptions_ns.append(time.monotonic_ns())
             self._on_event("interruption_at_output")

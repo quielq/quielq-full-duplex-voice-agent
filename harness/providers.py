@@ -137,6 +137,9 @@ def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None, hops=No
         return ToneTTSService(text_aggregation_mode=agg)
     if choice == "fake_words":
         return ToneTTSService(text_aggregation_mode=agg, word_timestamps=True)
+    if choice == "fake_words_fast":
+        # Speaks faster than the bench's pacing guess, as Cartesia does (research.md, Nov 4).
+        return ToneTTSService(text_aggregation_mode=agg, word_timestamps=True, ms_per_char=45.0)
     if choice == "deepgram_aura2":
         from harness.deepgram_tts import FreshSocketDeepgramTTSService
 

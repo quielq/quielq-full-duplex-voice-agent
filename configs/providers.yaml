@@ -9,7 +9,7 @@
 stages:
   stt: fake   # fake | deepgram_flux | voice_listen (Flux through our MCP server, ADR-032)
   llm: fake   # fake | groq | anthropic
-  tts: fake   # fake | fake_words (fake with word timestamps) | deepgram_aura2 | cartesia | voice_speak (ADR-032)
+  tts: fake   # fake | fake_words (fake with word timestamps) | fake_words_fast (same, 45 ms a character) | deepgram_aura2 | cartesia | voice_speak (ADR-032)
   music: fake # fake (nothing plays) | spotify (demo only, ADR-022)
 
 # Tool backends, kept apart from the voice stages. The servers read these themselves
