@@ -19,6 +19,7 @@ tool_stages:
   weather: open_meteo   # fake | open_meteo. Approved Nov 1, 2026, ADR-024
   fetch: http           # fake | http. Approved Nov 1, 2026, ADR-024
   comms: mock           # mock | bridge. A real send, so it stays per run, ADR-024
+  delegate: fake        # fake | anthropic. Background tasks on Haiku 5.5 under the anthropic cap, ADR-035
 
 providers:
   deepgram:
