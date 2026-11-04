@@ -71,6 +71,7 @@ from harness.providers import FLUX_STAGES, STAGE_PROVIDER, build_llm, build_stt,
 from harness.system_stats import LoopLag, SystemStats
 from servers.tasks.music.backends import PLAYER_NAME, SpotifyBackend
 from harness.recovery import LLMErrorRecovery
+from harness.delegate_watch import DelegateWatch
 from harness.timer_watch import TimerWatch
 from harness.tool_policy import PolicyGate, ToolPolicy
 from harness.ui import UiServer, UiState
@@ -453,13 +454,15 @@ async def run_bot(
             finisher = asyncio.create_task(finish_after_reply())
         clock_file = (Path(data_dir) if data_dir else cfg.path("data_dir")) / "clock.json"
         timers = asyncio.create_task(TimerWatch(clock_file, speak, log.emit).run())
+        quiet = lambda: turn_obs.quiet and not policy.busy()  # noqa: E731
+        delegated = asyncio.create_task(DelegateWatch(clock_file.with_name("delegate.json"), speak, quiet, log.emit).run())
         stats = asyncio.create_task(SystemStats(log.emit).run()) if input_mode == "mic" else None
         lag = asyncio.create_task(LoopLag(log.emit).run()) if input_mode == "mic" else None
         try:
             await runner.run()
         finally:
             shutdown("pipeline")
-            for task in filter(None, (finisher, timers, stats, lag)):
+            for task in filter(None, (finisher, timers, delegated, stats, lag)):
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
