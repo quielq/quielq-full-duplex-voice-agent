@@ -38,7 +38,7 @@ The pieces:
 | `harness/tool_policy.py` | Runs at once, holds, asks, or refuses each call |
 | `configs/tool_policy.yaml` | Per tool overrides, read-backs, phrases, containment |
 | `configs/providers.yaml` | Which backend each tool uses, caps, prices |
-| `servers/shell_guard.py`, `servers/sandbox.py` | Shell command checks and the OS sandbox |
+| `servers/command_policy.py`, `servers/sandbox.py` | Shell command policy (ADR-034) and the OS sandbox |
 
 Each server is its own process, so a server gets only its own secrets, and a crash stays contained. The LLM sees one flat list of tools, which is why names must be unique across servers.
 
@@ -165,7 +165,7 @@ Hints are only hints. A server can lie about them, so the harness and the server
 | Saved contacts only | `comms/server.py` | Injected text naming a new recipient | A wrong message to a real contact, which is what the read-back is for |
 | Private addresses refused | `knowledge/server.py` | A page steering `fetch_content` at your router or local services | |
 | Untrusted note on results | `knowledge/server.py` | Some prompt injection. This is a soft limit only | A determined injected instruction |
-| Shell guard | `servers/shell_guard.py` | Obvious danger, refused with a reason before anyone is asked | An interpreter on the list, such as `python3` |
+| Command policy | `servers/command_policy.py` | Obvious danger, installs, network tools, and paths outside the workspace, refused with a reason before anyone is asked | An interpreter after a yes, such as `python3` |
 | OS sandbox | `servers/sandbox.py` | Everything a command could do outside the workspace | Damage inside the workspace |
 | Containment | `tool_policy.py` | A steered model that keeps trying | Fewer than three critical attempts |
 | Audit log | Event log, `data/tool_calls.jsonl` | Not knowing what happened | |
@@ -189,20 +189,22 @@ Three things make that work (ADR-028):
 ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --echo-cancel --ui
 ```
 
-Each `bash`, `serve`, and `open_in_browser` call still asks for a spoken yes. That is deliberate: those are the tools that can do real harm.
+A `bash` read such as `ls` or `grep` runs at once (ADR-034). A `bash` change or run, and every `serve` and `open_in_browser` call, asks for a spoken yes. That is deliberate: those are the tools that can do real harm.
 
 ## Bash and serve
 
 `bash` and `serve` are the only tools that can do anything, so they get four layers. Each covers a gap in the one before it.
 
 1. **Off by default.** Both are mocks unless `ME3_WORKSPACE_LIVE=1`.
-2. **Shell guard.** `servers/vendor/onit_command_policy.py` is OnIt's parser, unchanged. It finds every executable in a command, including inside pipes, `$(...)`, and `bash -c`, and refuses what it cannot read. The result is allow, ask, or deny, as in OnIt.
-   - **Deny:** `sudo`, `ssh`, `docker`, `crontab`, disk and kernel commands, and anything touching `.env` or `.ssh`. Saying yes cannot lift these.
-   - **Ask:** a program not on the list. The read-back names it.
-   - **Allow:** everything else, which still needs a spoken yes.
+2. **Command policy.** `servers/command_policy.py` (ADR-034, written for this project) reads only simple commands: words, quotes, pipes, `&&`, `||`, `;`, and plain redirects. Anything else is refused rather than guessed at. The result is run, ask, or refuse.
+   - **Run at once:** reads, such as `ls`, `cat`, `grep`, `find`, `wc`, and `git status`.
+   - **Ask:** anything that writes, deletes, or runs code or a build, and any program on no list, which the question names.
+   - **Refuse:** installs ("installing packages is off: the sandbox has no network"), network tools, the desktop, paths outside the workspace, and `$(...)`, backticks, `<(...)`, here-documents, loops, functions, background `&`, and a variable as the program.
+   - **Refuse, critical:** `sudo`, `docker`, `crontab`, disk, kernel, and system commands, deleting from the root or home, and anything touching `.env` or `.ssh`. Saying yes cannot lift these.
+   - Before `rm` or `rmdir` runs, the server copies what it deletes to `data/workspace/.versions`, and the result names the copies.
    - The harness checks before asking, and the server checks again before running.
-3. **Spoken read-back.** The harness reads the real command with its symbols as words, so `rm -rf x | sh` is not heard as `rm rf x sh`. The model does not write this question.
-4. **OS sandbox.** A command can write only in the workspace, read only that, the documents folder, and system files, and has no network. `python3` can reach anything the sandbox allows, and nothing more. That is why the sandbox is the real boundary, and the guard is the polite one.
+3. **Spoken read-back.** The harness says what the command does in plain words, built from the command itself: "This will delete build and everything inside, then run make_site.py with Python." The face shows the exact command text while it waits. The model does not write this question.
+4. **OS sandbox.** A command can write only in the workspace, read only that, the documents folder, and system files, and has no network. `python3` can reach anything the sandbox allows, and nothing more. That is why the sandbox is the real boundary, and the policy is the polite one.
 
 `serve` may also listen on this machine. Three critical refusals in one session lock `bash`, `serve`, `open_in_browser`, file writes, and messaging until the session ends.
 

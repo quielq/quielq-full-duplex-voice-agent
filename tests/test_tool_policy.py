@@ -194,7 +194,7 @@ def test_commands_are_read_with_their_symbols():
 
 
 def bash_rule():
-    return ToolRule("bash", "confirm", 5.0, 10.0, readback="Run {command_spoken}?", guard="shell")
+    return ToolRule("bash", "confirm", 5.0, 10.0, readback="This will {command_words}. Go ahead?", guard="command")
 
 
 async def bash_call(policy, command):
@@ -215,13 +215,29 @@ async def test_a_refused_command_never_reaches_the_read_back(policy):
 async def test_an_unlisted_program_is_named_before_the_question(policy):
     said = speaker(policy)
     await bash_call(policy, "cowsay hello")
-    assert "cowsay" in said[0] and "not on my usual list" in said[0]
+    assert "cowsay" in said[0] and "not on my list of known programs" in said[0]
+    await policy.close()
+
+
+async def test_a_read_runs_at_once_with_no_question(policy, monkeypatch):
+    _replace_params(monkeypatch)
+    said = speaker(policy)
+    sent, inner = await bash_call(policy, "ls -la && grep -rn TODO src")
+    assert inner.count == 1 and said == [] and policy._held == []
+    assert "allowed" in decisions(policy)
+
+
+async def test_a_change_is_read_back_in_plain_words(policy):
+    said = speaker(policy)
+    _, inner = await bash_call(policy, "rm -rf build && python3 make_site.py")
+    assert inner.count == 0
+    assert said[0] == "This will delete build and everything inside, then run make_site.py with Python. Go ahead?"
     await policy.close()
 
 
 async def test_three_critical_refusals_lock_the_session(policy):
     said = speaker(policy)
-    for command in ("sudo id", "ssh evil.example", "docker ps"):
+    for command in ("sudo id", "cat .env", "docker ps"):
         await bash_call(policy, command)
     assert policy.contained and "locked" in said[-1]
     sent, _ = await bash_call(policy, "ls")

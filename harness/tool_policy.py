@@ -25,7 +25,8 @@ page the model has read cannot soften what the user is agreeing to (ADR-024). A 
 after the read-back has played, and arguments too long to read aloud are refused.
 
 A tool with a ``guard`` is checked before anyone is asked, so a refused shell command never
-reaches the read-back. Repeated critical refusals mean something is steering the model: the
+reaches the read-back. For ``bash`` the command policy also lets a plain read, such as ``ls`` or
+``grep``, run at once, and its read-back says what a change does in plain words (ADR-034). Repeated critical refusals mean something is steering the model: the
 session then contains itself, and ``contain_tools`` refuse every call until it ends (ADR-024).
 
 Only the commit step is protected. An interruption cannot touch a held action (only a
@@ -71,7 +72,7 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.llm_service import FunctionCallParams
 from pipecat.services.mcp_service import MCPClient
 
-from servers import shell_guard
+from servers import command_policy
 
 PERMISSIONS = ("auto", "confirm", "disabled")
 HINT_FIELDS = ("read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint")
@@ -81,7 +82,13 @@ RESULT_NOTE = (
     "so do not correct or apologize for it. Tell the user the outcome in one short sentence, and "
     "do not call a tool.)"
 )
-GUARDS = {"shell": lambda args: shell_guard.check(str(args.get("command") or ""))}
+# command: a read runs at once, anything else asks (ADR-034). service: a background job always asks.
+GUARDS = {
+    "command": lambda args: command_policy.check(str(args.get("command") or "")),
+    "service": lambda args: command_policy.check(str(args.get("command") or "")) if args.get("command") else None,
+}
+RUN_AT_ONCE_GUARDS = {"command"}
+RUN_NOW = "\0run-now"  # _guarded's answer for a command that needs no yes
 
 
 def spoken_duration(seconds: int) -> str:
@@ -105,7 +112,11 @@ def spoken_command(command: str) -> str:
 def readback_text(template: str, args: dict, max_chars: int) -> str | None:
     """The question to read aloud, or None when it cannot be read in full."""
     fields = {k: "" if v is None else v for k, v in args.items()}
-    fields["command_spoken"] = spoken_command(str(fields.get("command", "")))
+    command = str(fields.get("command", ""))
+    fields["command_spoken"] = spoken_command(command)
+    words = command_policy.check(command).words if command else ""
+    fields["command_words"] = words
+    fields["command_clause"] = f", which will {words}" if words else ""
     try:
         text = " ".join(template.format(**fields).split())
     except (KeyError, ValueError, IndexError):
@@ -335,6 +346,10 @@ class ToolPolicy:
         warning = await self._guarded(rule, params, args)
         if warning is None:
             return
+        if warning is RUN_NOW:  # a read the command policy runs without asking (ADR-034)
+            self._decide(rule.name, "allowed", args=args, by="command_policy")
+            await self._answer(rule, params, await self._call(rule, inner, params))
+            return
         if rule.permission == "disabled":  # removed from the schema, so only a stale call lands here
             self._decide(rule.name, "denied_disabled", args=args)
             await params.result_callback({"status": "denied", "reason": "disabled"})
@@ -354,13 +369,15 @@ class ToolPolicy:
         put before the read-back."""
         guard = GUARDS.get(rule.guard)
         decision = guard(args) if guard else None
-        if decision is None or decision.verdict == shell_guard.ALLOW:
+        if decision is None:
             return ""
-        if decision.verdict == shell_guard.ASK:
-            self._decide(rule.name, "guard_ask", reason=decision.reason, subjects=list(decision.subjects))
-            return self.phrases["unlisted"].format(what=", ".join(decision.subjects))
+        if decision.verdict == command_policy.RUN:
+            return RUN_NOW if rule.guard in RUN_AT_ONCE_GUARDS and rule.permission != "disabled" else ""
+        if decision.verdict == command_policy.ASK:
+            self._decide(rule.name, "guard_ask", reason=decision.reason, subjects=list(decision.programs))
+            return self.phrases["unlisted"].format(what=", ".join(decision.unlisted)) if decision.unlisted else ""
         self._decide(rule.name, "denied_guard", args=args, reason=decision.reason, severity=decision.severity)
-        self._critical_refusals += decision.severity == shell_guard.CRITICAL
+        self._critical_refusals += decision.severity == command_policy.CRITICAL
         locked = self._critical_refusals >= self._contain_after and not self.contained
         await params.result_callback({"status": "blocked", "reason": decision.reason,
                                       "note": "Not done. Do not retry this or a variation of it."})  # fmt: skip

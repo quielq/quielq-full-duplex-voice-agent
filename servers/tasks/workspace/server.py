@@ -3,7 +3,7 @@
 Files are real and stay inside $ME3_DATA_DIR/workspace; reads may also use the documents folder.
 ``bash``, ``serve``, and ``open_in_browser`` are mocks unless ME3_WORKSPACE_LIVE=1, and
 ``send_file`` is always a mock. ``open_in_browser`` is the one thing that leaves the sandbox
-(ADR-026): it runs no command text, only the system opener on one HTML file. Live commands pass servers/shell_guard.py and then run in servers/sandbox.py (ADR-024):
+(ADR-026): it runs no command text, only the system opener on one HTML file. Live commands pass servers/command_policy.py (ADR-034) and then run in servers/sandbox.py (ADR-024):
 with no sandbox on the machine, nothing runs.
 """
 
@@ -21,7 +21,7 @@ import subprocess
 import sys
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Annotated, Literal
 
 from fastmcp import FastMCP
@@ -30,7 +30,7 @@ from pydantic import Field
 from servers.common import OutsideRoots, ToolCallLog, data_dir, documents_dir, inside, serve as serve_mcp, workspace_dir
 from servers.documents import extract_text
 from servers.sandbox import SAFE_PATH, NoSandbox, wrap
-from servers.shell_guard import DENY, check
+from servers.command_policy import REFUSE, check
 
 mcp = FastMCP("workspace", instructions="Read, write, and run things in the agent's workspace folder.")
 mcp.add_middleware(ToolCallLog("workspace"))
@@ -64,7 +64,7 @@ def _command_env() -> dict[str, str]:
 def _sandboxed(command: str, network: str, cwd: Path | None = None) -> list[str]:
     """The argv for a live command. Refuses by raising, so no path runs one unchecked."""
     decision = check(command)
-    if decision.verdict == DENY:
+    if decision.verdict == REFUSE:
         raise NoSandbox(decision.reason)
     return wrap(["/bin/bash", "-c", command], workspace_dir(), [documents_dir()], _command_env(), network, cwd)
 
@@ -77,6 +77,32 @@ def _mock(tool: str, **fields) -> dict:
 
 def _clip(text: str) -> str:
     return text if len(text) <= MAX_CHARS else text[-MAX_CHARS:]  # the end of output is what matters
+
+
+def _keep_deleted(command: str, folder: Path) -> list[str]:
+    """Copy what a command's rm or rmdir would delete into .versions first (ADR-034). Globs are
+    matched the way the shell would, from the command's folder, and only inside the workspace."""
+    root, kept = workspace_dir().resolve(), []
+    for pattern in check(command).deletes:
+        for match in sorted(folder.glob(pattern)) if any(c in pattern for c in "*?[") else [folder / pattern]:
+            if match.is_symlink():  # rm removes the link, not what it points at
+                continue
+            if match.name.startswith(".") and not PurePath(pattern).name.startswith("."):
+                continue  # the shell's * skips hidden names, so rm does too
+            try:
+                target = inside(str(match), [root])
+            except OutsideRoots:
+                continue
+            if not target.exists() or target == root or ".versions" in target.relative_to(root).parts:
+                continue
+            copy = root / ".versions" / f"{time.time_ns()}-{target.name}"
+            copy.parent.mkdir(exist_ok=True)
+            if target.is_dir():
+                shutil.copytree(target, copy, symlinks=True)
+            else:
+                shutil.copy2(target, copy)
+            kept.append(str(copy.relative_to(root)))
+    return kept
 
 
 def _keep_version(target: Path) -> str | None:
@@ -236,6 +262,7 @@ def bash(
         argv = _sandboxed(command, "none", folder)
     except NoSandbox as e:
         return {"error": str(e)}
+    kept = _keep_deleted(command, folder)
     proc = subprocess.Popen(
         argv, cwd=folder, env=_command_env(), text=True, errors="replace",
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
@@ -246,7 +273,8 @@ def bash(
         os.killpg(proc.pid, signal.SIGKILL)
         out, err = proc.communicate()
         return {"error": f"stopped after {BASH_TIMEOUT_S} s, use serve for long work", "stdout": _clip(out)}
-    return {"returncode": proc.returncode, "stdout": _clip(out), "stderr": _clip(err)}
+    result = {"returncode": proc.returncode, "stdout": _clip(out), "stderr": _clip(err)}
+    return result | {"kept_copies": kept} if kept else result
 
 
 def _services() -> dict:

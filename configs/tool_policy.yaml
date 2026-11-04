@@ -40,7 +40,7 @@ phrases:
   confirmed_undo: "Okay. Say cancel in the next {undo_s} seconds to stop it."
   confirmed_now: "Okay, doing that now."
   failed: "Sorry, that did not go through."
-  unlisted: "Careful, this uses {what}, which is not on my usual list."
+  unlisted: "Careful, this uses {what}, which is not on my list of known programs."
   contained: "I've been asked to do several unsafe things, so I've locked my shell and messaging until this session ends."
 
 # Spoken instead of a second LLM call when the tool succeeds (ADR-020). Off by default. Fields
@@ -65,7 +65,8 @@ reply_templates:
     restart_track: "Starting {now_playing} again."
 
 # Overrides. Keys: permission (auto | confirm | disabled), undo_s, timeout_s, report_result, readback, guard.
-# readback: fields are the call's arguments, plus command_spoken for shell commands.
+# readback: fields are the call's arguments, plus command_words (the command in plain words,
+# from servers/command_policy.py), command_clause (the same as ", which will ..."), and command_spoken.
 # guard: a check in harness/tool_policy.py GUARDS, run before anyone is asked.
 # report_result: true by default. A held tool's success gets one more LLM reply (ADR-023).
 tools:
@@ -88,11 +89,11 @@ tools:
     readback: "Call {to}. Should I call?"
   bash:
     timeout_s: 30.0   # the server stops the command at 25 s; longer work goes through serve
-    guard: shell
-    readback: "Run this command: {command_spoken}. Should I run it?"
+    guard: command    # reads run at once; changes and runs ask (ADR-034)
+    readback: "This will {command_words}. Should I go ahead?"
   open_in_browser:
     readback: "Open {path} in your browser. Should I do that?"
   serve:
     timeout_s: 15.0
-    guard: shell
-    readback: "{action} the service {name}. {command_spoken}. Should I do that?"
+    guard: service
+    readback: "{action} the service {name}{command_clause}. Should I do that?"

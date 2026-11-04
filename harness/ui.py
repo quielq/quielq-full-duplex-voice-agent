@@ -161,9 +161,12 @@ class UiState:
             decision = rec.get("decision", "")
             if decision in ANGRY_DECISIONS:
                 self._set_mood("angry")
-            elif decision in ASKING_DECISIONS:
+            elif decision in ASKING_DECISIONS or decision == "hold_confirm":
                 self._awaiting_answer = True
                 self.activity = "asking"
+                command = (rec.get("args") or {}).get("command")
+                if command:  # the read-back is in plain words, so the screen shows the exact text
+                    self.step = f"Asking to run: {command}"
             elif decision == "confirmed" or decision.startswith("denied"):
                 self._awaiting_answer = False
         elif event == "first_audio_out":

@@ -1,6 +1,6 @@
 # ADR-024: Real tools, phone bridge, and shell guardrails
 
-Date: Nov 1, 2026. Status: approved by Quiel, Nov 1, 2026. Extends ADR-021, and departs from the review as ADR-021 does.
+Date: Nov 1, 2026. Status: approved by Quiel, Nov 1, 2026. Extends ADR-021, and departs from the review as ADR-021 does. Nov 4, 2026: the OnIt parser and the rule that every command asks are replaced by our own command policy (ADR-034). The sandbox, read-back, and containment stand.
 
 ## Context
 

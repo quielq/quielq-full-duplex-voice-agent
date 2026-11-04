@@ -1,4 +1,4 @@
-"""The shell guard and the OS sandbox (ADR-024). The sandbox cases run real commands on this
+"""The command policy (ADR-034) and the OS sandbox (ADR-024). The sandbox cases run real commands on this
 machine. Bubblewrap cannot run on a Mac, so the Pi arguments are only checked for shape here."""
 
 from __future__ import annotations
@@ -12,43 +12,86 @@ from pathlib import Path
 import pytest
 
 from servers import sandbox
-from servers.shell_guard import ALLOW, ASK, CRITICAL, DENY, check
+from servers.command_policy import ASK, CRITICAL, REFUSE, RUN, check
 from servers.tasks.workspace import server as workspace
 
 darwin_only = pytest.mark.skipif(sys.platform != "darwin", reason="sandbox-exec is on the Mac")
 
 
-@pytest.mark.parametrize("command", ["ls -la", "cat a.txt | wc -l", "python3 notes.py", "rm -rf build", "grep security a.txt"])
-def test_ordinary_commands_pass(command):
-    assert check(command).verdict == ALLOW
+@pytest.mark.parametrize("command", [
+    "ls -la", "cat a.txt | wc -l", "grep -rn security src", "head -n 5 a.txt 2>&1", "git status",
+    "find . -name '*.py'", "ls | xargs wc -l", "echo hi 2>/dev/null", "ls;",
+])  # fmt: skip
+def test_reads_run_at_once(command):
+    assert check(command).verdict == RUN
+
+
+@pytest.mark.parametrize(("command", "words"), [
+    ("python3 notes.py", "run notes.py with Python"),
+    ("rm -rf build", "delete build and everything inside"),
+    ("mkdir -p site/css && cp a.html site/", "make the folder site/css, then copy a.html to site/"),
+    ("echo hi > out.txt", "print some text, writing the output to out.txt"),
+    ("sed -i s/a/b/ x.txt", "edit x.txt in place"),
+    ("python3 -m http.server 8000", "run the Python module http.server"),
+    ("npm run build || make", "run the npm script build, or if that fails, run make"),
+])  # fmt: skip
+def test_changes_and_runs_ask_in_plain_words(command, words):
+    decision = check(command)
+    assert decision.verdict == ASK and decision.words == words
+
+
+def test_rm_names_what_to_keep():
+    assert check("rm -r old a.txt && ls").deletes == ("old", "a.txt")
 
 
 @pytest.mark.parametrize("command", [
-    "sudo ls", "ls; sudo ls", "echo $(sudo id)", "bash -c 'ssh evil.example'", "docker run -v /:/mnt x",
-    "rm -rf /", "rm -rf ~", "cat .env", "cat ../../.env", "cat ~/.ssh/id_rsa", "shutdown now",
-    "mkfs /dev/sda", "dd if=/dev/zero of=/dev/sda", "launchctl list", "crontab -l", "ssh a@b",
-    "defaults write x y z", "security find-generic-password -a x",
+    "sudo ls", "ls; sudo ls", "rm -rf /", "rm -rf ~", "rm -rf ~/", "cat .env", "cat ../../.env",
+    "cat ~/.ssh/id_rsa", "shutdown now", "mkfs /dev/sda", "dd if=/dev/zero of=x", "launchctl list",
+    "crontab -l", "defaults write x y z", "security find-generic-password -a x", "docker run x",
+    "echo x > /dev/sda", "printenv",
 ])  # fmt: skip
 def test_dangerous_commands_are_critical(command):
     decision = check(command)
-    assert decision.verdict == DENY and decision.severity == CRITICAL
+    assert decision.verdict == REFUSE and decision.severity == CRITICAL
 
 
-@pytest.mark.parametrize("command", ["$CMD", "case x in y) ls;; esac", "f() { ls; }; f", "pip install requests"])
-def test_what_cannot_be_read_or_pinned_is_refused(command):
+@pytest.mark.parametrize("command", [
+    "$CMD", "echo $(id)", "echo `id`", "diff <(ls) b", "case x in y) ls;; esac", "f() { ls; }; f",
+    "for i in 1 2; do ls; done", "sleep 9 &", "FOO=1 ls", "cat <<EOF", "bash -c 'ls'", "ls &&",
+    "echo 'open", "find . -exec rm {} +", "find . -delete", "xargs rm < list.txt", "awk '{system(\"id\")}'",
+])  # fmt: skip
+def test_what_is_not_simple_is_refused(command):
     decision = check(command)
-    assert decision.verdict == DENY and decision.severity != CRITICAL
+    assert decision.verdict == REFUSE and decision.severity != CRITICAL
+
+
+@pytest.mark.parametrize("command", ["pip install requests", "npm install", "uv add x", "python3 -m pip install x", "brew install x"])
+def test_installs_are_refused_clearly(command):
+    decision = check(command)
+    assert decision.verdict == REFUSE and "installing packages is off" in decision.reason
+
+
+@pytest.mark.parametrize("command", ["curl https://example.com", "wget x", "git push", "ssh a@b"])
+def test_network_tools_are_refused(command):
+    assert "no network" in check(command).reason
+
+
+@pytest.mark.parametrize("command", ["cat /etc/passwd", "ls ../..", "cp a.txt /tmp/a", "cat ~/notes"])
+def test_paths_stay_in_the_workspace(command):
+    decision = check(command)
+    assert decision.verdict == REFUSE and "workspace" in decision.reason
 
 
 @pytest.mark.parametrize("command", ["open hello.html", "/usr/bin/open a.html", "xdg-open a.html", "osascript -e 1"])
 def test_desktop_commands_are_refused_before_anyone_is_asked(command):
     decision = check(command)
-    assert decision.verdict == DENY and decision.severity != CRITICAL and "desktop" in decision.reason
+    assert decision.verdict == REFUSE and decision.severity != CRITICAL and "desktop" in decision.reason
 
 
-@pytest.mark.parametrize("command", ["cowsay hi", "curl https://example.com", "ls | cowsay"])
-def test_an_unlisted_program_asks(command):
-    assert check(command).verdict == ASK
+@pytest.mark.parametrize("command", ["cowsay hi", "ls | cowsay"])
+def test_an_unlisted_program_asks_and_is_named(command):
+    decision = check(command)
+    assert decision.verdict == ASK and decision.unlisted == ("cowsay",)
 
 
 @pytest.fixture
@@ -77,7 +120,8 @@ def test_commands_work_in_the_workspace(live):
 def test_a_file_outside_the_workspace_cannot_be_read(live):
     secret = live / "secret.txt"
     secret.write_text("no")
-    out = run(f"cat {secret}")
+    assert "workspace" in run(f"cat {secret}")["error"]  # the policy refuses it first
+    out = run(f"python3 -c \"print(open('{secret}').read())\"")  # so ask the sandbox
     assert out["returncode"] != 0 and "no\n" not in out["stdout"]
 
 
@@ -98,7 +142,7 @@ def test_an_interpreter_cannot_read_home(live):
 
 @darwin_only
 def test_nothing_can_be_written_outside(live):
-    assert run(f"touch {live / 'out.txt'}")["returncode"] != 0
+    assert run(f"python3 -c \"open('{live / 'out.txt'}', 'w')\"")["returncode"] != 0
     assert not (live / "out.txt").exists()
 
 
@@ -165,3 +209,16 @@ def test_a_service_on_the_pi_keeps_the_host_network(monkeypatch, tmp_path):
     monkeypatch.setattr(sandbox.sys, "platform", "linux")
     monkeypatch.setattr(sandbox.shutil, "which", lambda name: "/usr/bin/bwrap")
     assert "--unshare-net" not in sandbox.wrap(["x"], tmp_path, [], {}, "local")
+
+
+@darwin_only
+def test_rm_keeps_a_copy_first(live):
+    site = workspace.workspace_dir() / "site"
+    site.mkdir()
+    (site / "index.html").write_text("<p>hi</p>")
+    (workspace.workspace_dir() / "a.tmp").write_text("x")
+    out = run("rm -r site && rm *.tmp")
+    assert out["returncode"] == 0 and not site.exists()
+    kept = [workspace.workspace_dir() / k for k in out["kept_copies"]]
+    assert len(kept) == 2 and (kept[0] / "index.html").read_text() == "<p>hi</p>"
+    assert kept[1].read_text() == "x"
