@@ -50,7 +50,7 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | --- | --- | --- | --- |
 | `clock` | `get_time`, `set_timer`, `set_alarm`, `list_timers`, `cancel_timer` | Real. The bot says when one is due (`harness/timer_watch.py`) | |
 | `notes` | `add_note`, `list_notes`, `delete_note` | Real, SQLite | |
-| `docs` | `index_documents`, `local_search`, `search_document` | Real, SQLite FTS5 | Put files in `data/documents`, which the agent can read but never write |
+| `docs` | `index_documents`, `local_search`, `search_document`, `list_documents`, `read_document` | Real, SQLite FTS5 | Put files in `data/documents`, which the agent can read but never write. A document agent sees only its folders (ADR-039) |
 | `workspace` | `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, `serve_status` | Real, confined to `data/workspace` | |
 | `workspace` | `bash`, `serve` | Mock | `ME3_WORKSPACE_LIVE=1` and a working sandbox |
 | `workspace` | `open_in_browser` | Mock | `ME3_WORKSPACE_LIVE=1`. Runs outside the sandbox, HTML in the workspace only (ADR-026) |

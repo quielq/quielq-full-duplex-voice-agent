@@ -8,7 +8,7 @@
 
 stages:
   stt: fake   # fake | deepgram_flux | voice_listen (Flux through our MCP server, ADR-032)
-  llm: fake   # fake | groq | anthropic | openrouter (model from providers.openrouter or the agent, ADR-038)
+  llm: fake   # fake | groq | anthropic | openrouter (model from providers.openrouter or the agent, ADR-040)
   tts: fake   # fake | fake_words (fake with word timestamps) | fake_words_fast (same, 45 ms a character) | deepgram_aura2 | cartesia | voice_speak (ADR-032)
   music: fake # fake (nothing plays) | spotify (demo only, ADR-022)
 
@@ -51,7 +51,7 @@ providers:
     daily_cap_usd: 5.00   # approved Nov 1, 2026
     model: anthropic/claude-haiku-5.5   # an agent's model overrides this (configs/agents.yaml)
     max_tokens: 8192
-    # The models an agent may pick, in the order the agent builder lists them (ADR-038).
+    # The models an agent may pick, in the order the agent builder lists them (ADR-040).
     # Each needs tool calls and a price below, or the run refuses to start. Prices from
     # https://openrouter.ai/api/v1/models on Nov 4, 2026. Recheck before a model goes live.
     models:

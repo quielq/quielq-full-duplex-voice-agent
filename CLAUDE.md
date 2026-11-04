@@ -32,18 +32,22 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - Duck-then-decide is custom: scale output by about 0.3 on speech onset, decide within about 0.5 s using the allowlist (stop, wait, no, cancel, pause). Duck within 100 ms with Silero `start_secs` of about 0.064 to 0.1.
 - Pipecat has no AEC. Phase 1 uses headphones. Phase 2 uses a separate USB mic and speaker with no hardware AEC, so `pi.yaml` turns on WebRTC AEC in the harness (ADR-013, ADR-029); PipeWire echo-cancel, then an RMS gate, are the fallbacks. `--echo-cancel` adds it on the Mac for speaker tests.
 - `write_file` and `edit_file` have no undo window, because a multi-step job needs each file at once. The server keeps replaced versions in `data/workspace/.versions` (ADR-028). Do not extend this to any tool that leaves the workspace.
-- The robot face (`--ui`, ADR-027) reads the event log and stays on 127.0.0.1. It displays devices and only controls the mic mute, so nothing on screen can bypass the tool policy. With `--spotify-player` the page also plays Spotify (ADR-031, off by default), but it only plays: the `music` tools still choose and pause.
+- The robot face (`--ui`, ADR-027, ADR-038) reads the event log and stays on 127.0.0.1. It draws the devices and the chat history. Its controls are the mic mute, three music buttons (`stop_music`, `resume_music`, `next_track`) that go through `ToolPolicy.run_from_screen` and are refused unless the policy would run them at once, and the agent picker and builder. Nothing on screen may skip a question the voice path would ask. With `--spotify-player` the page also plays Spotify (ADR-031, off by default), but it only plays.
+- Agents (ADR-039): `configs/agents.yaml` has the generalist and five document agents. A document agent starts only the docs server, scoped by `ME3_DOC_SCOPE` to its folders, and sees only the four read tools. The scope is enforced in the server, never only in the prompt. Custom agents from the builder live in `data/agents` and are document agents only: the builder cannot grant tools, change the policy, or raise a cap. An agent's model applies only on a live run: a fake LLM stage stays fake for every agent.
+- OpenRouter (ADR-040): `llm=openrouter` uses only models listed and priced in `providers.yaml`. A model without a price is refused, so the cap never counts it as free.
+- Every face change must stay cheap on the Pi: no filters or blur, animate only transform and opacity, redraw a section only when its data changes, no outside requests.
 
 ## Layout and commands
 
 Running the full agent on the Mac: `docs/quickstart-mac.md`. The Pi port order: `docs/quickstart-pi.md`.
 
 ```
-harness/        bot.py (entry point), fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py, delegate_watch.py
+harness/        bot.py (entry point), agents.py, fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py, delegate_watch.py
 servers/        voice_listen/, voice_speak/ (Flux and Cartesia relays, ADR-032, plus the stubs), voice_relay.py, tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (built on fakes, ADR-035)
 bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py and latency_bench.py (ADR-036), interruption_test.py, voice_bridge_probe.py, voice_hop_probe.py, voice_fakes.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
 docs/           architecture.md, tools.md, research.md, prompt.md, decisions/
+assets/         fallback_wavs/, sample_documents/ (fictional, copied into data/documents when missing)
 ```
 
 ```
@@ -53,7 +57,9 @@ uv run python -m harness.bot --input text --mcp stdio     # scripted turn, no au
 uv run python -m harness.bot --input wav --wav x.wav      # wav through VAD and Smart Turn
 uv run python -m harness.bot                              # live mic (headphones)
 uv run python -m harness.audio_io                         # list audio devices by name, with rate support
-uv run python -m harness.ui --demo                        # robot face at http://127.0.0.1:8770, no bot, no spend
+uv run python -m harness.ui --demo [--data-dir d]         # robot face at http://127.0.0.1:8770, no bot, no spend
+uv run python -m harness.agents [--seed]                  # list agents; copy missing sample documents
+uv run python -m harness.bot --input text --agent customers --say "who manages Mayon Builders"   # one agent, scripted
 uv run python -m bench.doctor [--quick] [--offline]       # health check, no spend; run this first when anything is wrong
 uv run python -m bench.run_report [--live] [<run id>]     # timeline and anomalies for one run
 uv run python -m bench.run_report --list 20               # one line per recent run
