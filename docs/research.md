@@ -316,6 +316,25 @@ Targets quoted in the sources disagree, so I would report distributions and let 
 
 One practical point from the class chat that I would keep: record our own scripted audio (commands with pauses, backchannels, side talk, and interruptions at known timestamps) and replay it into the Pi's input. Known timestamps make every latency number reproducible instead of depending on a person speaking differently each run.
 
+### Cartesia over-commit on interruption was a bench estimate (Nov 4, 2026)
+
+On Nov 3, `bench.interruption_test --tts cartesia` reported 4 words committed past what was heard in immediate mode and 5 in duck mode, against 1 on `fake_words`. The cause is the bench, not Cartesia or Pipecat. Analysis from the two event logs, no new paid calls.
+
+| Run | Mode | First loud sample to last loud sample | Stop latency | Committed (reported) | Heard at 850 chars/min |
+| --- | --- | --- | --- | --- | --- |
+| `20261103-121404-05fcde` | immediate | 2.72 s | 279 ms | 10 words, up to "lived" | 6 |
+| `20261103-121420-e5b110` | duck | 3.76 s | 1,298 ms | about 13 | 8 to 9 |
+
+1. **The heard estimate was wrong for Cartesia (the cause).** For any TTS other than the fakes, the bench turned played seconds into characters at a fixed 850 characters per minute (14.2 a second), and never used the word timestamps. Cartesia Sonic speaks faster. For the context to hold "...named Ana who lived" after 2.72 s, the voice had reached character 49 to 54, which is 18.0 to 19.9 characters a second. The duck run gives 17.0 to 18.9. A separate bound comes from the `audio_hop` events of the duck run: the 470-character story arrived at about 8 s of audio per second, then the arrival rate fell in the window before the cancel, so the whole story was 24.4 to 28.6 s of audio, 16.4 to 19.3 characters a second including the pauses between sentences. At 850 a minute it would be 33.2 s. At 16.4 to 19.3 characters a second, the immediate run heard 8 or 9 words, so it committed 1 or 2 extra, the same as `fake_words`. Two runs of different length give the same implied pace, which fits a rate error. A timestamp offset would add a fixed number of words instead.
+2. **Played seconds also skipped silent chunks.** `played_s` sums only voiced output chunks, and Cartesia speech has quiet chunks between words and phrases that the constant fake tone never has. That shrinks "heard" further and likely explains why the duck run's figure was 5 rather than 4. The fix measures wall time from the first loud sample instead.
+3. **Cartesia's timestamps running ahead: not supported.** Pipecat 1.13's `CartesiaTTSService` passes each word's `start` through `_normalize_word_timestamps` unchanged (it only strips SSML tags), and `TTSService` sets the timestamp baseline on the first audio chunk, the same path as `fake_words`. The logs carry no per-word events, so this is a reading of the code, not a measurement.
+4. **Output buffering: not in these runs.** The bench plays into `PacedNullOutputTransport`, which blocks each write for the chunk's length with a 20 ms lead, so playback starts on the first chunk and never underruns while Cartesia sends 8 s of audio a second. `audio_hops` records no writes on this transport (`writes` is 0), so it gives arrival only. On a real device the device buffer does add latency, which is not measured here.
+5. **Pipecat's truncation: works.** Words are released at their start time, so the word in progress is committed. That is the 1 extra word on both TTS.
+
+Fix: `PacedNullOutputTransport` keeps each timed `TTSTextFrame`, and the bench counts a word as heard once the next word has started, measured from the first loud sample to the last loud sample before the cut (`heard_source: word_timestamps`). The pace estimate stays as the fallback for TTS without timestamps and is reported as `heard_words_pace`. A new `fake_words_fast` stage (45 ms a character, 1,333 a minute) reproduces the old error on fakes: the pace estimate says 6 heard words where the timestamps say 11, and the real over-commit is 1 (`tests/test_interruption.py`).
+
+Open: one more `--tts cartesia` run (immediate, about $0.025) with the fixed bench would confirm the 1 to 2 word figure. It is not needed to decide the cause, and it would still trust Cartesia's own timestamps for "heard". Checking those timestamps against the audio needs a run that lets the story play to the end and compares the last word's start with the audio length.
+
 ## Cost model
 
 A cascaded stack of streaming ASR, a small LLM, and streaming TTS costs about $1.10 to $1.61 per hour of conversation at list prices, roughly a quarter to a half of the bundled voice-agent APIs. ASR and TTS carry almost all of it: in the cheapest stack, TTS is about half, ASR about 40%, and the LLM about 8%.

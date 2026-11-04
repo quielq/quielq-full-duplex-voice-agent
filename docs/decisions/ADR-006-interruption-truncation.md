@@ -8,7 +8,7 @@ Step 4 asks whether the LLM context holds only the words actually spoken after a
 
 ## Method
 
-`bench/interruption_test.py`: a `say` voice asks for a story; 2.5 s after the bot starts speaking, a second `say` clip says "Stop right there." Both run through Silero VAD and Smart Turn in real time. STT and LLM are fakes so only the TTS varies. Output goes to `PacedNullOutputTransport`, a silent output paced like a sound card that records what played and when. Heard words are estimated from played seconds (exact 60 ms per character for the fakes; 850 characters per minute for real TTS).
+`bench/interruption_test.py`: a `say` voice asks for a story; 2.5 s after the bot starts speaking, a second `say` clip says "Stop right there." Both run through Silero VAD and Smart Turn in real time. STT and LLM are fakes so only the TTS varies. Output goes to `PacedNullOutputTransport`, a silent output paced like a sound card that records what played and when. Heard words are estimated from played seconds (exact 60 ms per character for the fakes; 850 characters per minute for real TTS). Since Nov 4 the bench uses word timestamps when the TTS has them, because the pace guess undercounted Cartesia (research.md, "Cartesia over-commit on interruption").
 
 ## Results (one run each, Oct 21, 2026)
 
