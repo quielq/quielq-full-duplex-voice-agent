@@ -4,15 +4,17 @@ Living list of open work. Tick items as they close, add new ones where they belo
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
-Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase with real clips (ADR-033), our own command policy (ADR-034), the `delegate` server on fakes (ADR-035), and the voice hop probe were built on `build/voice-servers`. 587 tests pass, and local main matches. Nothing is pushed. Feature freeze is Nov 5 and the deadline is Nov 7.
+Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase (ADR-033), our own command policy (ADR-034), the `delegate` server (ADR-035), the audio-sample latency method (ADR-036), network-loss recovery (ADR-037), and voice server reconnects were built on `build/voice-servers`, and every one has now run live on the Mac at least once. The full suite passed after the merges (643 passed, 3 skipped), plus one test since. Local main is at `457797e`, behind `build/voice-servers`. Nothing is pushed. Today's spend is about $0.38. Feature freeze is Nov 5 and the deadline is Nov 7.
 
 ## Next, in order (Nov 4)
 
-1. Done Nov 4 (`20261104-202417-64248a`): the live Mac run through both voice servers. Headline p50 3.0 s, no-tool 2.8 s, tool 4.4 s (ADR-036). Found: the model refuses to delete with `bash`, and one echo leak on speakers.
-2. Done Nov 4: the Cartesia interruption bench direct and through `voice-speak`, and one live `delegate` task.
-3. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
-4. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
-5. Pi cooling and power before the demo.
+Done on the Mac, Nov 4: the live run through both voice servers (`20261104-202417-64248a`, headline p50 3.0 s, no-tool 2.8 s, tool 4.4 s, ADR-036), the Cartesia interruption bench direct and through `voice-speak` (over-commit 1 word), `delegate` from a script and by voice, the recovery clips, and the `bash` delete read-back after a prompt fix (`20261104-204433-6a77ad`).
+
+1. Fast-forward local main to `build/voice-servers`, and decide whether to push.
+2. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
+3. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
+4. Pi cooling and power before the demo.
+5. Small fixes found live on Nov 4, below under "Found in the Nov 4 live runs".
 
 ## Waiting on Quiel
 
@@ -38,6 +40,15 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Buy Cartesia Pro (confirmed Nov 2)
 - [x] Command list: follow the tools and servers already requested, no separate list to check (Nov 2)
 - [x] Pi audio hardware: separate USB mic and USB speaker, not a speakerphone (ADR-029)
+
+## Found in the Nov 4 live runs
+
+- [x] Haiku refused to delete with `bash`, saying it would be permanent, so the read-back never ran. The `bash` description and prompt now say a delete asks first and keeps a copy (86c71f5), and the retry worked
+- [ ] Echo on the Mac speakers: the bot heard a few of its own words once ("I can't delete") and cut itself off. Headphones avoid it; check the Pi's AEC for the same
+- [ ] The thinking phrase played on every tool turn, `get_time` and `set_timer` included, because a tool turn needs two LLM calls and takes 3.3 to 3.7 s. Decide whether that is fine or the threshold should differ for tool turns
+- [ ] Asked to list the workspace, Haiku's reply named only the `delegate_trial` files though the tool returned all of them
+- [ ] Cost: the 18-turn run was $0.21, about $0.012 a turn, mostly Cartesia. Each Haiku call sends about 8,400 prompt tokens, so prompt caching (Latency, below) would help
+- [ ] The end-of-turn wait is the largest part of the headline at 1.3 s p50 (ADR-036)
 
 ## Robot face (ADR-027)
 
@@ -143,7 +154,7 @@ Waiting phrase (Nov 2):
 - [x] Phrase cache, shared with the network-loss phrases and the spending-cap notice (`harness/phrase_cache.py`)
 - [x] Generate the real clips (Nov 4, `bench.make_phrases`)
 - [x] Five rotating clips, 1500 ms, slow tools only on start, a prompt rule against saying one, on by default (Nov 4, ADR-033)
-- [ ] Check the 1500 ms threshold and the slow-tool list on a live run
+- [x] Check the 1500 ms threshold and the slow-tool list on a live run (Nov 4): 4 of 15 turns, every tool turn, none without a tool. See "Found in the Nov 4 live runs"
 - [x] Triggers: tool call start, or no reply audio after `filler.after_ms`; off by default in `mac.yaml` and `pi.yaml` (e2f977b)
 - [x] Once per turn, interruptible, kept out of the LLM context, never for `stay_silent` or in IDLE (e2f977b; the IDLE and `stay_silent` hooks wait for those features)
 - [x] `filler_audio_out` event and a `latency_probe` stage; log how often it plays (e2f977b; reply audio after a clip is an estimate)
@@ -180,7 +191,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] One live Mac run with `stt=voice_listen,tts=voice_speak`, and the Cartesia interruption bench through the servers (Nov 4)
 - [x] Measure the extra audio hop through the servers on the Mac (`bench/voice_hop_probe`, Nov 4): under 0.5 ms a frame each way, +0.6 ms (stdio) and +2.1 ms (HTTP) from request to first chunk, +6 to 21 ms per stream open (ADR-032). After the event queue (a3bec1e): first-chunk p95 3.3 ms on stdio, was 17 ms
 - [x] Send voice events without blocking the relay's down loop (Nov 4, a3bec1e): first-chunk p95 fell from 17 ms to 3.3 ms on stdio
-- [ ] Switch the Pi service and the live command to the voice stages once the live run passes
+- [ ] Switch the Pi service and the live command to the voice stages: the Mac live run passed on Nov 4, so this waits only on the Pi run
 - [x] `append_text`, `pause`, `resume`, `interrupt(kind)` dropped: Pipecat sends these as Cartesia messages on the stream (ADR-032)
 - [x] Wire `VoiceEventFrame`s into pipeline actions (ADR-008): dropped. With thin servers, Pipecat's own Flux and Cartesia services act on the provider messages, and the voice events are logged for the benchmark (ADR-032)
 - [x] Reconnect when a voice server's MCP session or stream drops after a long idle (Nov 4, fakes): provider drop, a refused reconnect, a dead server process, Cartesia's idle timeout, and a stop during a connect all recover, over stdio and HTTP, with no leaked socket, call, or process. A whole bot run heard and spoke a second turn after both streams dropped (ADR-032, `tests/test_voice_reconnect.py`)
@@ -202,7 +213,9 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] `comms` phone bridge built, dry run only (ADR-024, real send waits on approval)
 - [x] Read-back from real arguments for open world destructive tools (ADR-024)
 - [x] `delegate` on fakes: own worker loop on Haiku 5.5, only what needs no yes, step and cost caps, announced at a quiet moment (ADR-035)
-- [x] One live `delegate` task on Haiku 5.5: wrote two files and listed them, 3 model calls, 4.6 s, $0.00095 (Nov 4, from a script, not by voice)
+- [x] One live `delegate` task on Haiku 5.5: wrote two files and listed them, 3 model calls, 4.6 s, $0.00095 (Nov 4, from a script)
+- [x] A live `delegate` task by voice: wrote `packing.txt` and was announced about 8 s later (Nov 4, `20261104-202417-64248a`)
+- [ ] A live `delegate` task that stops on "needs your yes"
 
 ## No-wake-word addressing
 
@@ -230,6 +243,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 ## Reliability and operations
 
 - [x] Network-loss detection: a TCP probe tells an outage from a bad request, `network_lost` plays once, the face shows it, recovery is logged (Nov 4, ADR-037, fakes only)
+- [ ] Try a real outage once: turn off Wi-Fi mid-session and check the clip, the face, and recovery
 - [x] Make the `network_lost` and `cap_reached` clips (Nov 4, $0.0051)
 - [ ] Provider failover per stage, reconnect with backoff, health log
 - [ ] systemd services with restart on failure, auto-start on boot, a watchdog
