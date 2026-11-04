@@ -43,6 +43,18 @@ Until now `bench/latency_probe.py` was a skeleton. The live numbers so far (p50 
 - Stop latency (interrupter onset to output silence) can use the same marks but is not built here. Cost per successful task needs the task judge and is not built here either.
 - Unsolicited speech such as a timer firing inside a turn window would count as that turn's reply. The bench uses ten-minute timers so none fires during a session.
 
+## First live headline, Nov 4
+
+`20261104-202417-64248a`: Mac, speakers with `--echo-cancel`, `stt=voice_listen,llm=anthropic,tts=voice_speak`, 18 turns, 3 warm-up turns dropped, 14 measured. One run, so a first look, not the benchmark.
+
+| Turns | n | p50 | p90 | max |
+| --- | --- | --- | --- | --- |
+| All | 14 | 3,040 ms | 4,706 ms | 5,849 ms |
+| No tool | 10 | 2,781 ms | 3,360 ms | 3,604 ms |
+| Tool | 4 | 4,405 ms | 5,642 ms | 5,849 ms |
+
+Attribution at p50: end-of-turn wait 1,306 ms, LLM first token 782 ms, TTS first byte 376 ms, tool call 384 ms. The end-of-turn wait the old figures left out is the largest single part. The thinking phrase played on 4 of 15 turns, 2.6 s after speech at p50, on every tool turn that took over 1500 ms after end of turn, including `get_time` and `set_timer`, because a tool turn needs two LLM calls. Cost $0.012 a turn.
+
 ## Sources
 
 - `docs/architecture.md`, Benchmark harness: Definitions and Run protocol.

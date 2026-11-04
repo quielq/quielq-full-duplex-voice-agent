@@ -8,7 +8,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 
 ## Next, in order (Nov 4)
 
-1. Live Mac run through both voice servers, `stt=voice_listen,tts=voice_speak`. It is the first live run of `voice-listen` and checks the 1500 ms thinking phrase. Paid and needs Quiel at the mic.
+1. Done Nov 4 (`20261104-202417-64248a`): the live Mac run through both voice servers. Headline p50 3.0 s, no-tool 2.8 s, tool 4.4 s (ADR-036). Found: the model refuses to delete with `bash`, and one echo leak on speakers.
 2. Done Nov 4: the Cartesia interruption bench direct and through `voice-speak`, and one live `delegate` task.
 3. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
 4. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
@@ -22,9 +22,9 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Patent question dropped, and the repo goes public as a course requirement (Nov 3). Privacy measures are listed in `docs/privacy.md`
 - [x] Reply templates stay off: the second LLM call always runs (Nov 4, ADR-020). A natural thinking phrase covers long waits instead
 - [x] Our own command policy replaces the vendored OnIt file (Nov 4, ADR-034): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen
-- [ ] Approve the live Mac run through both voice servers (Next 1), at the mic
+- [x] The live Mac run through both voice servers (Nov 4, `20261104-202417-64248a`, $0.21)
 - [x] The Cartesia bench through `voice-speak`: over-commit 1, stop 277 ms, same as direct (Nov 4, `20261104-202147-ab3d44`, $0.0246)
-- [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`
+- [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`. Tried Nov 4: Haiku would not call `bash` to delete, saying it would be permanent, so the read-back never ran. The `bash` description and prompt do not say that a delete asks first and keeps a copy
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
 - [x] Generate the five waiting phrase clips through voice-speak (Nov 4, $0.0029, the first live voice-speak run)
@@ -177,7 +177,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 
 - [x] Real `voice-listen` (Flux) and `voice-speak` (Cartesia) as thin relays, tested on fakes over stdio and HTTP (Nov 4)
 - [x] Audio side channel: a Unix socket per stream (Nov 4)
-- [ ] One live Mac run with `stt=voice_listen,tts=voice_speak`, and the Cartesia interruption bench through the servers (paid, needs a yes)
+- [x] One live Mac run with `stt=voice_listen,tts=voice_speak`, and the Cartesia interruption bench through the servers (Nov 4)
 - [x] Measure the extra audio hop through the servers on the Mac (`bench/voice_hop_probe`, Nov 4): under 0.5 ms a frame each way, +0.6 ms (stdio) and +2.1 ms (HTTP) from request to first chunk, +6 to 21 ms per stream open (ADR-032). After the event queue (a3bec1e): first-chunk p95 3.3 ms on stdio, was 17 ms
 - [x] Send voice events without blocking the relay's down loop (Nov 4, a3bec1e): first-chunk p95 fell from 17 ms to 3.3 ms on stdio
 - [ ] Switch the Pi service and the live command to the voice stages once the live run passes

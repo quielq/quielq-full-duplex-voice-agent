@@ -66,6 +66,7 @@ Quiel chose B on Nov 4.
   - Flux's drop is also reported as a non-fatal `pipeline_error` ("connection closed by server") by Pipecat, the same as with a direct Flux connection.
   - `upstream_connected` now comes before `stream_ready`, so `bench/voice_hop_probe`'s open time no longer includes the socket handshake, which is under 1 ms.
 - **Interruption through `voice-speak`, live, Nov 4** (`bench.interruption_test --tts voice_speak`, run `20261104-202147-ab3d44`, $0.0246). Cartesia truncates the same through the relay as direct: 9 words heard, 10 committed, over-commit 1, stop 277 ms (direct: 245 ms, mostly VAD onset; flush 7 ms against 9 ms). This was the first live run of a reply cancelled through the relay.
+- **First live mic run through both servers, Nov 4** (`20261104-202417-64248a`, MacBook Air speakers with `--echo-cancel`, Haiku 5.5, 18 turns, $0.21). Both streams opened (Cartesia 494 ms, Flux 786 ms), stayed up for the whole 5 minute run, and every turn was heard and spoken. Transcript events took 16 to 38 ms over MCP. Interrupting the story through `voice-speak` worked by voice. One turn was the bot hearing its own reply through the speakers ("I can't delete"), so the echo canceller let a few words through at speaker volume.
 - The stubs and `bench/voice_bridge_probe.py` stay as they are, for the hop measurement.
 
 ## Sources
