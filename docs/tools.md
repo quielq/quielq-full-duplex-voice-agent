@@ -66,6 +66,26 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 
 `ME3_TOOL_STAGES` takes several at once: `search=tavily,comms=bridge`.
 
+## Voice tools
+
+The voice servers are MCP servers too, but the harness calls them, not the LLM, so they are not in the tool list the model sees and `tool_policy.py` does not hold them. They carry control only. Audio rides a Unix socket per stream, and events are logging notifications on the `voice` logger while `listen` or `speak` is open (ADR-008, ADR-032).
+
+| Server | Tools | Purpose | Status |
+| --- | --- | --- | --- |
+| `voice-listen` | `listen`, `stop_listening`, `status` | Holds one Deepgram Flux stream per `listen` call and sends transcript and turn events | Live on the Mac, Nov 4 (`stt=voice_listen`) |
+| `voice-speak` | `speak`, `stop`, `status` | Holds one Cartesia stream per `speak` call, with word timestamps for `played_up_to` | Live on the Mac, Nov 4 (`tts=voice_speak`) |
+| stubs | the above, plus `duck` and `unduck` in `voice-speak` | The bridge probe (ADR-008). Ducking and playback stay in the harness, so `duck` and `unduck` exist only here | Fakes only |
+
+Their limits:
+
+- **Key stays in the server.** `SERVER_KEYS` in `harness/mcp_tools.py` gives `voice-listen` only the Deepgram key and `voice-speak` only the Cartesia key. The harness never sees them.
+- **Fixed upstream.** The provider address is fixed per server, and the harness supplies only a `key=value` query string, so a caller cannot point the key anywhere else. Tests may name a loopback upstream through an environment variable, and nothing else.
+- **Private socket.** Each stream gets a socket in a 0700 folder, set to 0600, and the first frame must be a one-time token compared in constant time.
+- **Cost ledger.** Each `listen` or `speak` call checks the provider's daily cap before it opens a stream.
+- **Recovery.** A dropped stream is reopened by Pipecat's reconnect logic through a new call, and a dead server is restarted. Tested on fakes, stdio and HTTP.
+
+Proven live on Nov 4: an 18 turn mic run through both servers (`20261104-202417-64248a`, $0.21), where both streams stayed up for the whole 5 minute run and voice interruption worked, and the interruption bench through `voice-speak` (`20261104-202147-ab3d44`, $0.0246, 9 words heard, 10 committed). The stored waiting, network-loss, and cap clips were also made through `voice-speak`. Not yet run on the Pi.
+
 ## Add a tool
 
 Adding one to an existing server takes steps 2 to 6. A new server needs all of them. `servers/tasks/notes/server.py` is the shortest example.
