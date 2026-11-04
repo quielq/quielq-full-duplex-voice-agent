@@ -90,6 +90,8 @@ class TurnEventObserver(BaseObserver):
         self.reply_done = asyncio.Event()
         # Set by the bot when the waiting phrase is on (harness/filler.py).
         self.filler = None
+        # Set by the bot: plays the network and spending-cap clips (harness/network.py).
+        self.clips = None
         # Set by the bot: the undo window opens on these signals (harness/tool_policy.py).
         self.policy = None
         # Set by the bot when the face is on: reply text as it streams (harness/ui.py).
@@ -175,7 +177,8 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, BotStartedSpeakingFrame):
             self.bot_speaking = True
             is_filler = self.filler is not None and self.filler.claim_bot_start()
-            log.emit("filler_audio_out" if is_filler else "first_audio_out")
+            is_clip = not is_filler and self.clips is not None and self.clips.claim_bot_start()
+            log.emit("filler_audio_out" if is_filler else "phrase_audio_out" if is_clip else "first_audio_out")
             if self.policy:
                 self.policy.bot_started()
         elif isinstance(frame, BotStoppedSpeakingFrame):

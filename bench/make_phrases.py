@@ -1,10 +1,11 @@
 """Synthesise the stored phrases into assets/fallback_wavs/ through our voice-speak server.
 
 A paid Cartesia call, metered in the cost ledger: the waiting phrases are about 60 characters,
-about $0.003 at list price. It refuses unless ME3_LIVE=1. The clips are synthetic, in the live
+about $0.003 at list price, and the two recovery clips about 100, about $0.005. It refuses unless ME3_LIVE=1. The clips are synthetic, in the live
 voice from configs/providers.yaml, and must be made again when that voice changes.
 
     ME3_LIVE=1 uv run python -m bench.make_phrases                 # the waiting phrases
+    ME3_LIVE=1 uv run python -m bench.make_phrases --recovery      # network_lost and cap_reached (ADR-037)
     ME3_LIVE=1 uv run python -m bench.make_phrases --all           # every phrase
     ME3_LIVE=1 uv run python -m bench.make_phrases one_sec on_it   # just these
 """
@@ -26,6 +27,12 @@ from harness.voice_relay import RelayClient
 
 MODEL = "sonic-3.6"  # Pipecat 1.13.0's default for CartesiaTTSService
 VERSION = "2026-03-01"  # the Cartesia API version Pipecat 1.13.0 is written against
+
+
+def recovery_phrases() -> list[str]:
+    """The clips the harness plays when it cannot use TTS: the network is gone or the cap is hit."""
+    r = load_config("mac").profile["recovery"]
+    return [r["network_clip"], r["cap_clip"]]
 
 
 async def synthesise(client: RelayClient, text: str, voice_id: str, rate: int) -> bytes:
@@ -84,10 +91,12 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("names", nargs="*", help="phrase names; default: the waiting phrases in configs/mac.yaml")
     ap.add_argument("--all", action="store_true", help="every phrase in harness/phrase_cache.py")
+    ap.add_argument("--recovery", action="store_true", help="the network-loss and spending-cap clips")
     args = ap.parse_args()
     if os.environ.get("ME3_LIVE") != "1":
         raise SystemExit("this run spends money (Cartesia): set ME3_LIVE=1")
-    chosen = list(PHRASES) if args.all else args.names or load_config("mac").profile["filler"]["phrases"]
+    chosen = recovery_phrases() if args.recovery else (
+        list(PHRASES) if args.all else args.names or load_config("mac").profile["filler"]["phrases"])
     unknown = [n for n in chosen if n not in PHRASES]
     if unknown:
         raise SystemExit(f"unknown phrases: {', '.join(unknown)}")

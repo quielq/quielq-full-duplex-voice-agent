@@ -64,10 +64,11 @@ from harness.events import EventLog, TurnEventObserver
 from harness.filler import FillerProcessor
 from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import TASK_SERVERS, task_clients
+from harness.network import ClipPlayer, NetworkWatch, stage_hosts
 from harness.null_output import PacedNullOutputTransport
 from harness.phrase_cache import load_phrase
 from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
-from harness.providers import FLUX_STAGES, STAGE_PROVIDER, build_llm, build_stt, build_tts
+from harness.providers import FLUX_STAGES, build_llm, build_stt, build_tts
 from harness.system_stats import LoopLag, SystemStats
 from servers.tasks.music.backends import PLAYER_NAME, SpotifyBackend
 from harness.recovery import LLMErrorRecovery
@@ -260,6 +261,7 @@ async def run_bot(
     worker: PipelineWorker | None = None
 
     cap_hit = False
+    clips: ClipPlayer | None = None
 
     async def on_cap_reached(provider: str) -> None:
         nonlocal cap_hit
@@ -270,9 +272,9 @@ async def run_bot(
         logger.warning(f"{provider}: daily spend cap reached, stopping the agent")
         if worker is None:
             return
-        # Never spend past a cap to announce it: if TTS is the capped provider, stay quiet.
-        if STAGE_PROVIDER.get(cfg.providers["stages"]["tts"]) != provider:
-            await worker.queue_frame(TTSSpeakFrame(cfg.profile["recovery"]["cap_phrase"]))
+        # A stored clip, so announcing the cap never spends past it, whichever provider hit it.
+        if clips is not None:
+            await clips.play(cfg.profile["recovery"]["cap_clip"])
         await worker.stop_when_done()
 
     cost_obs = CostObserver(ledger, cfg.providers, log.run_id, on_cap_reached)
@@ -345,12 +347,36 @@ async def run_bot(
         filler = _filler(cfg, log, addressing)
         filler_procs = [filler] if filler else []
         turn_obs.filler = filler
+        net_cfg = cfg.profile["network"]
+        network: NetworkWatch | None = None
+        clips = ClipPlayer(audio["out_sample_rate"], muted=lambda: network is not None and network.down,
+                           on_event=log.emit)  # fmt: skip
+        turn_obs.clips = clips
+        if net_cfg["enabled"]:
+            network = NetworkWatch(
+                stage_hosts(cfg.providers["stages"]),
+                play=lambda: clips.play(cfg.profile["recovery"]["network_clip"]),
+                on_turn_lost=lambda stage: turn_lost(stage),
+                on_event=log.emit,
+                timeout_s=net_cfg["probe_timeout_s"],
+                attempts=net_cfg["probe_attempts"],
+                backoff_s=net_cfg["backoff_s"],
+            )
+
+        def turn_lost(stage: str) -> None:
+            """A turn the outage swallowed: end it, and forget a request the LLM never answered."""
+            messages = list(context.get_messages())  # set_messages refills the same list
+            if stage == "llm" and messages and messages[-1].get("role") == "user":
+                context.set_messages(messages[:-1])
+                log.emit("lost_turn_dropped", text=str(messages[-1].get("content", ""))[:200])
+            turn_obs.reply_done.set()
+
         if input_mode == "mic":
             transport = local_transport(audio, audio_out_filter=duck_gain, on_event=log.emit)
             trace_writes(transport.output(), hops)
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts, forced=forced, voice=voice)
             front = [transport.input(), mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
-            back = [*filler_procs, transport.output()]
+            back = [*filler_procs, clips, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts,
@@ -359,9 +385,9 @@ async def run_bot(
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
             )
-            back = [*filler_procs, output]
+            back = [*filler_procs, clips, output]
         elif input_mode == "text":
-            front, back = [], []
+            front, back = [], [clips]  # no output device: the clip is logged and goes nowhere
         else:
             raise ValueError(f"unknown input mode {input_mode!r}")
 
@@ -378,7 +404,7 @@ async def run_bot(
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[turn_obs, cost_obs],
+            observers=[turn_obs, cost_obs, *([network] if network else [])],
             idle_timeout_secs=None,
         )
 
@@ -394,7 +420,8 @@ async def run_bot(
         policy.speak = speak
         policy.report = report
         worker.add_observer(
-            LLMErrorRecovery(cfg.profile["recovery"]["llm_error_phrase"], speak, lambda: log.turn_id, log.emit)
+            LLMErrorRecovery(cfg.profile["recovery"]["llm_error_phrase"], speak, lambda: log.turn_id, log.emit,
+                             network=network)  # fmt: skip
         )
 
         async def text_turn(text: str) -> None:
@@ -468,6 +495,8 @@ async def run_bot(
                     await task
             await policy.close()
             shutdown("tool_policy")
+            if network:
+                await network.close()
             if ui:
                 await ui.stop()
                 shutdown("ui")
