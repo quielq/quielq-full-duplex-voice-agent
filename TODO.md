@@ -24,7 +24,7 @@ Status as of Nov 4: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia
 - [x] Our own command policy replaces the vendored OnIt file (Nov 4, ADR-034): reads run at once, changes and runs ask, simple syntax only, installs refused clearly, unlisted programs ask, deletes copied to `.versions` first, plain read-backs with the exact command on screen
 - [x] The live Mac run through both voice servers (Nov 4, `20261104-202417-64248a`, $0.21)
 - [x] The Cartesia bench through `voice-speak`: over-commit 1, stop 277 ms, same as direct (Nov 4, `20261104-202147-ab3d44`, $0.0246)
-- [ ] Try the new read-backs live once, with `ME3_WORKSPACE_LIVE=1`. Tried Nov 4: Haiku would not call `bash` to delete, saying it would be permanent, so the read-back never ran. Fixed in the `bash` description and prompt the same day; retry live
+- [x] Try the new read-backs live once (Nov 4, `20261104-204433-6a77ad`): after the prompt fix, `rm -r` was read back in plain words, ran after a yes, and kept a copy; a restore with `cp -r` was read back too; `ls -la` ran at once
 - [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
 - [x] Generate the five waiting phrase clips through voice-speak (Nov 4, $0.0029, the first live voice-speak run)

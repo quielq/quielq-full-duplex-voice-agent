@@ -1,6 +1,6 @@
 # ADR-034: Our own command policy for bash
 
-Date: Nov 4, 2026. Status: designed with Quiel on Nov 4, 2026, from his answers to seven questions. Built and tested on this Mac. Not tried live by voice yet.
+Date: Nov 4, 2026. Status: designed with Quiel on Nov 4, 2026, from his answers to seven questions. Built and tested on this Mac. Tried live by voice on Nov 4, 2026.
 
 ## Context
 
@@ -56,7 +56,7 @@ OnIt gave the idea of classing every program in a command into allow, ask, or de
 - The sandbox is still the boundary. An interpreter that gets a yes can do anything the sandbox allows.
 - The sandbox tests now pass their outside paths inside Python code, because the policy refuses a plain `cat /etc/passwd` before the sandbox sees it.
 - Commands a model writes with `$(...)` or loops are refused, and the model has to write them simply. How often that happens on a real job is unmeasured.
-- **The model must know a delete asks.** In the first live mic run (Nov 4, `20261104-202417-64248a`), Haiku 5.5 refused five times to delete a folder with `bash`, saying it would be permanent, so the read-back never ran. The `bash` description and the system prompt now say that a change or delete is read back and needs a yes, and that `rm` keeps a copy in `.versions`, so the model calls the tool and the harness asks. A test keeps that text in step with the policy. Not retried live yet.
+- **The model must know a delete asks.** In the first live mic run (Nov 4, `20261104-202417-64248a`), Haiku 5.5 refused five times to delete a folder with `bash`, saying it would be permanent, so the read-back never ran. The `bash` description and the system prompt now say that a change or delete is read back and needs a yes, and that `rm` keeps a copy in `.versions`, so the model calls the tool and the harness asks. A test keeps that text in step with the policy. **Retried live the same evening** (`20261104-204433-6a77ad`): asked to delete the folder, Haiku listed the files, then called `bash` with `rm -r delegate_trial`. The harness read back "This will delete delegate_trial and everything inside. Should I go ahead?", the yes ran it after the 5 s undo window, and the copy landed in `.versions`. Asked to bring it back, Haiku proposed `cp -r` from `.versions`, which was read back and run after a yes. `ls -la` ran at once with no question.
 - The read-backs are only as good as `_describe`. A program it has no phrase for reads as "run cowsay on hi".
 
 ## Sources
