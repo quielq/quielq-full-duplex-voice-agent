@@ -44,7 +44,7 @@ Two checks on Nov 4, 2026:
 
 - **Live use needs credits and approval.** Recommended: $10, which also lifts the free-model limit from 50 to 1,000 requests a day.
 - **Before a model goes live:** a small smoke test per model, a tool call and a short answer, at about $0.01 in total, then `bench.latency_probe`. Slow models leave the list.
-- **Usage metrics.** OpenRouter reports usage through the OpenAI streaming format, which Pipecat turns into `LLMUsageMetricsData`. Not yet checked against a live response.
+- **Usage metrics.** OpenRouter reports usage through the OpenAI streaming format, which Pipecat turns into `LLMUsageMetricsData`. Checked live on Nov 4: the ledger recorded $0.0095 for the six-model smoke test from those reports.
 
 ## Live smoke test, Nov 4, 2026
 
