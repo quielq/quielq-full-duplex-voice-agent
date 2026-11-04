@@ -1,7 +1,7 @@
 """Pre-synthesised phrases in assets/fallback_wavs/, played with no TTS call.
 
-The waiting phrase uses this now. The network-loss phrases and the spending-cap notice share
-it when they are built. Clips are synthetic, never recordings of people, and must be
+The waiting phrase uses this, and so do the network-loss phrase and the spending-cap notice
+(harness/network.py, ADR-037). Clips are synthetic, never recordings of people, and must be
 regenerated when the voice changes. Making them is a paid TTS call, so until that is approved
 a missing clip falls back to a short quiet tone and the run logs that it did.
 """
