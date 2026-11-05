@@ -69,6 +69,7 @@ from harness.ducking import DuckGain, DuckingProcessor
 from harness.events import EventLog, TurnEventObserver
 from harness.filler import FillerProcessor
 from harness.preamble import PreambleFilter
+from harness.self_echo import SelfEchoFilter, SpokenTap, SpokenWords
 from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import TASK_SERVERS, task_clients
 from harness.network import ClipPlayer, NetworkWatch, stage_hosts
@@ -365,6 +366,15 @@ async def run_bot(
         stt_interrupts = duck_gain is None
         gate = PolicyGate(policy, on_spoken=turn_obs.reply_done.set)
         address_procs = [AddressingFilter(addressing)] if addressing else []
+        echo_procs: list = []
+        tap_procs: list = []
+        se = cfg.profile.get("self_echo") or {}
+        if audio["echo_cancel"] and se.get("enabled", True) and input_mode != "text":
+            # Speakers leave some echo: do not answer the bot's own words (ADR-042).
+            spoken = SpokenWords(window_s=se.get("window_s", 15.0))
+            allow = cfg.profile["barge_in"]["allowlist"]
+            echo_procs = [SelfEchoFilter(spoken, min_words=se.get("min_words", 3), allowlist=allow, on_event=log.emit)]
+            tap_procs = [SpokenTap(spoken)]
         mic_gate = _mic_gate(cfg, log, addressing)
         filler = _filler(cfg, log, addressing)
         filler_procs = [filler] if filler else []
@@ -401,13 +411,14 @@ async def run_bot(
             stamp_capture(transport.input())
             stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts, forced=forced, voice=voice)
             front = [transport.input(), InputVoiceTap(log.emit, adaptive=True), mic_gate, _vad(cfg), stt,
-                     gate, *address_procs, *duck_procs]  # fmt: skip
+                     gate, *echo_procs, *address_procs, *duck_procs]  # fmt: skip
             back = [*filler_procs, clips, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts,
                             forced=forced, voice=voice)  # fmt: skip
-            front = [source, InputVoiceTap(log.emit), mic_gate, _vad(cfg), stt, gate, *address_procs, *duck_procs]
+            front = [source, InputVoiceTap(log.emit), mic_gate, _vad(cfg), stt, gate, *echo_procs, *address_procs,
+                     *duck_procs]  # fmt: skip
             output = PacedNullOutputTransport(
                 audio["out_sample_rate"], on_event=log.emit, audio_out_filter=duck_gain
             )
@@ -421,7 +432,7 @@ async def run_bot(
         if force_end and input_mode != "text":
             force_end.stt = stt
         pipeline = Pipeline(
-            [*front, aggregators.user(), llm, PreambleFilter(log.emit), tts, *back, aggregators.assistant()]
+            [*front, aggregators.user(), llm, PreambleFilter(log.emit), tts, *tap_procs, *back, aggregators.assistant()]
         )
         worker = PipelineWorker(
             pipeline,
