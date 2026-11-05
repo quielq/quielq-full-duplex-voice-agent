@@ -1,6 +1,6 @@
 # ME3 to-do list
 
-Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 4, 2026.
+Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 5, 2026.
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
 
@@ -43,12 +43,24 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 ## Found in the Nov 4 live runs
 
 - [x] Haiku refused to delete with `bash`, saying it would be permanent, so the read-back never ran. The `bash` description and prompt now say a delete asks first and keeps a copy (86c71f5), and the retry worked
-- [x] Echo on the Mac speakers: the bot heard a few of its own words once ("I can't delete"), cut itself off, and answered them. With echo cancelling on, its own recent words that cut it off are no longer answered (Nov 5, ADR-042, fakes only). The cut-off itself remains: headphones on the Mac, and the Pi echo test
-- [x] The thinking phrase played on every tool turn and delayed quick tool replies by about 0.85 s. A quick tool now restarts the wait at 2000 ms (Nov 5, ADR-033, fakes only)
-- [x] DeepSeek said "I'll check your documents" before a tool call. A waiting phrase before a tool call is now dropped before the TTS (Nov 5, ADR-041, fakes only)
-- [x] Asked to list the workspace, Haiku's reply named only the `delegate_trial` files though the tool returned all of them. `list_files` now adds a count per top-level folder for each root (Nov 5, ADR-021, fakes only)
+- [x] Echo on the Mac speakers: the bot heard a few of its own words once ("I can't delete"), cut itself off, and answered them. With echo cancelling on, its own recent words that cut it off are no longer answered (Nov 5, ADR-042, fakes only). Live Nov 5: three speaker runs, 27 turns, no self-echo at all, so the guard had nothing to drop The cut-off itself remains: headphones on the Mac, and the Pi echo test
+- [x] The thinking phrase played on every tool turn and delayed quick tool replies by about 0.85 s. A quick tool now restarts the wait at 2000 ms (Nov 5, ADR-033). Live Nov 5: five quick tool turns had no clip and first audio at 1.9 s
+- [x] DeepSeek said "I'll check your documents" before a tool call. A waiting phrase before a tool call is now dropped before the TTS (Nov 5, ADR-041). Live Nov 5: Haiku said two, both dropped
+- [x] Asked to list the workspace, Haiku's reply named only the `delegate_trial` files though the tool returned all of them. `list_files` now adds a count per top-level folder for each root (Nov 5, ADR-021). Live Nov 5: the result carried the folder counts; the spoken reply was not captured
 - [ ] Cost: the 18-turn run was $0.21, about $0.012 a turn, mostly Cartesia. Each Haiku call sends about 8,400 prompt tokens, so prompt caching (Latency, below) would help
 - [ ] The end-of-turn wait is the largest part of the headline at 1.3 s p50 (ADR-036)
+
+## Found in the Nov 5 live runs
+
+Mac speakers with `--echo-cancel`, runs `20261105-195338-eb8cc9`, `20261105-195709-7ed5c6` (DeepSeek), `20261105-195758-061828`, 27 turns, $0.28 (plus $0.03 for `20261105-194831-817d86`). Headline p50 3.1 s (no-tool 2.5 s, tool 3.5 s, 17 measured turns, ADR-036).
+
+- [ ] `get_weather` for a misheard place ("Caddon City") never returned: no `tool_call_end`, no timeout event, and nothing was said for 11 s until the user asked again
+- [ ] After a `next_track` tap on the face, Haiku named the old song from context instead of calling `get_now_playing`. Screen actions do not reach the LLM context
+- [ ] "wait" was heard as "Great." The bot stopped, then answered it as a new turn ("Glad that helped")
+- [ ] A short "Okay." over the bot's reply cuts it off, and it restarts ("Sorry, my last reply cut off"). Belongs with backchannel handling in Barge-in
+- [ ] Misheard names: "UP Diliman" as "Yuki Deleman", "Mayon Builders" as "my on builders". On the second, DeepSeek answered without a docs tool call
+- [ ] The face server printed an aiohttp "Missing return statement on request handler" traceback at exit
+- [ ] Weather turns took 4.5 to 6.1 s to first audio, the slowest kind of turn in these runs
 
 ## Robot face (ADR-027)
 
@@ -58,6 +70,8 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 - [x] Layout checked at 800x480 on the Mac with `uv run python -m harness.ui --demo`
 - [x] Try it on the live mic: used on the Pi through three live sessions, Nov 2
 - [x] Confirm the display's resolution: 800x480 on DSI-2 (`wlr-randr`, Nov 2)
+- [x] Light and thermostat taps and a music button on a live run (Nov 5, `20261105-195758-061828`): each went through `run_from_screen` and applied
+- [x] Model picker on a live run (Nov 5): Haiku to DeepSeek V4.1 Flash and back, each switch starts a new run
 - [ ] Chromium kiosk start on the Pi, and CPU cost of the page next to the agent
 - [ ] Decide what `open_in_browser` does on the Pi: it covers the face, and touch has no way back
 - [ ] Optional: touch control of lights and thermostat (needs an ADR, it must not get around the tool policy)
@@ -69,7 +83,7 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 - [ ] Barge-in over the bot's speech and the 60 s echo test, live on the Pi. The clean bench talker test failed before the mic gain was lowered
 - [ ] Confirm the two `open_in_browser` runs on Nov 2 showed the pages on screen. The tool committed, but nobody checked
 - [ ] Install the boot service with `scripts/pi_setup.sh --service`, and add `--spotify-player` to `bot.env`
-- [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit. The Nov 4 Mac runs were ended by closing the terminal tab, which cut the log short, so they give no reading
+- [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit. The Nov 4 Mac runs were ended by closing the terminal tab, which cut the log short, so they give no reading. Nov 5: four Ctrl+C exits on the Mac, each under 2 s
 - [x] Show on the face when TTS has failed: `tts_failed`, a sad face and "Voice is down" until audio plays again (fakes only, not yet on a real Cartesia failure)
 - [ ] The cost ledger showed far less on Cartesia than the credits used, so check its price against the real balance
 - [x] Keep the 50% mic gain: `wpctl` line in `scripts/pi_setup.sh`, not yet run on the Pi

@@ -22,7 +22,7 @@ Pipecat announces a call with `FunctionCallsStartedFrame`, a system frame that c
 
 - An ordinary reply is not delayed. A reply that starts like a waiting phrase but has no tool call waits until its first sentence ends and the next text arrives, a few tens of milliseconds.
 - A waiting phrase worded outside the list still gets through. `preamble_dropped` counts the ones caught, so a live run shows whether the list needs more.
-- Checked on fakes only.
+- Checked on fakes only, then live on Nov 5 (`20261105-195758-061828`): Haiku 5.5 began two tool replies with a waiting phrase despite the prompt ("I'll look that up for you.", "Let me check what's going on with the music player."). Both were dropped and not spoken. DeepSeek V4.1 Flash said none in its two turns.
 
 ## Sources
 
