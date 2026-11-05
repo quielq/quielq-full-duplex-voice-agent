@@ -14,7 +14,7 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 
 1. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages. Nov 5 (`20261105-203514-1a2f7a`): voice stages, the short echo probe, a 50 s echo hold, barge-in, and `bash` in `bwrap` passed. Left: the hop probe, the long echo probe, and the boot service.
 2. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
-3. Pi cooling and power before the demo.
+3. Pi cooling and power before the demo. Nov 5: 53 to 60 C with the fan and no throttling, but one firmware stall dropped the USB mic and rebooted the Pi.
 4. Small fixes found live on Nov 4, below under "Found in the Nov 4 live runs".
 
 ## Waiting on Quiel
@@ -58,11 +58,11 @@ Mac speakers with `--echo-cancel`, runs `20261105-195338-eb8cc9`, `20261105-1957
 
 - [x] `get_weather` for a misheard place ("Caddon City") never returned: no `tool_call_end`, no timeout event, and nothing was said for 11 s until the user asked again. Now one 9 s deadline with side by side lookups, and `tool_call_cancelled` and `tool_no_end` in the log and report (ADR-024). Live Nov 5 `20261105-202141-d17a53`: answered in 2.2 s
 - [x] After a `next_track` tap on the face, Haiku named the old song from context instead of calling `get_now_playing`. Taps now reach the model at the start of the next turn, and `get_now_playing` says never to answer from memory (ADR-043). Live Nov 5 `20261105-202141-d17a53`: named the new song after a tap
-- [ ] "wait" was heard as "Great." The bot stopped, then answered it as a new turn ("Glad that helped")
+- [ ] "wait" was heard as "Great." The bot stopped, then answered it as a new turn ("Glad that helped"). Heard right once on the Pi (`20261105-203514-1a2f7a`), so keep watching
 - [ ] A short "Okay." over the bot's reply cuts it off, and it restarts ("Sorry, my last reply cut off"). Belongs with backchannel handling in Barge-in
 - [ ] Misheard names: "UP Diliman" as "Yuki Deleman", "Mayon Builders" as "my on builders". On the second, DeepSeek answered without a docs tool call
 - [ ] The face server printed an aiohttp "Missing return statement on request handler" traceback at exit
-- [ ] Weather turns took 4.5 to 6.1 s to first audio, the slowest kind of turn in these runs (4.8 to 5.6 s again in `20261105-202141-d17a53`)
+- [ ] Weather turns took 4.5 to 6.1 s to first audio, the slowest kind of turn in these runs (4.8 to 5.6 s again in `20261105-202141-d17a53`, and 5.1 and 5.7 s on the Pi in `20261105-203514-1a2f7a`)
 - [ ] Haiku spoke a remark about the misheard place before the weather call ("The place name is likely Cadon City or Caddon City; I'll use it as given."). The preamble list does not cover it, and the prompt already says not to remark on mishearing
 
 ## Found in the Nov 5 Pi run
@@ -89,6 +89,7 @@ Pi 5, USB mic and Dell soundbar, WebRTC AEC, `stt=voice_listen,llm=anthropic,tts
 - [x] Model picker on a live run (Nov 5): Haiku to DeepSeek V4.1 Flash and back, each switch starts a new run
 - [x] Chromium kiosk start on the Pi, and CPU cost of the page next to the agent: `scripts/pi_kiosk.sh` started by hand worked. Load rose from about 1 to 2 to 3 with the face and Spotify open, and the temperature stayed at 53 to 60 C (`20261105-203514-1a2f7a`)
 - [ ] Decide what `open_in_browser` does on the Pi: it covers the face, and touch has no way back
+- [ ] When the bot stops, the kiosk leaves Chromium on an error page: `scripts/pi_kiosk.sh` only waits for the face before the first launch. Reload when the face comes back (Nov 5)
 - [ ] Optional: touch control of lights and thermostat (needs an ADR, it must not get around the tool policy)
 
 ## Pi port, found on Nov 2 (ADR-029, ADR-030, ADR-031)
@@ -101,9 +102,9 @@ Pi 5, USB mic and Dell soundbar, WebRTC AEC, `stt=voice_listen,llm=anthropic,tts
 - [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit. The Nov 4 Mac runs were ended by closing the terminal tab, which cut the log short, so they give no reading. Nov 5: four Ctrl+C exits on the Mac, each under 2 s, and SIGINT on the Pi exited in 6 s with `run_end` (`20261105-203514-1a2f7a`)
 - [x] Show on the face when TTS has failed: `tts_failed`, a sad face and "Voice is down" until audio plays again (fakes only, not yet on a real Cartesia failure)
 - [ ] The cost ledger showed far less on Cartesia than the credits used, so check its price against the real balance
-- [x] Keep the 50% mic gain: `wpctl` line in `scripts/pi_setup.sh`, not yet run on the Pi
+- [x] Keep the 50% mic gain: `wpctl` line in `scripts/pi_setup.sh`. Nov 5: the USB mic read 0.50 after a reboot
 - [x] `play` in the first 20 s after start: waits up to 4 s for the player, then says it is still starting and to try again (fakes only). The 10 s tool timeout rules out a full 20 s wait
-- [ ] Decide what to do with VCM and raspotify on the Pi: VCM is stopped and disabled, raspotify still runs
+- [ ] Decide what to do with VCM and raspotify on the Pi: VCM is stopped and disabled, raspotify still runs. Nov 5: the `vcm`, `vcm-home`, and `raspotify` user units were inactive, and none held the mic; a system level raspotify unit was not checked
 - [x] Merge `build/pi-port` into main (Nov 3, local only)
 - [ ] Enhancement, parked: music lyrics reach the transcript and can trigger tools. In `20261102-123315-a8d32d`, a lyric was followed by `stop_music`. Options: lower the music while speech is detected, or add the music to the echo canceller's reference through a PipeWire virtual sink
 
@@ -140,7 +141,7 @@ Pi 5, USB mic and Dell soundbar, WebRTC AEC, `stt=voice_listen,llm=anthropic,tts
   - [ ] Live `bash` and `serve` inside `bwrap` on the Pi: `bash` passed Nov 5 (read-back, spoken yes, 5 s undo, `mkdir` ran, `20261105-203514-1a2f7a`). `serve` not tried
   - [x] WebRTC AEC from `livekit` on the Pi: 0.34 ms per 20 ms block (ADR-029)
   - [x] Set the audio devices in `pi.yaml` to `pipewire` (ADR-029)
-  - [ ] Echo test on the USB mic and speaker (short probe and live 50 s hold passed Nov 5; the long `--transport --repeat 10` run is left): 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
+  - [ ] Echo test on the USB mic and speaker (short probe and live 50 s hold passed Nov 5; the long `--transport --repeat 10` run is left, then set `audio.echo_delay_ms` in `pi.yaml` from it: the short probe's best was 50 ms, the file says 30): 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
   - [x] Spotify on the Pi: plays in the face with `--spotify-player` (ADR-031)
   - [x] CPU, temperature, memory, and throttling logging (`system_stats` events, doctor `pi` section), not run on a Pi
   - [x] Smart Turn timing on a Pi: 158 ms a decision, over the 120 ms budget, so stay on Flux
