@@ -68,6 +68,7 @@ from harness.costs import CostObserver
 from harness.ducking import DuckGain, DuckingProcessor
 from harness.events import EventLog, TurnEventObserver
 from harness.filler import FillerProcessor
+from harness.preamble import PreambleFilter
 from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import TASK_SERVERS, task_clients
 from harness.network import ClipPlayer, NetworkWatch, stage_hosts
@@ -420,7 +421,7 @@ async def run_bot(
         if force_end and input_mode != "text":
             force_end.stt = stt
         pipeline = Pipeline(
-            [*front, aggregators.user(), llm, tts, *back, aggregators.assistant()]
+            [*front, aggregators.user(), llm, PreambleFilter(log.emit), tts, *back, aggregators.assistant()]
         )
         worker = PipelineWorker(
             pipeline,
