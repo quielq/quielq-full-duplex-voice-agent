@@ -1,8 +1,10 @@
 # ME3 to-do list
 
-Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 5, 2026.
+Living list of open work. Tick items as they close, add new ones where they belong, and note the ADR or commit that settled each one. Last updated: Nov 5, 2026 (evening, Pi run).
 
 Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m bench.run_report --live`.
+
+Nov 5, evening: the first Pi run through both voice servers passed (`20261105-203514-1a2f7a`, 30 turns, $0.40, see "Found in the Nov 5 Pi run").
 
 Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261102-123315-a8d32d`). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase (ADR-033), our own command policy (ADR-034), the `delegate` server (ADR-035), the audio-sample latency method (ADR-036), network-loss recovery (ADR-037), and voice server reconnects were built on `build/voice-servers`, and every one has now run live on the Mac at least once. The full suite passed after the merges (643 passed, 3 skipped), plus one test since. Main matches `build/voice-servers` and is pushed to GitHub (Nov 4, after the live runs and these to-do updates). Today's spend is about $0.38. Feature freeze is Nov 5 and the deadline is Nov 7.
 
@@ -10,7 +12,7 @@ Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5,
 
 Done on the Mac, Nov 4: the live run through both voice servers (`20261104-202417-64248a`, headline p50 3.0 s, no-tool 2.8 s, tool 4.4 s, ADR-036), the Cartesia interruption bench direct and through `voice-speak` (over-commit 1 word), `delegate` from a script and by voice, the recovery clips, and the `bash` delete read-back after a prompt fix (`20261104-204433-6a77ad`).
 
-1. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages.
+1. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages. Nov 5 (`20261105-203514-1a2f7a`): voice stages, the short echo probe, a 50 s echo hold, barge-in, and `bash` in `bwrap` passed. Left: the hop probe, the long echo probe, and the boot service.
 2. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
 3. Pi cooling and power before the demo.
 4. Small fixes found live on Nov 4, below under "Found in the Nov 4 live runs".
@@ -63,6 +65,18 @@ Mac speakers with `--echo-cancel`, runs `20261105-195338-eb8cc9`, `20261105-1957
 - [ ] Weather turns took 4.5 to 6.1 s to first audio, the slowest kind of turn in these runs (4.8 to 5.6 s again in `20261105-202141-d17a53`)
 - [ ] Haiku spoke a remark about the misheard place before the weather call ("The place name is likely Cadon City or Caddon City; I'll use it as given."). The preamble list does not cover it, and the prompt already says not to remark on mishearing
 
+## Found in the Nov 5 Pi run
+
+Pi 5, USB mic and Dell soundbar, WebRTC AEC, `stt=voice_listen,llm=anthropic,tts=voice_speak,music=spotify`, face in kiosk with Spotify, `ME3_WORKSPACE_LIVE=1`. Run `20261105-203514-1a2f7a`, 30 turns, 664 s, $0.40 (Cartesia $0.28, Deepgram $0.08, Anthropic $0.04). No-tool replies 1.1 to 1.3 s from end of turn to audio, tool turns 4.7 to 5.7 s.
+
+- [ ] Self-echo got through: the bot's own "three text files" came back as "Three chest pains", cut it off, and got emergency advice. Silero gave no onset, so Flux alone started the turn from echo left after AEC, and the ADR-042 guard missed it because the garbled words do not match. Options: require a local VAD onset before a Flux turn start while the bot speaks, or match on sound alike words
+- [ ] `get_weather` on a made up place ("Flats") found some real place and returned only its name, so the bot could not say where it was and three turns went in circles. Return the region and country from the geocoder and have the bot say them
+- [ ] Haiku spoke "Let me check the thermostat." before a tool call, after the light answer in the same reply. The ADR-041 drop covers only a reply that opens with the filler
+- [ ] "Grindelwald" was transcribed once as "Brindlewood", and the bot kept offering to look up Brindlewood
+- [ ] The user singing at the start was answered as a turn ("Since")
+- [x] Stale now playing after a face tap: fixed. After a Stop tap the bot said nothing was playing (ADR-043)
+- [x] "Wait" heard right this time ("Wait. Wait. Wait.")
+
 ## Robot face (ADR-027)
 
 - [x] Browser page with the four expressions from the artwork, plus listening, thinking, working, asking, and muted (`--ui`, `harness/ui.py`, `harness/ui_page.html`)
@@ -73,18 +87,18 @@ Mac speakers with `--echo-cancel`, runs `20261105-195338-eb8cc9`, `20261105-1957
 - [x] Confirm the display's resolution: 800x480 on DSI-2 (`wlr-randr`, Nov 2)
 - [x] Light and thermostat taps and a music button on a live run (Nov 5, `20261105-195758-061828`): each went through `run_from_screen` and applied
 - [x] Model picker on a live run (Nov 5): Haiku to DeepSeek V4.1 Flash and back, each switch starts a new run
-- [ ] Chromium kiosk start on the Pi, and CPU cost of the page next to the agent
+- [x] Chromium kiosk start on the Pi, and CPU cost of the page next to the agent: `scripts/pi_kiosk.sh` started by hand worked. Load rose from about 1 to 2 to 3 with the face and Spotify open, and the temperature stayed at 53 to 60 C (`20261105-203514-1a2f7a`)
 - [ ] Decide what `open_in_browser` does on the Pi: it covers the face, and touch has no way back
 - [ ] Optional: touch control of lights and thermostat (needs an ADR, it must not get around the tool policy)
 
 ## Pi port, found on Nov 2 (ADR-029, ADR-030, ADR-031)
 
-- [ ] Cooling: the Pi reached 84 C on Nov 2 and has throttled since boot. A fan clashes with the display mounting, so find what fits, and check whether open page tabs drive the heat
-- [ ] Power: `throttled=0xf0000` includes under-voltage, so check the supply
-- [ ] Barge-in over the bot's speech and the 60 s echo test, live on the Pi. The clean bench talker test failed before the mic gain was lowered
+- [ ] Cooling: Nov 5, with the fan at level 2, an 11 minute live run with the face and Spotify stayed at 53 to 60 C, never throttled (`20261105-203514-1a2f7a`). Still check a demo length run. Nov 2: the Pi reached 84 C and has throttled since boot. A fan clashes with the display mounting, so find what fits, and check whether open page tabs drive the heat
+- [ ] Power: `throttled=0xf0000` includes under-voltage, so check the supply. Nov 5: 5.06 V and `0x0` all evening, but before the run the firmware timed out, the touch controller timed out 9 times, the USB mic dropped ("Not enough bandwidth", -62), and the Pi rebooted. Cause unknown; watch `dmesg` for it
+- [x] Barge-in over the bot's speech and the 60 s echo test, live on the Pi: `echo_probe --talker` passed (no false onsets, both talkers, best delay 50 ms against 30 ms in `pi.yaml`). Live, 50 s of story with nobody talking gave no turn, and "Stop" and "Wait" silenced the bot 0.45 s and 0.67 s after speech began (`20261105-203514-1a2f7a`). One self-echo got through, below
 - [ ] Confirm the two `open_in_browser` runs on Nov 2 showed the pages on screen. The tool committed, but nobody checked
 - [ ] Install the boot service with `scripts/pi_setup.sh --service`, and add `--spotify-player` to `bot.env`
-- [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit. The Nov 4 Mac runs were ended by closing the terminal tab, which cut the log short, so they give no reading. Nov 5: four Ctrl+C exits on the Mac, each under 2 s
+- [ ] Find why the bot is slow to exit: 62 s in run `20261102-095054-8e433b`, 2 s in others, 4 s on fakes. Each exit step now logs `shutdown_step`, MCP close has a 5 s limit, and on fakes MCP close took 0 ms, so read the steps after the next slow exit. The Nov 4 Mac runs were ended by closing the terminal tab, which cut the log short, so they give no reading. Nov 5: four Ctrl+C exits on the Mac, each under 2 s, and SIGINT on the Pi exited in 6 s with `run_end` (`20261105-203514-1a2f7a`)
 - [x] Show on the face when TTS has failed: `tts_failed`, a sad face and "Voice is down" until audio plays again (fakes only, not yet on a real Cartesia failure)
 - [ ] The cost ledger showed far less on Cartesia than the credits used, so check its price against the real balance
 - [x] Keep the 50% mic gain: `wpctl` line in `scripts/pi_setup.sh`, not yet run on the Pi
@@ -112,7 +126,7 @@ Mac speakers with `--echo-cancel`, runs `20261105-195338-eb8cc9`, `20261105-1957
 - [ ] Run a live session on the fixes made after the last mic run. Seen live on Nov 4: tools called with no preamble, and an unclear fragment ("Only a certificate.") got a short question back. Still untried live: `restart_track`, and desktop commands refused in `bash`
 - [ ] Run `open_in_browser` with `ME3_WORKSPACE_LIVE=1` and a spoken yes (ADR-026)
 - [x] `tts_starved` at about 0.02x was a false reading: hop windows ran across the wait between replies. Fixed, and speech arrives at 2x to 11x real time. Most output gaps were pauses between sentences or during tools
-- [ ] Two real speaker write stalls in `20261102-095054-8e433b` (1,889 ms and 313 ms) with audio buffered, cause unknown. `loop_lag` events now log a stalled event loop. In the 5 minute Mac run on Nov 4 the only one was 229 ms during shutdown, none while talking, so check again on the Pi, where the stalls happened
+- [ ] Two real speaker write stalls in `20261102-095054-8e433b` (1,889 ms and 313 ms) with audio buffered, cause unknown. `loop_lag` events now log a stalled event loop. In the 5 minute Mac run on Nov 4 the only one was 229 ms during shutdown, none while talking, so check again on the Pi, where the stalls happened. Nov 5 Pi run: no `loop_lag` events in 11 minutes (`20261105-203514-1a2f7a`)
 - [x] The `phantom_turn` in run `20261102-000823-8958d3` was a false alarm: the run stopped with that turn open. The report now skips such turns
 
 ## Finish the first spike
@@ -123,10 +137,10 @@ Mac speakers with `--echo-cancel`, runs `20261105-195338-eb8cc9`, `20261105-1957
   - [x] Write `scripts/pi_setup.sh`, the `me3-bot` service, the kiosk launcher, and `docs/quickstart-pi.md` (ADR-030), not run on a Pi
   - [x] Run the setup and tests on the Pi: Bookworm, not Trixie, 450 passed, and the `say` failures fixed
   - [x] `bwrap` sandbox passes the doctor, and `xdg-open` opened a page by hand (ADR-024, ADR-026)
-  - [ ] Live `bash` and `serve` inside `bwrap` on the Pi
+  - [ ] Live `bash` and `serve` inside `bwrap` on the Pi: `bash` passed Nov 5 (read-back, spoken yes, 5 s undo, `mkdir` ran, `20261105-203514-1a2f7a`). `serve` not tried
   - [x] WebRTC AEC from `livekit` on the Pi: 0.34 ms per 20 ms block (ADR-029)
   - [x] Set the audio devices in `pi.yaml` to `pipewire` (ADR-029)
-  - [ ] Echo test on the USB mic and speaker: 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
+  - [ ] Echo test on the USB mic and speaker (short probe and live 50 s hold passed Nov 5; the long `--transport --repeat 10` run is left): 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
   - [x] Spotify on the Pi: plays in the face with `--spotify-player` (ADR-031)
   - [x] CPU, temperature, memory, and throttling logging (`system_stats` events, doctor `pi` section), not run on a Pi
   - [x] Smart Turn timing on a Pi: 158 ms a decision, over the 120 ms budget, so stay on Flux
@@ -206,7 +220,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [x] One live Mac run with `stt=voice_listen,tts=voice_speak`, and the Cartesia interruption bench through the servers (Nov 4)
 - [x] Measure the extra audio hop through the servers on the Mac (`bench/voice_hop_probe`, Nov 4): under 0.5 ms a frame each way, +0.6 ms (stdio) and +2.1 ms (HTTP) from request to first chunk, +6 to 21 ms per stream open (ADR-032). After the event queue (a3bec1e): first-chunk p95 3.3 ms on stdio, was 17 ms
 - [x] Send voice events without blocking the relay's down loop (Nov 4, a3bec1e): first-chunk p95 fell from 17 ms to 3.3 ms on stdio
-- [ ] Switch the Pi service and the live command to the voice stages: the Mac live run passed on Nov 4, so this waits only on the Pi run
+- [ ] Switch the Pi service and the live command to the voice stages: the Pi run passed on Nov 5 (`20261105-203514-1a2f7a`, upstream connect about 0.7 s each, relay hops 3 to 12 ms), so only the service change is left
 - [x] `append_text`, `pause`, `resume`, `interrupt(kind)` dropped: Pipecat sends these as Cartesia messages on the stream (ADR-032)
 - [x] Wire `VoiceEventFrame`s into pipeline actions (ADR-008): dropped. With thin servers, Pipecat's own Flux and Cartesia services act on the provider messages, and the voice events are logged for the benchmark (ADR-032)
 - [x] Reconnect when a voice server's MCP session or stream drops after a long idle (Nov 4, fakes): provider drop, a refused reconnect, a dead server process, Cartesia's idle timeout, and a stop during a connect all recover, over stdio and HTTP, with no leaked socket, call, or process. A whole bot run heard and spoke a second turn after both streams dropped (ADR-032, `tests/test_voice_reconnect.py`)
