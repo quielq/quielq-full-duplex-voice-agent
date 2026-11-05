@@ -13,7 +13,7 @@ Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5,
 Done on the Mac, Nov 4: the live run through both voice servers (`20261104-202417-64248a`, headline p50 3.0 s, no-tool 2.8 s, tool 4.4 s, ADR-036), the Cartesia interruption bench direct and through `voice-speak` (over-commit 1 word), `delegate` from a script and by voice, the recovery clips, and the `bash` delete read-back after a prompt fix (`20261104-204433-6a77ad`).
 
 1. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages. Nov 5 (`20261105-203514-1a2f7a`): voice stages, the hop probes, the short echo probe, a 50 s echo hold, barge-in, and `bash` in `bwrap` passed; the long echo probe was skipped. Left: the boot service.
-2. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task. Nov 5 on the Pi: 28 kept turns, p50 2.56 s, $0.21 (ADR-036).
+2. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task. Nov 5 on the Pi: 35 kept turns, p50 2.59 s, $0.26 (ADR-036).
 3. Pi cooling and power before the demo. Nov 5: 53 to 60 C with the fan and no throttling, but one firmware stall dropped the USB mic and rebooted the Pi.
 4. Small fixes found live on Nov 4, below under "Found in the Nov 4 live runs".
 
@@ -202,7 +202,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] Add Deepgram Nova-3 so Smart Turn can be A/B tested against Flux fairly
 - [x] Build reply templates to skip the second LLM call: off by default, saved 296 ms against a 300 ms bar on 120b (ADR-020)
 - [x] Measure from real audio, not framework events: `latency_probe` reads sample-level marks at the input and output, drops three warm-up turns per session, and reports p50/p90/p95 for tool and no-tool turns with cost per turn; `latency_bench` makes the runs on fakes (ADR-036, branch `claude/latency-bench-e97788`)
-- [ ] Run `latency_bench` live for 30 or more kept turns per condition, with `ME3_LIVE=1` and approval, at two times of day. Nov 5, 22:33, Pi, voice servers, Haiku: 28 kept turns, p50 2.56 s, p90 3.05 s (no tool 2.47 s, tool 2.67 s), $0.21 (ADR-036). Left: two more kept turns, and a second time of day
+- [ ] Run `latency_bench` live for 30 or more kept turns per condition, with `ME3_LIVE=1` and approval, at two times of day. Nov 5, 22:33 to 22:46, Pi, voice servers, Haiku: 35 kept turns over five sessions, p50 2.59 s, p90 3.09 s (no tool 2.47 s over 18, tool 2.72 s over 17), $0.26 (ADR-036). Left: a second time of day, and 30 per group if "per condition" means tool and no-tool
 - [ ] Stop latency from the same audio marks: interrupter onset to output silence
 - [ ] Cost per successful task: join the task judge to the probe's cost per turn
 - [ ] `bench.latency_bench` refuses on the Pi even with every clip cached: `request_wav` checks for macOS `say` before it checks the cache. Check the cache first. Nov 5 workaround: copy `data/latency_bench/wavs` from the Mac and put a stand-in `say` that exits 1 first on `PATH`
