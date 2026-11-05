@@ -41,6 +41,8 @@ filler:
   phrases: [one_sec, just_a_moment, let_me_see, on_it, working_on_it]
   # Only these tools play it when they start; a quick tool's reply comes before it would end.
   slow_tools: [search, fetch_content, get_weather, index_documents, bash, serve, write_file, play_music]
+  # A quick tool restarts the wait from its start: its reply came 1.45 to 1.64 s later on Nov 4.
+  after_tool_ms: 2000
 
 addressing:
   # No wake word (harness/addressing.py, ADR-016). Off until tuned on real rooms.

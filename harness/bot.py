@@ -219,7 +219,7 @@ def _filler(cfg: Config, log: EventLog, addressing: Addressing | None = None) ->
     log.emit("filler_clip", phrases=names, real=len(names) - len(missing))
     is_active = (lambda: addressing.state.active) if addressing else (lambda: True)
     return FillerProcessor(clips, rate, after_ms=f["after_ms"], on_event=log.emit, is_active=is_active,
-                           slow_tools=f.get("slow_tools"))  # fmt: skip
+                           slow_tools=f.get("slow_tools"), after_tool_ms=f.get("after_tool_ms"))  # fmt: skip
 
 
 def _vad(cfg: Config) -> VADProcessor:

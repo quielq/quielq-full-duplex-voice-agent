@@ -1,7 +1,9 @@
 """Waiting phrase (ADR-009): a short local clip while the agent is working.
 
 Sits between the TTS and the output. It plays when a slow tool starts, or when no reply audio
-has started ``after_ms`` after end of turn. At most once per turn, never once the reply has
+has started ``after_ms`` after end of turn. A quick tool (not in ``slow_tools``) moves that
+timer to ``after_tool_ms`` after the tool starts, because its reply needs a second LLM call
+and a clip at 1500 ms delayed it by about 0.85 s on Nov 4 (ADR-033). At most once per turn, never once the reply has
 started, and queued clip audio is flushed by any interruption like other output audio. With
 several clips it rotates, and never plays the same one twice in a row.
 
@@ -49,11 +51,13 @@ class FillerProcessor(FrameProcessor):
         is_active: Callable[[], bool] = lambda: True,
         never_tools: Sequence[str] = ("stay_silent",),
         slow_tools: Collection[str] | None = None,
+        after_tool_ms: float | None = None,
         rng: random.Random | None = None,
         on_event: Callable[..., object] | None = None,
         **kwargs,
     ):
-        """``slow_tools`` limits which tool starts play the clip; None means any tool."""
+        """``slow_tools`` limits which tool starts play the clip; None means any tool.
+        ``after_tool_ms`` restarts a waiting timer when another tool starts; None leaves it."""
         super().__init__(**kwargs)
         clips = [clip] if isinstance(clip, (bytes, bytearray)) else list(clip)
         # Whole 40 ms output chunks, so no chunk mixes a clip with the reply after it and the
@@ -68,6 +72,7 @@ class FillerProcessor(FrameProcessor):
         self._slow_tools = None if slow_tools is None else set(slow_tools)
         self._sample_rate = sample_rate
         self._after_s = after_ms / 1000
+        self._after_tool_s = None if after_tool_ms is None else after_tool_ms / 1000
         self._is_active = is_active
         self._never_tools = set(never_tools)
         self._on_event = on_event or (lambda *a, **k: None)
@@ -108,9 +113,14 @@ class FillerProcessor(FrameProcessor):
             self._awaiting_bot_start = False
         elif isinstance(frame, FunctionCallInProgressFrame):
             name = frame.function_name
-            if name not in self._never_tools and (self._slow_tools is None or name in self._slow_tools):
+            if name in self._never_tools:
+                pass
+            elif self._slow_tools is None or name in self._slow_tools:
                 await self._cancel_timer()
                 await self._trigger("tool_call")
+            elif self._after_tool_s is not None and self._timer and not self._timer.done():
+                await self._cancel_timer()
+                self._timer = self.create_task(self._after_silence(self._after_tool_s))
         elif isinstance(frame, BotStartedSpeakingFrame):
             self._bot_speaking = True
         elif isinstance(frame, BotStoppedSpeakingFrame):
@@ -120,8 +130,8 @@ class FillerProcessor(FrameProcessor):
             await self._reply_begins()
         await self.push_frame(frame, direction)
 
-    async def _after_silence(self) -> None:
-        await asyncio.sleep(self._after_s)
+    async def _after_silence(self, wait_s: float | None = None) -> None:
+        await asyncio.sleep(self._after_s if wait_s is None else wait_s)
         await self._trigger("timer")
 
     async def _trigger(self, reason: str) -> None:

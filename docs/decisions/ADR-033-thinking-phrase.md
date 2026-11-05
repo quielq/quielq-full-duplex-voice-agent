@@ -31,6 +31,12 @@ The waiting phrase from ADR-009 already does most of this. It is local audio tha
 - The latency headline is unchanged: the phrase still never counts as first audio (ADR-009).
 - The 1500 ms threshold and the slow-tool list are guesses to check against live runs.
 
+## Update, Nov 5, 2026: quick tools wait longer
+
+The Nov 4 live run (`20261104-202417-64248a`) played the clip on every quick tool turn (`get_time`, `set_timer`, `list_files`). The tool ended about 1.04 s after end of turn, the clip started at 1.5 s, and the reply audio, ready at about 2.5 s, waited behind it: first sound out came at 3.3 to 3.7 s. The clip made those turns about 0.85 s slower.
+
+A quick tool, one not in `slow_tools`, now restarts the waiting timer at `after_tool_ms` (2000 ms) from the tool start. On Nov 4 the reply came 1.45 to 1.64 s after a quick tool started, so it should play first; a slow reply still gets the clip. Slow tools play it at once, as before. Checked on fakes only.
+
 ## Sources
 
 - ADR-009 (waiting phrase), ADR-020 (reply templates), ADR-032 (voice-speak server).
