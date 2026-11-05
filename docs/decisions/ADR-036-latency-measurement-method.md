@@ -55,6 +55,20 @@ Until now `bench/latency_probe.py` was a skeleton. The live numbers so far (p50 
 
 Attribution at p50: end-of-turn wait 1,306 ms, LLM first token 782 ms, TTS first byte 376 ms, tool call 384 ms. The end-of-turn wait the old figures left out is the largest single part. The thinking phrase played on 4 of 15 turns, 2.6 s after speech at p50, on every tool turn that took over 1500 ms after end of turn, including `get_time` and `set_timer`, because a tool turn needs two LLM calls. Cost $0.012 a turn.
 
+## Pi benchmark, Nov 5
+
+`bench.latency_bench --profile pi --sessions 4 --turns 10 --stages stt=voice_listen,llm=anthropic,tts=voice_speak`, Raspberry Pi 5, scripted wav turns (synthetic `say` speech, clock server only, so the tool turns are `set_timer`, `get_time`, and `list_timers`). Runs `20261105-223356-74b35c`, `20261105-223535-19209f`, `20261105-223718-fd171a`, and `20261105-223855-3d2f74`, report `logs/latency-20261105-224036.json` on the Pi. 40 turns, 3 warm-up turns dropped per run, 28 measured, $0.21 ($0.0052 a turn).
+
+| Turns | n | p50 | p90 | p95 | max |
+| --- | --- | --- | --- | --- | --- |
+| All | 28 | 2,563 ms | 3,052 ms | 3,121 ms | 3,366 ms |
+| No tool | 14 | 2,474 ms | 2,820 ms | 2,890 ms | 3,010 ms |
+| Tool | 14 | 2,674 ms | 3,121 ms | 3,208 ms | 3,366 ms |
+
+Attribution at p50: end-of-turn wait 1,108 ms (end of turn 1,046 ms after speech), LLM first token 657 ms, TTS first byte 281 ms, tool call 13 ms, VAD release 182 ms. The thinking phrase played on none of the 28 turns. The end-of-turn wait is still the largest part, as on the Mac.
+
+Against the Nov 4 Mac run: p50 2.6 s against 3.0 s. The tool turns are much closer to the no-tool turns here (2.7 s against 4.4 s), because these clock tools take 13 ms and the Mac run's tools were slower and fewer. So this is the headline for scripted turns with quick tools, not for weather or search turns. 28 kept turns is two short of the 30 the benchmark plan asks for, and it is one time of day.
+
 ## Sources
 
 - `docs/architecture.md`, Benchmark harness: Definitions and Run protocol.
