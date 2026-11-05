@@ -55,6 +55,20 @@ Until now `bench/latency_probe.py` was a skeleton. The live numbers so far (p50 
 
 Attribution at p50: end-of-turn wait 1,306 ms, LLM first token 782 ms, TTS first byte 376 ms, tool call 384 ms. The end-of-turn wait the old figures left out is the largest single part. The thinking phrase played on 4 of 15 turns, 2.6 s after speech at p50, on every tool turn that took over 1500 ms after end of turn, including `get_time` and `set_timer`, because a tool turn needs two LLM calls. Cost $0.012 a turn.
 
+## Pi benchmark, Nov 5
+
+`bench.latency_bench --profile pi --stages stt=voice_listen,llm=anthropic,tts=voice_speak`, Raspberry Pi 5, scripted wav turns (synthetic `say` speech, clock server only, so the tool turns are `set_timer`, `get_time`, and `list_timers`). Five sessions of 10 turns, at 22:33 to 22:46: `20261105-223356-74b35c`, `20261105-223535-19209f`, `20261105-223718-fd171a`, `20261105-223855-3d2f74` (one `--sessions 4` call), then `20261105-224553-20043c` (`--sessions 1`). Combined with `bench.latency_probe` over the five run ids, report `logs/latency-20261105-224741.json` on the Pi. 50 turns, 3 warm-up turns dropped per run, 35 measured, $0.26 ($0.0053 a turn).
+
+| Turns | n | p50 | p90 | p95 | max |
+| --- | --- | --- | --- | --- | --- |
+| All | 35 | 2,592 ms | 3,089 ms | 3,168 ms | 3,366 ms |
+| No tool | 18 | 2,474 ms | 2,937 ms | 3,016 ms | 3,049 ms |
+| Tool | 17 | 2,721 ms | 3,183 ms | 3,292 ms | 3,366 ms |
+
+Attribution at p50: end-of-turn wait 1,156 ms (end of turn 1,087 ms after speech), LLM first token 662 ms, TTS first byte 281 ms, tool call 13 ms, VAD release 181 ms. The thinking phrase played on none of the 35 turns. The end-of-turn wait is still the largest part, as on the Mac. The first four sessions alone gave p50 2,563 ms over 28 turns, so the fifth moved the headline by 29 ms.
+
+Against the Nov 4 Mac run: p50 2.6 s against 3.0 s. The tool turns are much closer to the no-tool turns here (2.7 s against 4.4 s), because these clock tools take 13 ms and the Mac run's tools were slower and fewer. So this is the headline for scripted turns with quick tools, not for weather or search turns. It is one time of day, and each of the tool and no-tool groups has under 30 turns.
+
 ## Sources
 
 - `docs/architecture.md`, Benchmark harness: Definitions and Run protocol.
