@@ -45,7 +45,7 @@ Quiel chose B on Nov 4.
 
 ## Consequences
 
-- **Measured on fakes, Nov 4:** a spoken turn with `stt=voice_listen,tts=voice_speak` set a timer and replied over stdio and HTTP. First audio came 70 ms after the end of the turn, and voice events took 2 to 7 ms over MCP. The extra hop for audio frames was measured on the Mac the same day, below. The Pi is not measured yet.
+- **Measured on fakes, Nov 4:** a spoken turn with `stt=voice_listen,tts=voice_speak` set a timer and replied over stdio and HTTP. First audio came 70 ms after the end of the turn, and voice events took 2 to 7 ms over MCP. The extra hop for audio frames was measured on the Mac the same day and on the Pi on Nov 5, below.
 - **Audio hop on the Mac, Nov 4** (`bench/voice_hop_probe`, 250 frames of 20 ms, loopback fakes, MacBook Air arm64). The relay against a direct WebSocket to the same fake, p50 added (relay p95 in brackets):
   - 16 kHz frames up, one way: no measurable cost (relay 0.21 ms p50, 0.52 ms p95 on stdio; 0.20 ms and 0.32 ms on HTTP). The direct path was slower here because the fake and the client share one event loop, so up to about 0.3 ms is noise.
   - 24 kHz chunks down, one way: +0.33 ms on stdio, +0.39 ms on HTTP (relay p95 1.6 ms and 1.3 ms).
@@ -67,6 +67,9 @@ Quiel chose B on Nov 4.
   - `upstream_connected` now comes before `stream_ready`, so `bench/voice_hop_probe`'s open time no longer includes the socket handshake, which is under 1 ms.
 - **Interruption through `voice-speak`, live, Nov 4** (`bench.interruption_test --tts voice_speak`, run `20261104-202147-ab3d44`, $0.0246). Cartesia truncates the same through the relay as direct: 9 words heard, 10 committed, over-commit 1, stop 277 ms (direct: 245 ms, mostly VAD onset; flush 7 ms against 9 ms). This was the first live run of a reply cancelled through the relay.
 - **First live mic run through both servers, Nov 4** (`20261104-202417-64248a`, MacBook Air speakers with `--echo-cancel`, Haiku 5.5, 18 turns, $0.21). Both streams opened (Cartesia 494 ms, Flux 786 ms), stayed up for the whole 5 minute run, and every turn was heard and spoken. Transcript events took 16 to 38 ms over MCP. Interrupting the story through `voice-speak` worked by voice. One turn was the bot hearing its own reply through the speakers ("I can't delete"), so the echo canceller let a few words through at speaker volume.
+- **Hop cost on the Pi, Nov 5** (`bench/voice_hop_probe`, 250 frames, 10 opens, loopback fakes, Raspberry Pi 5, `logs/voice-hop-20261105-220737.json` on the Pi). Added at p50, relay against direct: frames up +0.11 ms (stdio) and +0.10 ms (HTTP), chunks down no measurable cost, request to first chunk +0.95 ms and +0.62 ms (relay p95 1.4 ms and 1.9 ms), stream open +16 ms and +18 ms. Cold opens, server start included, 1.3 to 1.7 s, against 0.75 to 0.97 s on the Mac. So the hop still adds well under 1 ms a frame on the Pi; only the first open of a session is slower.
+- **MCP events on the Pi, Nov 5** (`bench/voice_bridge_probe`, stubs): event hop p50 2.0 ms (stdio) and 2.2 ms (HTTP), p95 3.3 ms and 4.3 ms, duck round trip 4.0 and 6.6 ms, stop to `playback_stopped` 4.6 and 7.1 ms. In line with the Mac numbers in ADR-008.
+- **First live run on the Pi through both servers, Nov 5** (`20261105-203514-1a2f7a`, USB mic and speaker with WebRTC AEC, Haiku 5.5, 30 turns, $0.40). Upstream connects about 0.7 s each, relay event hops 3 to 12 ms, both streams up for the whole 11 minutes.
 - The stubs and `bench/voice_bridge_probe.py` stay as they are, for the hop measurement.
 
 ## Sources
