@@ -150,6 +150,24 @@ async def test_only_slow_tools_trigger_on_start():
     assert await _triggers([UserStoppedSpeakingFrame(), _call("set_timer"), SleepFrame(0.1)], **slow) == ["timer"]
 
 
+async def test_a_quick_tool_moves_the_timer_later():
+    slow = {"slow_tools": ["search"], "after_tool_ms": 150}
+    # The 30 ms timer would fire, but the quick tool restarts it at 150 ms.
+    frames = [UserStoppedSpeakingFrame(), _call("set_timer"), SleepFrame(0.08)]
+    assert await _triggers(frames, **slow) == []
+    assert await _triggers(frames + [SleepFrame(0.15)], **slow) == ["timer"]
+    # A quick tool with no waiting timer starts none.
+    assert await _triggers([_call("set_timer"), SleepFrame(0.2)], **slow) == []
+    # A slow tool still plays at once.
+    assert await _triggers([UserStoppedSpeakingFrame(), _call("search"), SleepFrame(0.05)], **slow) == ["tool_call"]
+
+
+def test_profiles_wait_longer_after_a_quick_tool():
+    for profile in ("mac", "pi"):
+        f = load_config(profile).profile["filler"]
+        assert f["after_tool_ms"] > f["after_ms"]
+
+
 async def test_clips_rotate_without_repeats():
     import random
 

@@ -141,22 +141,35 @@ def list_files(
     file_pattern: Annotated[str, Field(description="Only these file names, for example *.pdf")] = "*",
     max_results: Annotated[int, Field(ge=1, le=100)] = 20,
 ) -> dict:
-    """List the files in the workspace and documents folders, newest first."""
+    """List the files in the workspace and documents folders, newest first. To say what is in a folder, use the summaries: they count every file, and name each top-level folder and file."""
     found: list[tuple[float, int, str]] = []
+    summaries: dict[str, dict] = {}
     for root in _readable():
+        summary = summaries.setdefault("workspace" if root == workspace_dir() else "documents",
+                                       {"folders": {}, "files": [], "total_files": 0})  # fmt: skip
         for p in root.rglob("*"):
             hidden = any(s.startswith(".") for s in p.relative_to(root).parts)
             if hidden or p.is_symlink() or not p.is_file() or not fnmatch.fnmatch(p.name, file_pattern):
                 continue
             stat = p.stat()
+            top = p.relative_to(root).parts
+            summary["total_files"] += 1
+            if len(top) > 1:
+                summary["folders"][top[0]] = summary["folders"].get(top[0], 0) + 1
+            else:
+                summary["files"].append(top[0])
             # A relative path starts from the workspace, so read_file needs documents in full.
             name = str(p.relative_to(root)) if root == workspace_dir() else str(p)
             found.append((stat.st_mtime, stat.st_size, name))
     found.sort(reverse=True)
     files = [{"path": name, "bytes": size, "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime))}
              for mtime, size, name in found[:max_results]]  # fmt: skip
+    for summary in summaries.values():
+        summary["folders"] = dict(sorted(summary["folders"].items()))
+        summary["files"].sort()
     return {"files": files, "truncated": len(found) > max_results, "workspace_folder": str(workspace_dir()),
-            "documents_folder": str(documents_dir())}  # fmt: skip
+            "documents_folder": str(documents_dir()),
+            "workspace_summary": summaries.get("workspace"), "documents_summary": summaries.get("documents")}  # fmt: skip
 
 
 @mcp.tool(

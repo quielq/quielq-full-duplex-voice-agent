@@ -236,6 +236,18 @@ def test_list_files_shows_both_folders_newest_first(data):
     assert workspace.list_files(max_results=1)["truncated"] is True
 
 
+def test_list_files_sums_up_every_top_level_folder(data):
+    # On Nov 4 Haiku named only the newest folder when asked to list the workspace.
+    for i in range(25):
+        workspace.write_file(f"site/page{i}.html", "x")
+    workspace.write_file("notes/a.txt", "x")
+    workspace.write_file("packing.txt", "x")
+    out = workspace.list_files(max_results=5)
+    assert out["truncated"] is True
+    assert out["workspace_summary"] == {"folders": {"notes": 1, "site": 25}, "files": ["packing.txt"],
+                                        "total_files": 27}  # fmt: skip
+
+
 def test_files_round_trip():
     workspace.write_file("a/b.txt", "one two")
     assert workspace.read_file("a/b.txt")["text"] == "one two"

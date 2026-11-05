@@ -2,7 +2,7 @@
 
 A spoken run of about 6 minutes on the Mac. It shows the tools, the guardrails, the skips (reply templates and track skip), and the turns (end of turn, barge-in, held actions).
 
-This is a paid run, about $0.20 going by the Nov 2 run in `docs/quickstart-mac.md`.
+This is a paid run, about $0.20 (an 18 turn run on Nov 4 cost $0.21, mostly Cartesia).
 
 ## Before you start
 

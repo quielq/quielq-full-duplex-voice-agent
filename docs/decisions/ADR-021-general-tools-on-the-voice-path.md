@@ -65,6 +65,11 @@ Fakes pick tools by rule, so these runs say nothing about whether a real model s
 
 Run `20261101-192724-03eda3` asked "What files can you see?". No tool listed files, so the model chose `bash` with `ls -la`, which needs spoken confirmation and is a mock. `list_files` is read only, so it runs at once. It lists both folders, newest first, so "the latest file" is answerable. `~/Downloads` stays outside the roots.
 
+
+## Addendum, Nov 5, 2026: `list_files` summaries
+
+Asked to list the workspace in run `20261104-202417-64248a`, Haiku named only the newest folder, `delegate_trial`, though the tool returned every file. The flat list, newest first with the read-only documents mixed in as full paths, invites naming the top of it. `list_files` now also returns `workspace_summary` and `documents_summary`: each top-level folder with its file count, the loose files, and a total. They count every file, so they stay whole when the list is cut at `max_results`. The description tells the model to answer from them. The `files` list is unchanged, so "the latest file" still works. Checked on fakes only.
+
 ## Addendum, Nov 1, 2026: ADR-024
 
 ADR-024 turns on weather and fetching by default, closes the DNS rebinding gap, and adds a read-back, a command guard, and an OS sandbox for `bash` and `serve`. The sandbox consequence above is resolved by it.

@@ -33,6 +33,13 @@ barge_in:
   backchannel_max_words: 1
   allowlist: ["stop", "wait", "no", "cancel", "pause"]   # quoted: bare no is a YAML boolean
 
+self_echo:
+  # With audio.echo_cancel on, a transcript that cut the bot off and repeats its own recent words
+  # is dropped instead of answered (harness/self_echo.py, ADR-042). Allowlist words always count.
+  enabled: true
+  min_words: 3
+  window_s: 15
+
 filler:
   # Waiting phrase (harness/filler.py, ADR-009, ADR-033). Never counts toward latency.
   enabled: true
@@ -41,6 +48,8 @@ filler:
   phrases: [one_sec, just_a_moment, let_me_see, on_it, working_on_it]
   # Only these tools play it when they start; a quick tool's reply comes before it would end.
   slow_tools: [search, fetch_content, get_weather, index_documents, bash, serve, write_file, play_music]
+  # A quick tool restarts the wait from its start: its reply came 1.45 to 1.64 s later on Nov 4.
+  after_tool_ms: 2000
 
 addressing:
   # No wake word (harness/addressing.py, ADR-016). Off until tuned on real rooms.

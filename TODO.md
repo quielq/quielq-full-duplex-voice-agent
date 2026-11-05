@@ -43,9 +43,10 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 ## Found in the Nov 4 live runs
 
 - [x] Haiku refused to delete with `bash`, saying it would be permanent, so the read-back never ran. The `bash` description and prompt now say a delete asks first and keeps a copy (86c71f5), and the retry worked
-- [ ] Echo on the Mac speakers: the bot heard a few of its own words once ("I can't delete") and cut itself off. Headphones avoid it; check the Pi's AEC for the same
-- [ ] The thinking phrase played on every tool turn, `get_time` and `set_timer` included, because a tool turn needs two LLM calls and takes 3.3 to 3.7 s. Decide whether that is fine or the threshold should differ for tool turns
-- [ ] Asked to list the workspace, Haiku's reply named only the `delegate_trial` files though the tool returned all of them
+- [x] Echo on the Mac speakers: the bot heard a few of its own words once ("I can't delete"), cut itself off, and answered them. With echo cancelling on, its own recent words that cut it off are no longer answered (Nov 5, ADR-042, fakes only). The cut-off itself remains: headphones on the Mac, and the Pi echo test
+- [x] The thinking phrase played on every tool turn and delayed quick tool replies by about 0.85 s. A quick tool now restarts the wait at 2000 ms (Nov 5, ADR-033, fakes only)
+- [x] DeepSeek said "I'll check your documents" before a tool call. A waiting phrase before a tool call is now dropped before the TTS (Nov 5, ADR-041, fakes only)
+- [x] Asked to list the workspace, Haiku's reply named only the `delegate_trial` files though the tool returned all of them. `list_files` now adds a count per top-level folder for each root (Nov 5, ADR-021, fakes only)
 - [ ] Cost: the 18-turn run was $0.21, about $0.012 a turn, mostly Cartesia. Each Haiku call sends about 8,400 prompt tokens, so prompt caching (Latency, below) would help
 - [ ] The end-of-turn wait is the largest part of the headline at 1.3 s p50 (ADR-036)
 

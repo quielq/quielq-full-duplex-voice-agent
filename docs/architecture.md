@@ -1,8 +1,54 @@
 # ME3 Architecture Review: Full-Duplex Voice Agent on Raspberry Pi 5
 
-Revision 2, Oct 21, 2026 · Quiel Quiwa
+Revision 2, Oct 21, 2026 · Quiel Quiwa. As-built section added Nov 5, 2026.
 
 This revision folds in the verification research on Pipecat, providers, licences, and benchmarks. The list of what changed from revision 1 is at the end of the Decisions section. Items marked unverified come from third-party pages or were not checked.
+
+The sections after "As built" are the Oct 21 review, kept as the design record, with dated notes where the build has moved on. Where they disagree with "As built" or an ADR, the newer one wins. For the code itself, see `docs/codebase.md`.
+
+## As built (Nov 5, 2026)
+
+```mermaid
+flowchart LR
+  subgraph DEV["Mac (Phase 1) or Pi 5 (Phase 2): harness/bot.py"]
+    MIC["USB mic or headphones"] --> AEC["WebRTC AEC<br/>on speakers"]
+    AEC --> VAD["Silero VAD"]
+    VAD --> STT["Flux STT service"]
+    STT --> AGG["Turn end: Flux"]
+    AGG --> LLM["LLM service"]
+    LLM --> TTS["Cartesia TTS service"]
+    TTS --> OUT["Playback: flush on barge-in,<br/>waiting phrase, stored clips"]
+    OUT --> SPK["USB speaker or headphones"]
+    LLM <--> POL["Tool policy<br/>undo, read-back, yes"]
+    FACE["Robot face<br/>127.0.0.1:8770"]
+  end
+  POL -->|"MCP stdio or HTTP"| TASK["10 task servers"]
+  TASK -->|"delegate"| WORKER["Background worker<br/>Haiku 5.5, own tool loop"]
+  STT -.->|"MCP + Unix socket"| VL["voice-listen"]
+  TTS -.->|"MCP + Unix socket"| VS["voice-speak"]
+  VL --> FLUX["Deepgram Flux"]
+  VS --> CART["Cartesia"]
+  LLM --> CL["Anthropic Haiku 5.5<br/>or OpenRouter"]
+```
+
+| Area | Designed (Oct 21) | Built | Where |
+| --- | --- | --- | --- |
+| ASR | Deepgram Flux | Flux, which also owns end of turn. Smart Turn took 158 ms a decision on the Pi, over budget | ADR-005, ADR-018 |
+| LLM | Groq gpt-oss-20b first | Claude Haiku 5.5 on Anthropic. OpenRouter for document agents and a per-session model picker, from a priced list only | ADR-025, ADR-040 |
+| TTS | Cartesia, Aura-2 for bulk | Cartesia (Skylar voice), with word timestamps so context keeps only heard words. Aura-2 is wired but cannot truncate | ADR-006, ADR-015 |
+| Voice servers | MCP servers that hold ASR and TTS | `voice-listen` and `voice-speak` hold the keys and provider streams. MCP carries `listen`, `speak`, `stop`, and events. Audio rides a Unix socket. Playback, ducking, and AEC stay in the harness, so `duck` and `interrupt` are not server tools | ADR-008, ADR-032 |
+| Task servers | Seven | Ten: clock, notes, docs, workspace, knowledge, music, comms, lights, thermostat, delegate. Tool list in `docs/tools.md` | ADR-021, ADR-024 |
+| Tool safety | Hints plus undo window | `harness/tool_policy.py`: undo windows, read-backs from real arguments, spoken yes, a command policy and OS sandbox for `bash`, session containment | ADR-011, ADR-024, ADR-034 |
+| Barge-in | Duck-then-decide | Default is Pipecat's immediate stop (measured 245 to 277 ms, 1 word over-committed with Cartesia). Duck mode is a prototype, off by default | ADR-006, ADR-007 |
+| Echo | Speakerphone with hardware AEC | Separate USB mic and speaker, WebRTC AEC in the harness (0.34 ms per 20 ms block on the Pi). A transcript that repeats the bot's own recent words is dropped. The long Pi echo test is still open | ADR-013, ADR-029, ADR-042 |
+| Addressing | No wake word, three filters | Built, off by default, tested on fakes only | ADR-016 |
+| Waiting phrase | One clip after about 600 ms | Five rotating clips after 1500 ms, or when a slow tool starts. A waiting phrase the model says itself is dropped | ADR-033, ADR-041 |
+| Reliability | Fallback phrases, reconnects | TCP probe on a provider error, stored `network_lost` and `cap_reached` clips, voice server reconnects | ADR-037 |
+| Complex task | Delegate to onit | Our own worker loop on Haiku 5.5 behind `delegate`, with the workspace tools. OnIt is dropped. Website jobs also run in the voice loop itself with `write_file` | ADR-028, ADR-035 |
+| Screen | Not in the review | Robot face in a browser, with chat, devices, mute, music, light and thermostat taps (through the same policy), and an agent picker and builder | ADR-027, ADR-038, ADR-039 |
+| Latency method | Audio timestamps | Sample-level marks at input and output. First live headline p50 3.0 s (no tool 2.8 s, tool 4.4 s), of which the end-of-turn wait is 1.3 s | ADR-036 |
+
+Measured runs and open items are tracked in `TODO.md`. Still open: the Pi echo test, the voice servers and live `bash` on the Pi, the live latency benchmark of 30 or more turns, and the model comparison.
 
 ## Decisions
 
@@ -44,6 +90,8 @@ Pipecat's MCP support is now verified from its own documentation: `MCPClient` su
 
 ## At a glance
 
+The Oct 21 design. The as-built diagram is at the top of this page.
+
 ```mermaid
 flowchart LR
   subgraph PI["Raspberry Pi 5"]
@@ -73,7 +121,7 @@ Phase 1 builds and debugs the whole agent on your MacBook Air. Phase 2 moves it 
 
 ### Rules that keep the move cheap
 
-1. **One entry point, two profiles.** The same command starts the agent with `--profile laptop` or `--profile pi`. A profile sets the audio devices, sample rate, buffer size, and which providers are used. Nothing else differs.
+1. **One entry point, two profiles.** The same command starts the agent with `--profile mac` or `--profile pi` (`configs/mac.yaml`, `configs/pi.yaml`). A profile sets the audio devices, sample rate, buffer size, and which providers are used. Nothing else differs.
 2. **Hardware behind one small interface.** Microphone input and speaker output go through one `AudioIO` adapter, with device names taken from the profile. Pipecat's local audio transport uses PyAudio (PortAudio), which needs the portaudio system package on both machines. VAD and Smart Turn run through the same ONNX runtime on both machines.
 3. **Only what will run on the Pi runs locally.** On the laptop, VAD and Smart Turn run locally and everything else is an API call, exactly as planned for the Pi. No local model goes into the laptop build that the Pi could not run.
 4. **No laptop-only dependencies.** Pipecat needs Python 3.11 or newer. Use uv to install the same Python minor version on both machines (a third-party Pi 5 build ran Python 3.13 on Debian 13), pin dependencies in a lock file, avoid macOS-only audio libraries, and use no absolute paths. If your Air is Apple silicon, both machines are 64-bit ARM, and a Linux ARM container on the Mac is a cheap way to check the Pi install before touching the Pi.
@@ -161,6 +209,8 @@ Audio frames travel on a local side channel between the audio device, VAD, and t
 **The notification bridge is the largest custom piece.** Pipecat's `MCPClient` turns MCP tools into LLM function calls, but I found no documented way for it to deliver server notifications as pipeline events. A `VoiceMCPBridge` service therefore talks to the voice servers through the raw MCP Python SDK `ClientSession`, with a message handler that turns notifications into Pipecat frames. It should be spiked first. Pin the versions deliberately: the current Pipecat is 1.13.0 (Oct 19, 2026), FastMCP is 4.1.x, and the MCP Python SDK is 2.x (MIT). Pipecat pull request 5624 widens MCP SDK support to 2.x and notes that without it streamable HTTP breaks on SDK 2.x; I did not verify that it is merged, so check, or pin `mcp<2`.
 
 ### Task servers for the ME2 commands
+
+Nov 5, 2026: the table below is the original design. Ten servers are built, with different tool names (for example `play_music`, `set_light`, `list_timers`), plus `docs` and `workspace`. The current list, defaults, and how to make each one real are in `docs/tools.md`.
 
 | Server | Tools | Commands covered | Backing service and notes |
 | --- | --- | --- | --- |
