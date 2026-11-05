@@ -69,6 +69,7 @@ from harness.ducking import DuckGain, DuckingProcessor
 from harness.events import EventLog, TurnEventObserver
 from harness.filler import FillerProcessor
 from harness.preamble import PreambleFilter
+from harness.screen_notes import ScreenNotes
 from harness.self_echo import SelfEchoFilter, SpokenTap, SpokenWords
 from harness.file_input import ScriptedMicSource, Segment
 from harness.mcp_tools import TASK_SERVERS, task_clients
@@ -431,8 +432,10 @@ async def run_bot(
 
         if force_end and input_mode != "text":
             force_end.stt = stt
+        # Taps on the face reach the model at the start of the next user turn (ADR-043).
+        screen_notes = ScreenNotes()
         pipeline = Pipeline(
-            [*front, aggregators.user(), llm, PreambleFilter(log.emit), tts, *tap_procs, *back, aggregators.assistant()]
+            [*front, screen_notes, aggregators.user(), llm, PreambleFilter(log.emit), tts, *tap_procs, *back, aggregators.assistant()]
         )
         worker = PipelineWorker(
             pipeline,
@@ -476,7 +479,8 @@ async def run_bot(
             nonlocal stayed_silent
             stayed_silent = False
             await worker.queue_frame(
-                LLMMessagesAppendFrame(messages=[{"role": "user", "content": text}], run_llm=True)
+                LLMMessagesAppendFrame(messages=[*screen_notes.take(), {"role": "user", "content": text}],
+                                       run_llm=True)  # fmt: skip
             )
             await asyncio.wait_for(turn_obs.reply_done.wait(), reply_timeout_s)
             if not stayed_silent:
@@ -515,7 +519,7 @@ async def run_bot(
         if ui:
             async def screen_tool(tool: str, args: dict) -> dict:
                 result = await policy.run_from_screen(tool, args)
-                log.emit("ui_action", tool=tool, args=args, result=result)
+                log.emit("ui_action", tool=tool, args=args, result=result, noted=screen_notes.add(tool, args, result))
                 return result
 
             async def switch_agent() -> None:
