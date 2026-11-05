@@ -54,8 +54,8 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 
 Mac speakers with `--echo-cancel`, runs `20261105-195338-eb8cc9`, `20261105-195709-7ed5c6` (DeepSeek), `20261105-195758-061828`, 27 turns, $0.28 (plus $0.03 for `20261105-194831-817d86`). Headline p50 3.1 s (no-tool 2.5 s, tool 3.5 s, 17 measured turns, ADR-036).
 
-- [ ] `get_weather` for a misheard place ("Caddon City") never returned: no `tool_call_end`, no timeout event, and nothing was said for 11 s until the user asked again
-- [ ] After a `next_track` tap on the face, Haiku named the old song from context instead of calling `get_now_playing`. Screen actions do not reach the LLM context
+- [x] `get_weather` for a misheard place ("Caddon City") never returned: no `tool_call_end`, no timeout event, and nothing was said for 11 s until the user asked again. Now one 9 s deadline with side by side lookups, and `tool_call_cancelled` and `tool_no_end` in the log and report (ADR-024, fakes only)
+- [x] After a `next_track` tap on the face, Haiku named the old song from context instead of calling `get_now_playing`. Taps now reach the model at the start of the next turn, and `get_now_playing` says never to answer from memory (ADR-043, fakes only)
 - [ ] "wait" was heard as "Great." The bot stopped, then answered it as a new turn ("Glad that helped")
 - [ ] A short "Okay." over the bot's reply cuts it off, and it restarts ("Sorry, my last reply cut off"). Belongs with backchannel handling in Barge-in
 - [ ] Misheard names: "UP Diliman" as "Yuki Deleman", "Mayon Builders" as "my on builders". On the second, DeepSeek answered without a docs tool call

@@ -40,6 +40,12 @@ Finish on the Mac and then move to the Pi. Every part below is chosen at run tim
 - OnIt's Apache-2.0 file is vendored unchanged with its header, which the licence requires.
 - A real message, call, or model run has not happened. All of them wait on a separate go-ahead.
 
+## Update, Nov 5, 2026: one weather deadline
+
+In the live run `20261105-195338-eb8cc9`, "Quezon City" was heard as "Caddon City" and `get_weather` gave no answer for 11 s, until the user spoke again and the call was cancelled with no trace in the log. The tool made up to three calls in a row (the place, the place without "City", the forecast), each with a 10 s limit, so it could outlast the policy's 15 s limit. The Open-Meteo lookup usually takes about 1 s, but the same query took 6.1 s once when retried.
+
+The two place lookups now run side by side, and every call gets what is left of one 9 s deadline, at most 7 s each. Running out returns "the weather service is slow right now, try again", which the bot can say. A tool cancelled by a new turn now logs `tool_call_cancelled`, and the run report flags a tool that started and never ended as `tool_no_end`. Checked on fakes, plus three direct calls to Open-Meteo.
+
 ## Sources
 
 - https://github.com/sibyl-oracles/onit/blob/main/docs/ISOLATION.md
