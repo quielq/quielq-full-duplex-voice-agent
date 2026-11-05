@@ -393,7 +393,7 @@ def test_live_serve_starts_logs_and_stops(monkeypatch):
 def test_weather_retries_a_place_without_city(monkeypatch):
     asked = []
 
-    def geocode(name):
+    def geocode(name, timeout=None):
         asked.append(name)
         return [] if name == "Taguig City" else [{"name": "City of Taguig", "latitude": 14.5, "longitude": 121.0}]
 
@@ -402,13 +402,54 @@ def test_weather_retries_a_place_without_city(monkeypatch):
     monkeypatch.setattr(knowledge, "_geocode", geocode)
     monkeypatch.setattr(knowledge.httpx, "get", lambda *a, **k: answer)
     out, calls = knowledge._open_meteo("Taguig City", False)
-    assert asked == ["Taguig City", "Taguig"]
+    assert sorted(asked) == ["Taguig", "Taguig City"]  # looked up at the same time
     assert out["place"] == "City of Taguig" and calls == 3
 
 
 def test_an_unknown_place_stays_an_error(monkeypatch):
-    monkeypatch.setattr(knowledge, "_geocode", lambda name: [])
+    monkeypatch.setattr(knowledge, "_geocode", lambda name, timeout=None: [])
     assert knowledge._open_meteo("Nowhere City", False) == ({"error": "could not find Nowhere City"}, 2)
+
+
+def test_the_full_place_name_wins_when_both_hit(monkeypatch):
+    def geocode(name, timeout=None):
+        return [{"name": name, "latitude": 14.6, "longitude": 121.0}]
+
+    now = {"temperature_2m": 28, "weather_code": 0, "wind_speed_10m": 4}
+    answer = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"current": now, "daily": {}})
+    monkeypatch.setattr(knowledge, "_geocode", geocode)
+    monkeypatch.setattr(knowledge.httpx, "get", lambda *a, **k: answer)
+    assert knowledge._open_meteo("Quezon City", False)[0]["place"] == "Quezon City"
+
+
+def test_a_slow_weather_lookup_ends_in_a_spoken_error(monkeypatch):
+    """Nov 5: a slow lookup left the bot silent for 11 s. Each call now gets what is left of one deadline."""
+    timeouts = []
+
+    def slow_get(url, params=None, timeout=None):
+        timeouts.append(timeout)
+        time.sleep(min(timeout, 0.4))
+        raise knowledge.httpx.ReadTimeout("slow")
+
+    monkeypatch.setattr(knowledge.httpx, "get", slow_get)
+    monkeypatch.setenv("ME3_TOOL_STAGES", "weather=open_meteo")
+    monkeypatch.setattr(knowledge, "WEATHER_BUDGET_S", 0.6)
+    started = time.monotonic()
+    out = knowledge.get_weather("Caddon City")
+    assert out == {"error": knowledge.WEATHER_SLOW}
+    assert time.monotonic() - started < 1.0  # the two lookups ran side by side
+    assert len(timeouts) == 2 and all(t <= knowledge.WEATHER_CALL_S for t in timeouts)
+
+
+def test_the_forecast_call_gets_only_what_is_left(monkeypatch):
+    monkeypatch.setattr(knowledge, "_geocode", lambda name, timeout=None: (time.sleep(0.5), [{"name": "X", "latitude": 0, "longitude": 0}])[1])
+    monkeypatch.setattr(knowledge.httpx, "get", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no time left")))
+    try:
+        knowledge._open_meteo("X", False, budget_s=0.6)
+    except knowledge._WeatherSlow:
+        pass
+    else:
+        raise AssertionError("the deadline should have run out before the forecast call")
 
 
 def test_a_write_reports_where_the_file_went(data):
