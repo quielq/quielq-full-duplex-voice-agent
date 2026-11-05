@@ -6,7 +6,7 @@ You need a Raspberry Pi 5 with 64-bit Raspberry Pi OS (desktop), a USB mic, a US
 
 **Where it stands (Nov 5):** setup, tests, and a live run with Flux, Haiku 5.5, Cartesia, the face, and Spotify all worked on the Pi on Nov 2 (Bookworm). On Nov 5 a live run through both voice servers passed, with the short echo probe, barge-in, and live `bash` in `bwrap` (run `20261105-203514-1a2f7a`). Not yet done on the Pi: the long echo test, the hop probe, `serve` in `bwrap`, and the boot service.
 
-While the repo is private, the Pi cannot pull from GitHub. Push from the Mac instead: `git push raspberrypi.local:quielq-full-duplex-voice-agent main:refs/remotes/origin/main`, then `git reset --hard origin/main` on the Pi.
+The repo is public (since Nov 5), so the Pi pulls straight from GitHub. To update an existing checkout, run `git checkout main && git pull --ff-only origin main`, then `uv sync`.
 
 ## 1. Get the code and install
 
