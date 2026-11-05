@@ -24,7 +24,7 @@ Nothing on the screen gains any power: the note only reports what `run_from_scre
 
 - A tap followed by a question costs a few more prompt tokens on that turn only.
 - A transcript dropped before the aggregator (the self-echo guard, or the policy answering "cancel" itself) keeps the notes for the following turn.
-- Checked on fakes only: `tests/test_screen_notes.py`.
+- Checked on fakes (`tests/test_screen_notes.py`), then live on Nov 5 (`20261105-202141-d17a53`): after Black Parade played and a next track tap, "What's playing right now?" got "I Don't Love You" with no tool call, from the note.
 
 ## Sources
 
