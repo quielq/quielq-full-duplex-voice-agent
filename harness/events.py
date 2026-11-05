@@ -19,6 +19,7 @@ from pipecat.frames.frames import (
     EagerEndOfTurnCancelFrame,
     EagerTranscriptionFrame,
     ErrorFrame,
+    FunctionCallCancelFrame,
     FunctionCallInProgressFrame,
     FunctionCallResultFrame,
     InterruptionFrame,
@@ -168,6 +169,13 @@ class TurnEventObserver(BaseObserver):
                 {"name": frame.function_name, "args": frame.arguments, "result": frame.result}
             )
             log.emit("tool_call_end", name=frame.function_name, result=frame.result)
+        elif isinstance(frame, FunctionCallCancelFrame):
+            # Broadcast both ways too. An interruption cancels a running tool with no result,
+            # which left no trace in the Nov 5 weather turn.
+            if frame.tool_call_id in self._tool_call_ids:
+                return
+            self._tool_call_ids.add(frame.tool_call_id)
+            log.emit("tool_call_cancelled", name=frame.function_name)
         elif isinstance(frame, TTSStartedFrame):
             log.emit("tts_request")
         elif isinstance(frame, TTSAudioRawFrame):

@@ -27,6 +27,7 @@ The turn then ends with no transcript, so Pipecat's empty turn recovery runs onc
 - A person who interrupts with three or more of the bot's exact recent words, none on the allowlist, is not heard for that turn and gets asked to repeat.
 - With headphones it is off, since there is no echo to catch.
 - Checked on fakes only: unit tests and a whole wav run where the bot's story words cut in.
+- Live on Nov 5 (three Mac speaker runs, 27 turns, long replies such as a story and the planets): no `self_echo` drop and no cut-off from the bot's own words, so the guard had nothing to catch. Every interruption was the user. The drop path is still proven on fakes only.
 
 ## Sources
 

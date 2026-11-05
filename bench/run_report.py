@@ -193,6 +193,19 @@ def find_anomalies(events: list[dict], turns: list[Turn]) -> list[Anomaly]:
         add("warn", "tts_starved", starved[0].get("turn_id"),
             f"{len(starved)} s of speech arrived at {arrived / window:.2f}x real time (ADR-015)")  # fmt: skip
 
+    open_tools: list[dict] = []  # a started tool must end with a result or a cancel
+    for e in events:
+        if e["event"] == "tool_call_start":
+            open_tools.append(e)
+        elif e["event"] in ("tool_call_end", "tool_call_cancelled"):
+            match = next((o for o in open_tools if o.get("name") == e.get("name")), None)
+            if match is not None:
+                open_tools.remove(match)
+            if e["event"] == "tool_call_cancelled":
+                add("warn", "tool_cancelled", e.get("turn_id"), f"{e.get('name')} cancelled before it returned")
+    for o in open_tools:
+        add("error", "tool_no_end", o.get("turn_id"), f"{o.get('name')} started and never returned or cancelled")
+
     played = {e["turn_id"] for e in events if e["event"] == "filler_trigger"}
     ended = {e["turn_id"] for e in events if e["event"] == "end_of_turn"}
     if len(ended) >= 3 and len(played & ended) > len(ended) / 2:

@@ -134,3 +134,15 @@ def test_timeline_hides_noise_unless_asked():
     events = [*GOOD, hop(1000, 0)]
     assert not any("audio_hop" in line for line in timeline(events))
     assert any("audio_hop" in line for line in timeline(events, show_all=True))
+
+
+def test_a_tool_that_never_returns_is_flagged():
+    """Nov 5: get_weather started, the user spoke again, and the log showed nothing more."""
+    start = ev("tool_call_start", 1, 5, name="get_weather", args={})
+    assert "tool_no_end" in codes([*GOOD, start])
+    assert "tool_no_end" not in codes([*GOOD, start, ev("tool_call_end", 1, 6, name="get_weather", result="{}")])
+
+
+def test_a_cancelled_tool_is_a_warning_not_a_missing_end():
+    found = codes([*GOOD, ev("tool_call_start", 1, 5, name="get_weather"), ev("tool_call_cancelled", 1, 6, name="get_weather")])
+    assert "tool_cancelled" in found and "tool_no_end" not in found

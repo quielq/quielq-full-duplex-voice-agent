@@ -37,6 +37,8 @@ The Nov 4 live run (`20261104-202417-64248a`) played the clip on every quick too
 
 A quick tool, one not in `slow_tools`, now restarts the waiting timer at `after_tool_ms` (2000 ms) from the tool start. On Nov 4 the reply came 1.45 to 1.64 s after a quick tool started, so it should play first; a slow reply still gets the clip. Slow tools play it at once, as before. Checked on fakes only.
 
+Live check, Nov 5 (`20261105-195338-eb8cc9`, Mac speakers): five quick tool turns (`get_time`, `set_timer`, `list_timers`, `add_note`, `list_notes`) had no clip and first audio 1.86 to 1.92 s after end of turn, against 3.3 to 3.7 s on Nov 4. The weather turns played the clip once each.
+
 ## Sources
 
 - ADR-009 (waiting phrase), ADR-020 (reply templates), ADR-032 (voice-speak server).

@@ -36,7 +36,8 @@ def _run(action: Callable[[], dict]) -> dict:
     annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}
 )
 def get_now_playing() -> dict:
-    """Read what is playing, and the volume."""
+    """Read what is playing, and the volume. The song changes by itself and from the screen, so call
+    this every time you are asked what is playing; never answer from memory."""
     return _run(lambda: _backend().now_playing())
 
 
