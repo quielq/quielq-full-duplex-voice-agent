@@ -1,3 +1,5 @@
 # Task servers
 
-`clock`, `notes` (SQLite), `thermostat` (mock), `comms` (mock by default, the Mac phone bridge with `comms=bridge`, ADR-024), `lights` (mock, no hardware), and `music` (play, pause, resume, next, previous, volume; mock by default, Spotify with `--stages music=spotify`, ADR-022) are built. The bot starts all nine; `--servers` narrows that. `knowledge`, `docs`, and `workspace` are built (ADR-021, ADR-024). See `docs/tools.md` for what each tool does by default and how to add one. `delegate` waits for Thursday's command list, and the real Xiaomi backend waits on the checks in `TODO.md`. Tool names must be unique across servers, and every tool carries all four MCP annotation hints.
+Ten FastMCP servers, one process each: `clock`, `notes`, `docs`, `workspace`, `knowledge`, `music`, `comms`, `lights`, `thermostat`, and `delegate`. The bot starts all ten, and `--servers clock,notes` narrows that. A document agent starts only `docs`, scoped by `ME3_DOC_SCOPE` (ADR-039).
+
+`docs/tools.md` lists every tool, what it does by default, how to make it real, and how to add a new one. `docs/codebase.md` shows how a server is wired into the harness. Tool names must be unique across servers, and every tool carries all four MCP annotation hints.

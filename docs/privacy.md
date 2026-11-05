@@ -13,7 +13,8 @@ What the agent does today to limit what it hears, keeps, and shares. Each item n
 ## What leaves the device
 
 - **Speech goes to the speech recognition provider only.** The mic stream goes to Deepgram Flux. The harness sets Deepgram's `mip_opt_out=True` (`harness/providers.py`), which opts out of Deepgram's model improvement programme.
-- **Text, not audio, goes to the LLM and TTS.** Anthropic receives the transcript and the conversation, and Cartesia receives the reply text.
+- **Text, not audio, goes to the LLM and TTS.** Anthropic receives the transcript and the conversation, or OpenRouter does when a document agent or the model picker chooses one of its models (ADR-040), and Cartesia receives the reply text.
+- **The voice servers keep the speech keys.** With `stt=voice_listen,tts=voice_speak`, the Deepgram and Cartesia keys live only in those two server processes, and the audio between them and the harness stays on a Unix socket in a private folder (ADR-032).
 - **Keys stay with the harness.** Keys come from `.env`, which git ignores, and are never logged. Task servers start with every `*_API_KEY` removed from their environment, except Tavily for the search server (`harness/mcp_tools.py`).
 - **Messages and calls are mocks by default.** `comms` only sends for real with `ME3_TOOL_STAGES=comms=bridge`, after a spoken read-back of the real arguments and a yes (ADR-024). Contacts live in `data/contacts.yaml`, which git ignores.
 - **The web fetch tool refuses private addresses**, so a page cannot steer it at devices on the local network (`servers/tasks/knowledge/server.py`).
