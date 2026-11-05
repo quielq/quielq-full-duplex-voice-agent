@@ -12,7 +12,7 @@ Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5,
 
 Done on the Mac, Nov 4: the live run through both voice servers (`20261104-202417-64248a`, headline p50 3.0 s, no-tool 2.8 s, tool 4.4 s, ADR-036), the Cartesia interruption bench direct and through `voice-speak` (over-commit 1 word), `delegate` from a script and by voice, the recovery clips, and the `bash` delete read-back after a prompt fix (`20261104-204433-6a77ad`).
 
-1. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages. Nov 5 (`20261105-203514-1a2f7a`): voice stages, the short echo probe, a 50 s echo hold, barge-in, and `bash` in `bwrap` passed. Left: the hop probe, the long echo probe, and the boot service.
+1. On the Pi, in this order: the voice stages, the hop probe, the echo and barge-in test, and live `bash` in `bwrap`. Then switch the boot service to the voice stages. Nov 5 (`20261105-203514-1a2f7a`): voice stages, the hop probes, the short echo probe, a 50 s echo hold, barge-in, and `bash` in `bwrap` passed; the long echo probe was skipped. Left: the boot service.
 2. The latency benchmark (spec item 6, graded): the method is built on fakes (ADR-036). Run `bench.latency_bench` live for 30 or more kept turns, then add cost per successful task.
 3. Pi cooling and power before the demo. Nov 5: 53 to 60 C with the fan and no throttling, but one firmware stall dropped the USB mic and rebooted the Pi.
 4. Small fixes found live on Nov 4, below under "Found in the Nov 4 live runs".
@@ -143,11 +143,11 @@ Pi 5, USB mic and Dell soundbar, WebRTC AEC, `stt=voice_listen,llm=anthropic,tts
   - [ ] Live `bash` and `serve` inside `bwrap` on the Pi: `bash` passed Nov 5 (read-back, spoken yes, 5 s undo, `mkdir` ran, `20261105-203514-1a2f7a`). `serve` not tried
   - [x] WebRTC AEC from `livekit` on the Pi: 0.34 ms per 20 ms block (ADR-029)
   - [x] Set the audio devices in `pi.yaml` to `pipewire` (ADR-029)
-  - [ ] Echo test on the USB mic and speaker (short probe and live 50 s hold passed Nov 5; the long `--transport --repeat 10` run is left, then set `audio.echo_delay_ms` in `pi.yaml` from it: the short probe's best was 50 ms, the file says 30): 60 s of bot speech with nobody talking gives no `user_turn_start`, then a real barge-in still works. Two USB clocks drift, so run it long. Fall back to PipeWire echo-cancel (`scripts/pipewire_aec.conf`) if WebRTC AEC fails
+  - [x] Echo test on the USB mic and speaker: closed Nov 5 on the short probe (no false onsets, both talkers) and a live 50 s hold with no self-cut. The 5 minute `--transport --repeat 10` clock drift run was skipped by Quiel's call, so drift over a long session is unmeasured; rerun it if self-echo grows late in a session. `echo_delay_ms` stays at 30, which the live run used; the short probe's best was 50
   - [x] Spotify on the Pi: plays in the face with `--spotify-player` (ADR-031)
   - [x] CPU, temperature, memory, and throttling logging (`system_stats` events, doctor `pi` section), not run on a Pi
   - [x] Smart Turn timing on a Pi: 158 ms a decision, over the 120 ms budget, so stay on Flux
-  - [ ] Voice server cost on the Pi: `bench/voice_hop_probe` (audio frames) and `bench/voice_bridge_probe.py` (MCP events)
+  - [x] Voice server cost on the Pi (Nov 5, ADR-032): frames +0.1 ms, first chunk +0.6 to +1.0 ms, opens +16 to +18 ms, cold opens 1.3 to 1.7 s; MCP events p50 2.0 to 2.2 ms, p95 3.3 to 4.3 ms
 
 - [x] Check Cartesia delivery from the Philippines: smooth by ear, and used for all live runs since (ADR-015)
 - [x] Spoken fallback on LLM errors such as Groq rejecting `set_timer` with 0 seconds (`harness/recovery.py`, fake-tested)
@@ -286,6 +286,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 ## Housekeeping
 
 - [ ] Recheck Pipecat deprecations on every upgrade (ADR-003)
+- [ ] FastMCP warns that the MCP logging capability is deprecated as of 2026-07-28 (SEP-2577), seen in `bench.voice_bridge_probe` on the Pi, Nov 5. Voice events ride it (ADR-008), so check what replaces it before the next `mcp` or `fastmcp` upgrade
 - [ ] Recheck prices on the day each provider goes live (several are promotional)
 - [ ] Not yet researched: most providers' terms on data use
 - [x] Delete `music-spotify`: compared Nov 3, its work is already on main
