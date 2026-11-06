@@ -20,7 +20,7 @@ The updated class benchmark (fd-benchmark 9d7a824, Nov 6) now logs the context s
 - A tool call still waiting for its result comes after the last user message, so it is always kept. Context frames that come back up from the assistant aggregator after a tool result never pass this processor, so the history is never cut in the middle of a tool loop.
 - `keep_turns: 0` keeps everything, the old behaviour.
 
-**Prompt name and version.** The generalist prompt now opens "You are Via, short for voice input agent". Quiel's pronunciation is "vee-yah". `PROMPT_VERSION` in `harness/bot.py` starts at `v1`, and `run_start` logs it with `keep_turns`. Bump it whenever `SYSTEM_PROMPT` or `agents.DOCUMENT_PROMPT` changes. The class-benchmark entry's new `describe()` sends it to fdbench's results card with the model names. Document agents keep their own names.
+**Prompt name and version.** The generalist prompt now opens "You are VIA, short for voice input agent". Quiel's pronunciation is "vee-yah". `PROMPT_VERSION` in `harness/bot.py` starts at `v1`, and `run_start` logs it with `keep_turns`. Bump it whenever `SYSTEM_PROMPT` or `agents.DOCUMENT_PROMPT` changes. The class-benchmark entry's new `describe()` sends it to fdbench's results card with the model names. Document agents keep their own names.
 
 ## Alternatives
 
@@ -35,7 +35,7 @@ The updated class benchmark (fd-benchmark 9d7a824, Nov 6) now logs the context s
 - Prompt caching: tools and the system prompt stay cached, because the cache marker sits on the system prompt and they come first in the request. Pipecat 1.13 also marks the two latest user messages. Once trimming starts, the start of the history changes every turn, so the cached history from the previous turn no longer matches and is written again. The history at 20 spoken turns is small next to the 8,400 token prefix, so the cost of this is small, but it has not been measured.
 - The model forgets anything said more than 20 turns ago. Tools still hold the real state (timers, notes, lights), so it can look it up again.
 - Renaming the prompt changes the cached prefix once, so the first call after the change writes the cache again.
-- Not checked yet: how Cartesia says "Via". If it reads it as letters or as "vye-uh", spell it differently in the prompt and bump the version.
+- Not checked yet: how Cartesia says "VIA". If it reads it as letters or as "vye-uh", spell it differently in the prompt and bump the version.
 
 ## Sources
 

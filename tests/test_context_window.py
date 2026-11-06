@@ -89,4 +89,4 @@ def test_a_text_session_trims_and_logs_the_prompt_version(tmp_path):
     assert any(e["event"] == "context_trimmed" for e in events)
     users = [m["content"] for m in r.context_messages if m.get("role") == "user"]
     assert len(users) == 2 and users[-1] == "thanks"
-    assert SYSTEM_PROMPT.startswith("You are Via")
+    assert SYSTEM_PROMPT.startswith("You are VIA")

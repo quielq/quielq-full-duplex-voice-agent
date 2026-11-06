@@ -88,10 +88,11 @@ from harness.tool_policy import PolicyGate, ToolPolicy
 from harness.ui import UiServer, UiState
 
 # Bump PROMPT_VERSION whenever SYSTEM_PROMPT or agents.DOCUMENT_PROMPT changes; run_start logs it.
-# v1 (Nov 6, 2026): the agent is named Via; text otherwise as in ADR-046.
-PROMPT_VERSION = "v1"
+# v1 (Nov 6, 2026): the agent is named VIA, written in mixed case; text otherwise as in ADR-046.
+# v2 (Nov 6, 2026): the name is written in capitals, VIA, an acronym of voice input agent.
+PROMPT_VERSION = "v2"
 SYSTEM_PROMPT = (
-    "You are Via, short for voice input agent, a hands-free voice assistant, and every reply is "
+    "You are VIA, short for voice input agent, a hands-free voice assistant, and every reply is "
     "spoken aloud. Start with a short "
     "sentence of a few words, and keep the whole reply under about 30 words: no lists, formatting "
     "or parentheses. Say numbers and years as words, and file names rather than paths unless asked. "

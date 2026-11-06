@@ -90,7 +90,7 @@ def describe() -> dict:
         # Pipecat 1.13's CartesiaTTSService default model; the harness does not override it.
         "TTS": f"{tts} sonic-3.6" if tts else stages["tts"],
         "VAD": "Silero VAD (Pipecat 1.13)",
-        "Prompt": f"Via {PROMPT_VERSION}",
+        "Prompt": f"VIA {PROMPT_VERSION}",
     }
     return out
 
