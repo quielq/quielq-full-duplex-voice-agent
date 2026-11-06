@@ -211,7 +211,7 @@ The course run: ME3 on the Raspberry Pi 5 as the remote assistant (the guide's s
 fd-benchmark at 57eaddb, which adds the course's stage-latency test and deck summary (`docs/STAGES.md` there) and the
 class's targets. fdbench run `2026-11-06_21-22-21`, ME3 run `20261106-212224-666651` on the Pi.
 
-- Stages: Flux and Cartesia through our voice servers, Claude Haiku 5.5, the Pi profile, prompt Via v1 and the 20-turn
+- Stages: Flux and Cartesia through our voice servers, Claude Haiku 5.5, the Pi profile, prompt VIA v1 and the 20-turn
   context limit (ADR-047). Eager end of turn on at 0.5 (ADR-046). Barge-in immediate, addressing off.
 - 10 phrases x 2 runs for the stage test (20 turns; `--runs 2` to save Cartesia credits), then one round of every group
   (10 trials). The stage marks come from fdbench's Pipecat observer, which the launcher attaches to our pipeline
@@ -274,7 +274,7 @@ its first live run.
 - Network: Wi-Fi to the cloud, Wi-Fi to the Mac at 6 ms round trip. IPv6 turned off on the Pi's Wi-Fi for this run
   (below).
 - Models: Deepgram `flux-general-en` through voice-listen, `claude-haiku-5-5`, Cartesia `sonic-3.6` through
-  voice-speak, Silero VAD (Pipecat 1.13), prompt Via v1.
+  voice-speak, Silero VAD (Pipecat 1.13), prompt VIA v1.
 
 The latency chart is `latency_chart.svg` in the run folder.
 

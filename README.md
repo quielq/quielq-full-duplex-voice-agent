@@ -1,6 +1,6 @@
-# ME3: Via, a full-duplex voice agent on a Raspberry Pi
+# ME3: VIA, a full-duplex voice agent on a Raspberry Pi
 
-Via ("voice input agent", said "vee-yah") is a hands-free, English-only voice assistant built for AI222 (UP Diliman MEng AI). You talk to it without a wake word or a button. It can be interrupted mid-sentence, and it does real work through MCP tools: timers, notes, lights, the thermostat, music, the web, files, documents, and background tasks.
+VIA ("voice input agent", said "vee-yah") is a hands-free, English-only voice assistant built for AI222 (UP Diliman MEng AI). You talk to it without a wake word or a button. It can be interrupted mid-sentence, and it does real work through MCP tools: timers, notes, lights, the thermostat, music, the web, files, documents, and background tasks.
 
 It runs on a Raspberry Pi 5 with a USB mic, a USB speaker and a 7-inch touch screen, and on a MacBook with headphones for development.
 

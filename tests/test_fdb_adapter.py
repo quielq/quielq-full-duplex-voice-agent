@@ -82,4 +82,4 @@ def test_describe_names_the_models(monkeypatch):
     d = describe()
     assert d["LLM"] == "claude-haiku-5-5"
     assert "flux-general-en" in d["ASR"] and "voice-listen" in d["ASR"]
-    assert "sonic-3.6" in d["TTS"] and d["Prompt"].startswith("Via v")
+    assert "sonic-3.6" in d["TTS"] and d["Prompt"].startswith("VIA v")

@@ -6,7 +6,7 @@ Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m be
 
 Nov 5, evening: the first Pi run through both voice servers passed (`20261105-203514-1a2f7a`, 30 turns, $0.40, see "Found in the Nov 5 Pi run").
 
-Status as of Nov 6, night: the agent runs live on the Pi with Flux, Haiku 5.5 and Cartesia through both voice servers, the face, and Spotify in the page. Since Nov 4: eager end of turn and short replies (ADR-046), the agent named Via with a versioned prompt and a 20-turn context window (ADR-047), and the class benchmark on the Pi (`2026-11-06_21-22-21`, every course row under the class target). Feature freeze was Nov 5 and the deadline is Nov 7. Built-but-off components are listed in `docs/switches.md`.
+Status as of Nov 6, night: the agent runs live on the Pi with Flux, Haiku 5.5 and Cartesia through both voice servers, the face, and Spotify in the page. Since Nov 4: eager end of turn and short replies (ADR-046), the agent named VIA with a versioned prompt and a 20-turn context window (ADR-047), and the class benchmark on the Pi (`2026-11-06_21-22-21`, every course row under the class target). Feature freeze was Nov 5 and the deadline is Nov 7. Built-but-off components are listed in `docs/switches.md`.
 
 ## Next, in order (Nov 4)
 
