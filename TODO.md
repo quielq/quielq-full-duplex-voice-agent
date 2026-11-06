@@ -28,7 +28,7 @@ Done on the Mac, Nov 4: the live run through both voice servers (`20261104-20241
 - [x] The live Mac run through both voice servers (Nov 4, `20261104-202417-64248a`, $0.21)
 - [x] The Cartesia bench through `voice-speak`: over-commit 1, stop 277 ms, same as direct (Nov 4, `20261104-202147-ab3d44`, $0.0246)
 - [x] Try the new read-backs live once (Nov 4, `20261104-204433-6a77ad`): after the prompt fix, `rm -r` was read back in plain words, ran after a yes, and kept a copy; a restore with `cp -r` was read back too; `ls -la` ran at once
-- [ ] Decide whether to turn off Pipecat's empty turn recovery with addressing off too: it spends on noise (ADR-016)
+- [x] Keep Pipecat's empty turn recovery on with addressing off (Quiel, Nov 6). In Pipecat 1.13 it only answers an empty turn that cut the bot off, and it never fired in the 75 class-benchmark trials (ADR-016)
 - [ ] Approve a first real message and call through the phone bridge (ADR-024)
 - [x] Generate the five waiting phrase clips through voice-speak (Nov 4, $0.0029, the first live voice-speak run)
 - [ ] Later purchase: OpenRouter ($5), only if the model comparison goes ahead
@@ -206,14 +206,16 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] Stop latency from the same audio marks: interrupter onset to output silence
 - [ ] Cost per successful task: join the task judge to the probe's cost per turn
 - [ ] `bench.latency_bench` refuses on the Pi even with every clip cached: `request_wav` checks for macOS `say` before it checks the cache. Check the cache first. Nov 5 workaround: copy `data/latency_bench/wavs` from the Mac and put a stand-in `say` that exits 1 first on `PATH`
-- [ ] Try Anthropic prompt caching: the tool schemas repeat on every call, so it may cut cost and first token (ADR-025)
+- [x] Anthropic prompt caching, on by default (Nov 6): LLM cost about 87% lower, first token unchanged (ADR-045)
+- [ ] Try Flux eager end of turn on the class benchmark when Cartesia credits allow: the switch is `ME3_FLUX=eager_eot_threshold=0.5` (ADR-045)
+- [ ] Shorter replies (prompt and `max_tokens`): she averages about 300 characters a benchmark trial, and TTS is most of the cost
 - [ ] Shorten the gap after tool calls, the largest remaining cost on tool turns
 
 ## Barge-in
 
 - [ ] Replace the 100 ms history-ordering workaround: let the aggregator own the turn start (`ExternalUserTurnStartStrategy`) (ADR-007)
 - [ ] Get duck-mode stop under 300 ms (about 600 ms with Flux now): local stop-word spotter, or act on Flux partial transcripts sooner
-- [ ] Choose the default between `immediate` and `duck`, after the Flux and Pi echo measurements
+- [ ] Choose the default between `immediate` and `duck`, after the Flux and Pi echo measurements. On the class benchmark, duck stopped about 0.2 s later than immediate (ADR-045)
 - [x] Test-runner fix: a backchannel run now waits 15 s, not 60 s
 - [ ] Resume policy after an interruption: resume, summarize the unplayed part, or drop it (review improvement 4)
 
