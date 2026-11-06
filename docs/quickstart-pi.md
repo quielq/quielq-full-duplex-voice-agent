@@ -4,7 +4,7 @@ Six steps. Steps 1 to 4 make no cloud calls and spend nothing. Stop at the first
 
 You need a Raspberry Pi 5 with 64-bit Raspberry Pi OS (desktop), a USB mic, a USB speaker, the 7-inch display, and a network.
 
-**Where it stands (Nov 5):** setup, tests, and a live run with Flux, Haiku 5.5, Cartesia, the face, and Spotify all worked on the Pi on Nov 2 (Bookworm). On Nov 5 a live run through both voice servers passed, with the short echo probe, barge-in, and live `bash` in `bwrap` (run `20261105-203514-1a2f7a`). The voice server hop probes passed the same evening (ADR-032). Not yet done on the Pi: the long echo drift test (skipped), `serve` in `bwrap`, and the boot service.
+**Where it stands (Nov 6):** setup, tests, and a live run with Flux, Haiku 5.5, Cartesia, the face, and Spotify all worked on the Pi (Bookworm). On Nov 5 a live run through both voice servers passed, with the short echo probe, barge-in, and live `bash` in `bwrap` (run `20261105-203514-1a2f7a`), and the voice server hop probes passed. On Nov 6 the class benchmark ran on the Pi with every course row under the class target (`docs/class-benchmark.md`). Not yet done on the Pi: the long echo drift test (skipped), `serve` in `bwrap`, and the boot service.
 
 The repo is public (since Nov 5), so the Pi pulls straight from GitHub. To update an existing checkout, run `git checkout main && git pull --ff-only origin main`, then `uv sync`.
 

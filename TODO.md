@@ -6,7 +6,7 @@ Debugging: start with `uv run python -m bench.doctor`, then `uv run python -m be
 
 Nov 5, evening: the first Pi run through both voice servers passed (`20261105-203514-1a2f7a`, 30 turns, $0.40, see "Found in the Nov 5 Pi run").
 
-Status as of Nov 4, evening: the agent runs live on the Pi with Flux, Haiku 5.5, Cartesia, the face, and Spotify in the page (last Pi run `20261105-203514-1a2f7a`, Nov 5, through both voice servers). On Nov 4 the voice servers (ADR-032), the rotating thinking phrase (ADR-033), our own command policy (ADR-034), the `delegate` server (ADR-035), the audio-sample latency method (ADR-036), network-loss recovery (ADR-037), and voice server reconnects were built on `build/voice-servers`, and every one has now run live on the Mac at least once. The full suite passed after the merges (643 passed, 3 skipped), plus one test since. Main matches `build/voice-servers` and is pushed to GitHub (Nov 4, after the live runs and these to-do updates). Today's spend is about $0.38. Feature freeze is Nov 5 and the deadline is Nov 7.
+Status as of Nov 6, night: the agent runs live on the Pi with Flux, Haiku 5.5 and Cartesia through both voice servers, the face, and Spotify in the page. Since Nov 4: eager end of turn and short replies (ADR-046), the agent named Via with a versioned prompt and a 20-turn context window (ADR-047), and the class benchmark on the Pi (`2026-11-06_21-22-21`, every course row under the class target). Feature freeze was Nov 5 and the deadline is Nov 7. Built-but-off components are listed in `docs/switches.md`.
 
 ## Next, in order (Nov 4)
 

@@ -46,10 +46,10 @@ flowchart LR
 | Reliability | Fallback phrases, reconnects | TCP probe on a provider error, stored `network_lost` and `cap_reached` clips, voice server reconnects | ADR-037 |
 | Complex task | Delegate to onit | Our own worker loop on Haiku 5.5 behind `delegate`, with the workspace tools. OnIt is dropped. Website jobs also run in the voice loop itself with `write_file` | ADR-028, ADR-035 |
 | Screen | Not in the review | Robot face in a browser, with chat, devices, mute, music, light and thermostat taps (through the same policy), and an agent picker and builder | ADR-027, ADR-038, ADR-039 |
-| Latency method | Audio timestamps | Sample-level marks at input and output. First live headline p50 3.0 s (no tool 2.8 s, tool 4.4 s), of which the end-of-turn wait is 1.3 s | ADR-036 |
-| Context | Not in the review | The agent is named Via and the prompt carries a version (`PROMPT_VERSION`, logged per run). The context keeps the last 20 user turns, never splitting a tool call; the system prompt and tools always stay. Prompt caching on | ADR-045, ADR-047 |
+| Latency method | Audio timestamps | Sample-level marks at input and output. First live headline p50 3.0 s (no tool 2.8 s, tool 4.4 s), of which the end-of-turn wait is 1.3 s; on the Pi, Nov 5, p50 2.59 s over 35 turns. The class benchmark on the Pi (Nov 6, after ADR-046) gives E2E mean 1.46 s, p95 1.96 s, and every course row under the class target (`docs/class-benchmark.md`) | ADR-036, ADR-044 |
+| Context | Not in the review | The agent is named Via ("VIA: Generalist" on the face) and the prompt carries a version (`PROMPT_VERSION`, logged per run). The context keeps the last 20 user turns, never splitting a tool call; the system prompt and tools always stay. Prompt caching on | ADR-045, ADR-047 |
 
-Measured runs and open items are tracked in `TODO.md`. Still open: the Pi echo test, the voice servers and live `bash` on the Pi, the live latency benchmark of 30 or more turns, and the model comparison.
+Measured runs and open items are tracked in `TODO.md`. Still open (Nov 6): the long echo drift test and `serve` in `bwrap` on the Pi, the boot service, more class-benchmark rounds on the Pi for barge-in, and the model comparison. Every component that is built but off is listed in `docs/switches.md`.
 
 ## Decisions
 
