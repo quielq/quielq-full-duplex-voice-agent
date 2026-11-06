@@ -33,6 +33,77 @@ FDBENCH_ENTRY=$PWD/../bench/fdb_adapter.py ME3_PROFILE=mac ME3_STAGES=stt=voice_
 
 `FDBENCH_ENTRY` must be an absolute path, or the launcher falls back to the course layout and stops.
 
+## What the metrics mean
+
+These definitions follow fd-benchmark's `docs/METHOD.md`, which takes the rules from the papers' released code.
+
+### Trials and the basic rule
+
+- **Trial**: one test clip played into the agent while her reply is recorded. Between trials she gets 6 s of silence.
+  A **round** plays one clip from every group, so five rounds use five different clips per group.
+- **Taking the turn**: within the window the metric scores, she spoke for at least 1 s, or for less but with more
+  than 3 words (words come from a faster-whisper transcript of her audio). Everything below that says "took the turn"
+  uses this rule.
+- **TOR (takeover rate)**: the share of trials in which she took the turn. Whether high or low is good depends on the
+  test: she should take the turn when the user is done, and not when the user is only pausing.
+- **Brackets** after a rate are its 95% interval (Wilson). With 5 trials a perfect 5/5 still means anything from
+  56% to 100%.
+- **Latencies** are measured on the recorded audio with Silero VAD, the speech detector the papers use. fd-benchmark
+  shows the median, mean and p95; the papers report means.
+
+### Full-Duplex-Bench v1 tests
+
+- **Pause handling** (synthetic and Candor clips): the user pauses mid-sentence and then goes on. TOR is the share of
+  clips where she cut in during the clip. **Lower is better.** Synthetic clips have a made-up pause; Candor clips are
+  real conversation.
+- **Turn-taking** (Candor clips): the user finishes a turn that she should answer. TOR is the share she answered within
+  8 s of the annotated end of turn. **Higher is better.**
+- **Turn-taking latency**: from the annotated end of the user's turn to the first audio of her answer. **Lower is
+  better**; fd-benchmark's README marks under 1 s as the goal.
+- **Interruption**: she is asked a question, and 1.5 s after she starts answering the user cuts in with a new
+  request. TOR is the share where she took the turn after the cut-in (that is, she stopped and answered it). **Higher is
+  better.**
+- **Interruption latency**: from the end of the cut-in to the first audio of her reply to it. **Lower is better.**
+- **Judge score, interruption**: an LLM rates from 0 to 5 how well her reply addresses the cut-in, using the authors'
+  prompt. Not scored here, since we ran without a judge.
+
+### The course's two rates
+
+- **Missed turn-taking rate**: 1 minus the turn-taking TOR, that is, the share of turns meant for her that she did not
+  answer within 8 s. **Lower is better.**
+- **False turn-taking rate**: clips that are not addressed to her, played while she is idle: side talk (people talking
+  to each other), TV or radio, background speech, and noise. The rate is the share she answered, by the same rule, from
+  the start of the clip to 8 s after it ends. **Lower is better.** No published system has a number for this yet.
+
+### Full-Duplex-Bench v1.5 tests
+
+Each trial plays a user turn; 1.5 s after she starts answering, an overlap is played over her. Then the same turn is
+played again without the overlap (the **clean twin**), as a reference.
+
+| Scenario | What overlaps her | What she should do |
+|---|---|---|
+| Interruption | the user cuts in with something new | **Respond**: stop and address it |
+| Backchannel | the user says "uh-huh", "sure yeah" | **Resume**: keep going with her answer |
+| Talking to others | the user turns to speak to someone else | **Resume** |
+| Background speech | someone else talks in the room | **Resume** |
+
+- **Respond / Resume / Uncertain / Unknown**: an LLM judge reads transcripts of the overlapped and clean trials and
+  labels what she did. Respond means she addressed the overlap; Resume means she carried on with her original answer,
+  whether she paused first or talked straight through. Uncertain means she handled it unclearly, and Unknown means it
+  cannot be told (for example, she never answered the first turn, so there was nothing to overlap). The labels are
+  about content, not timing.
+- **Timing shares** (shown here instead, without a judge): **kept talking** (she spoke straight through the overlap),
+  **paused and came back** (she stopped and later spoke again, which can be Respond or Resume), and **stopped, silent**
+  (she stopped and said nothing more).
+- **Stop latency (t_stop)**: from the start of the overlap to the end of the speech she was producing. **Lower means
+  she yields faster**, which is right for an interruption but not needed for a backchannel.
+- **Response latency (t_resp)**: from the end of the overlap to her next speech. **Lower is better.**
+- **Voice change**: how her voice differs after the overlap compared with before it, on the interruption clips. Words
+  per minute, pitch mean and spread, and loudness mean and spread, each as after minus before, with a paired t-test
+  (p under 0.05 counts as a real change). The paper expects a natural speaker to speed up, raise and vary pitch, and
+  get slightly quieter after being interrupted. UTMOSv2, a speech quality score, is left out because it is not
+  installed.
+
 ## Mac, Nov 6, 2026: five rounds
 
 fdbench run `2026-11-06_10-28-03`, ME3 run `20261106-102804-7e95d7`, MacBook Air with 8 GB. Five rounds draw five
@@ -84,7 +155,10 @@ the right thing in the Resume scenarios. It does show that she stops for almost 
 
 Voice change after an interruption (n=4, paired t-test): words per minute -58.9 (p=0.03), pitch mean -17.8 (p=0.17),
 pitch SD -12.0 (p=0.17), intensity mean -0.7 (p=0.41), intensity SD +0.4 (p=0.45). She speaks slower after being
-interrupted; the other changes are not significant at this size.
+interrupted, the opposite of the speed-up the paper expects from a natural speaker; the other changes are not
+significant at this size. Her voice comes from Cartesia, so this most likely reflects the TTS rather than any choice
+the agent makes (not checked). The judge was not run, so all interruption clips with voice data count, not
+only those labelled Respond.
 
 ### What the five rounds show
 
