@@ -73,3 +73,13 @@ def test_bad_switch_values_refuse(monkeypatch):
     monkeypatch.setenv("ME3_FLUX", "speed=11")
     with pytest.raises(SystemExit):
         fdb_adapter._config()
+
+
+def test_describe_names_the_models(monkeypatch):
+    from bench.fdb_adapter import describe
+
+    monkeypatch.setenv("ME3_STAGES", "stt=voice_listen,llm=anthropic,tts=voice_speak")
+    d = describe()
+    assert d["LLM"] == "claude-haiku-5-5"
+    assert "flux-general-en" in d["ASR"] and "voice-listen" in d["ASR"]
+    assert "sonic-3.6" in d["TTS"] and d["Prompt"].startswith("Via v")
