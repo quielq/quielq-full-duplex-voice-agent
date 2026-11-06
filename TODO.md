@@ -208,7 +208,8 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] `bench.latency_bench` refuses on the Pi even with every clip cached: `request_wav` checks for macOS `say` before it checks the cache. Check the cache first. Nov 5 workaround: copy `data/latency_bench/wavs` from the Mac and put a stand-in `say` that exits 1 first on `PATH`
 - [x] Anthropic prompt caching, on by default (Nov 6): LLM cost about 87% lower, first token unchanged (ADR-045)
 - [x] Flux eager end of turn on at 0.5 (Nov 6, Quiel, not measured yet; ADR-046)
-- [ ] Measure eager and the shorter prompt: `bench.latency_bench` with Flux, Haiku and `fake_words_fast` (no Cartesia), then a Haiku task-suite pass (ADR-046)
+- [x] Measure eager and the shorter prompt on fake TTS (Nov 6, $0.12, ADR-046): eager saves 159 ms on chat turns, 355 ms on tool turns, no extra cut-ins; task suite 66 of 71
+- [ ] Find out why Haiku hands `workspace_plan_and_build_a_larger_site` to `start_task`: a few repeats with the old and new prompts (ADR-046)
 - [x] Shorter replies: short first sentence, about 30 words a reply, prompt 381 to 317 words (Nov 6, ADR-046); `max_tokens` stays 8192 for `write_file`
 - [ ] Shorten the gap after tool calls, the largest remaining cost on tool turns
 
