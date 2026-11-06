@@ -207,8 +207,9 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 - [ ] Cost per successful task: join the task judge to the probe's cost per turn
 - [ ] `bench.latency_bench` refuses on the Pi even with every clip cached: `request_wav` checks for macOS `say` before it checks the cache. Check the cache first. Nov 5 workaround: copy `data/latency_bench/wavs` from the Mac and put a stand-in `say` that exits 1 first on `PATH`
 - [x] Anthropic prompt caching, on by default (Nov 6): LLM cost about 87% lower, first token unchanged (ADR-045)
-- [ ] Try Flux eager end of turn on the class benchmark when Cartesia credits allow: the switch is `ME3_FLUX=eager_eot_threshold=0.5` (ADR-045)
-- [ ] Shorter replies (prompt and `max_tokens`): she averages about 300 characters a benchmark trial, and TTS is most of the cost
+- [x] Flux eager end of turn on at 0.5 (Nov 6, Quiel, not measured yet; ADR-046)
+- [ ] Measure eager and the shorter prompt: `bench.latency_bench` with Flux, Haiku and `fake_words_fast` (no Cartesia), then a Haiku task-suite pass (ADR-046)
+- [x] Shorter replies: short first sentence, about 30 words a reply, prompt 381 to 317 words (Nov 6, ADR-046); `max_tokens` stays 8192 for `write_file`
 - [ ] Shorten the gap after tool calls, the largest remaining cost on tool turns
 
 ## Barge-in
