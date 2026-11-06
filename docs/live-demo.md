@@ -19,7 +19,7 @@ uv run python -m bench.doctor --quick
 Open the Spotify app, then start the agent. `--reply-templates` applies to this run only. The default stays off (ADR-020).
 
 ```bash
-ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui --reply-templates
+ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui --reply-templates
 ```
 
 Show the face at [http://127.0.0.1:8770](http://127.0.0.1:8770) and wait for it to look ready.
@@ -98,7 +98,8 @@ The default barge-in stops on any speech, so "mm-hmm" cuts the agent off. To sho
 | Problem | What to do |
 | --- | --- |
 | It says Ana is not a saved contact | `data/contacts.yaml` is missing. The first step covers it |
-| It says the shell is a mock | `ME3_WORKSPACE_LIVE=1` is missing from the command |
+| It says the shell is a mock, or the browser never opens | `ME3_WORKSPACE_LIVE=1` is missing from the command |
+| A task says done but no file appears | `delegate=anthropic` is missing from `ME3_TOOL_STAGES` |
 | A cough or room noise cuts off a reply | Expected in the default barge-in mode. Ask again |
 | A hold answer is ignored | The yes came before the question ended. Ask for the action again |
 | Anything else | `uv run python -m bench.doctor`, then the table in `docs/quickstart-mac.md` |
@@ -123,7 +124,7 @@ The machine exercise asks for a real task, natural turns with no push-to-talk, a
    ```
 3. Start Via through both voice servers, with the face:
    ```bash
-   ~/.local/bin/uv run python -m harness.bot --profile pi --stages stt=voice_listen,llm=anthropic,tts=voice_speak --ui
+   ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic ~/.local/bin/uv run python -m harness.bot --profile pi --stages stt=voice_listen,llm=anthropic,tts=voice_speak --ui
    ```
 4. Open the face full screen with `scripts/pi_kiosk.sh` (`WAYLAND_DISPLAY=wayland-0`). Wait until the chip shows "VIA: Generalist" and the status says Listening. Start recording.
 

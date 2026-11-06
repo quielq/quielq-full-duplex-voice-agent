@@ -56,7 +56,7 @@ Open [http://127.0.0.1:8770](http://127.0.0.1:8770) to see the face.
 This is a paid run. An 18 turn run on Nov 4 cost $0.21, and each provider stops at $5 a day.
 
 ```bash
-ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui
+ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui
 ```
 
 Open [http://127.0.0.1:8770](http://127.0.0.1:8770) and start talking. Press Ctrl-C to stop.
@@ -64,6 +64,7 @@ Open [http://127.0.0.1:8770](http://127.0.0.1:8770) and start talking. Press Ctr
 - Headphones work best. On the laptop speakers, keep `--echo-cancel`.
 - Pick an agent on the face. Choosing another one starts a new session with it.
 - Leave out `music=spotify` if you have not set up Spotify (below).
+- `ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real (sandboxed, each change asks first). `delegate=anthropic` runs background tasks such as "make a deck" on Haiku 5.5 under the `anthropic` cap. Without them these tools are mocks: a task reports done but makes nothing, and the browser never opens.
 
 To route speech through our own MCP voice servers instead, change the stages to `stt=voice_listen,tts=voice_speak`. It sounds the same, and the keys stay in the servers.
 
@@ -121,7 +122,7 @@ uv run python -m bench.run_report --live
 | It answers its own voice | Use headphones, or turn the volume down |
 | The face says "Agent not running" | Start the step 5 command with `--ui` |
 | Port 8770 is busy | Stop the other run or demo |
-| A tool says it is a mock | Check `ME3_WORKSPACE_LIVE=1` and `ME3_TOOL_STAGES` are in the command |
+| A tool says it is a mock, or a task says done but no file appears | Check `ME3_WORKSPACE_LIVE=1` and `ME3_TOOL_STAGES=search=tavily,delegate=anthropic` are in the command |
 | Wrong mic or speaker | List devices with `uv run python -m harness.audio_io`, then set `audio.input_device` and `audio.output_device` in `configs/mac.yaml` |
 | It says it hit a limit | A daily cap was reached. Check with `uv run python -m bench.cost_ledger` |
 | "Now playing" but no sound | Open the Spotify app first |

@@ -80,7 +80,7 @@ Live runs use this command (Haiku 5.5, ADR-025; Groq's rate limits stop long run
 uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui
 ```
 
-Add `ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily` in front for multi-stage jobs such as building a website (`docs/tools.md`).
+Add `ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic` in front for multi-stage jobs such as building a website or a deck (`docs/tools.md`). Without them `bash`, `serve`, `open_in_browser` and background tasks are mocks, and a fake task still reports done.
 
  The bot starts all ten task servers; `--servers clock` narrows that. `bench.task_runner --stages llm=anthropic --all-servers` needs `ME3_LIVE=1`.
 
