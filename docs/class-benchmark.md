@@ -205,6 +205,102 @@ the entry's environment (ADR-045). One trial out of 3 is within run-to-run noise
 - **Duck mode made stopping slower** by about 0.2 s, since the benchmark counts ducked speech as still talking.
 - Flux eager end of turn was not run, to keep Cartesia credits for the demo.
 
+## Pi, Nov 6, 2026: stage test and one round
+
+The course run: ME3 on the Raspberry Pi 5 as the remote assistant (the guide's steps 8 to 11), fdbench on the Mac.
+fd-benchmark at 57eaddb, which adds the course's stage-latency test and deck summary (`docs/STAGES.md` there) and the
+class's targets. fdbench run `2026-11-06_21-22-21`, ME3 run `20261106-212224-666651` on the Pi.
+
+- Stages: Flux and Cartesia through our voice servers, Claude Haiku 5.5, the Pi profile, prompt Via v1 and the 20-turn
+  context limit (ADR-047). Eager end of turn on at 0.5 (ADR-046). Barge-in immediate, addressing off.
+- 10 phrases x 2 runs for the stage test (20 turns; `--runs 2` to save Cartesia credits), then one round of every group
+  (10 trials). The stage marks come from fdbench's Pipecat observer, which the launcher attaches to our pipeline
+  with no code change. Our `describe()` names the models on the results card.
+- Spend: Cartesia 5,728 characters (ledger $0.29), Deepgram $0.09, Anthropic $0.01, judge $0.0068.
+
+```
+# Pi
+cd ~/quielq-full-duplex-voice-agent/fd-benchmark
+FDBENCH_ENTRY=$HOME/quielq-full-duplex-voice-agent/bench/fdb_adapter.py ME3_PROFILE=pi \
+  ME3_STAGES=stt=voice_listen,llm=anthropic,tts=voice_speak ../.venv/bin/python launch_assistant.py \
+  --stats-procs stt_mcp=servers.voice_listen,tts_mcp=servers.voice_speak,tools_mcp=servers.tasks
+# Mac
+cd fd-benchmark
+.venv/bin/python -m fdbench run --student quielq --rounds 1 --runs 2 --connect direct --where remote \
+  --judge-provider none --yes --recordings k --cooling "active cooler, fan"
+cd ..
+uv run python -m bench.fdb_judge fd-benchmark/runs/quielq/<run folder>
+```
+
+### Course metrics (template section 5)
+
+Times on the Pi's monotonic clock. E2E is fdbench's definition: from the VAD end mark (Silero stops) to the first
+reply audio handed to the output (`BotStartedSpeakingFrame`).
+
+| Metric | Definition | Target | Mean | p95 | Median | n |
+|---|---|---|---|---|---|---|
+| E2E latency | end of speech to audio out | < 4.0 s | 1.46 s | 1.96 s | 1.29 s | 20 |
+| ASR final | end of speech to transcript | < 0.8 s | 0.43 s | 1.18 s | 0.21 s | 20 |
+| LLM TTFT | transcript to first token | < 1.5 s | 0.53 s | 0.70 s | 0.60 s | 19 |
+| TTS TTFB | text to first audio chunk | < 0.6 s | 0.14 s | 0.18 s | 0.14 s | 20 |
+| Barge-in | speech to playback stopped | < 0.8 s | 0.70 s | 0.79 s | | 2 |
+| WER | Flux transcript against the clip's text | < 15 % | 5.5 % | | | 20 |
+
+- Every row meets the class target, except ASR final's p95, which is over 0.8 s while its mean is under. ASR final
+  here is when Flux confirms the end of the turn, so the slow turns are ones where Flux waited.
+- **E2E heard**, from the clip's true end of speech to the start of her reply in the recording (fdbench's own clock,
+  closest to our ADR-036 headline): median 1.57 s, mean 1.71 s, max 3.56 s. The VAD end mark came 0.11 s after the
+  true end of speech (median). Our own Pi headline on Nov 5, before eager end of turn and the short-reply prompt and on
+  synthetic `say` speech, was p50 2.59 s, so the two are not like for like.
+- **Barge-in** has only two trials: 0.80 s on the v1 interruption clip and 0.60 s on the v1.5 one. With one round, the
+  p95 is the slower of the two.
+
+### Context size (template section 3)
+
+| Context size | Median | Max | First to last call |
+|---|---|---|---|
+| Prompt tokens per LLM call (reported usage, cached part included) | 6,766 | 8,467 | 6,612 to 1,754 |
+| Messages in context | 44 | 84 | 1 to 84 |
+
+The whole run was one session of 41 user turns, so the 20-turn limit (ADR-047) trimmed the context 26 times. This is
+its first live run.
+
+### Results card (deck 2)
+
+- Raspberry Pi 5 Model B Rev 1.1, 8 GB, active cooler with fan: peak 62.8 C, never throttled, ARM clock never
+  below 1,500 MHz.
+- CPU over all cores: median 4%, p95 7%; busiest core p95 18%. Lowest free RAM 6,522 MB. Per process: STT server 3.8%
+  CPU and 329 MB peak, TTS server 0.1% and 94 MB, task servers 920 MB peak together.
+- Network: Wi-Fi to the cloud, Wi-Fi to the Mac at 6 ms round trip. IPv6 turned off on the Pi's Wi-Fi for this run
+  (below).
+- Models: Deepgram `flux-general-en` through voice-listen, `claude-haiku-5-5`, Cartesia `sonic-3.6` through
+  voice-speak, Silero VAD (Pipecat 1.13), prompt Via v1.
+
+The latency chart is `latency_chart.svg` in the run folder.
+
+### Full-Duplex-Bench, one round
+
+One trial per group, so these are a check that the Pi behaves like the Mac, not results of their own.
+
+- v1: stayed silent through both pauses, took the turn after 1.61 s, took the interruption after 1.83 s with a judge
+  score of 5. Both false turn-taking clips (side talk, TV or radio) got a reply, as on the Mac.
+- v1.5: paused and came back on interruption, talking to others and background speech (judged Respond each time), and
+  talked through the backchannel (judged Resume). Stop latency 0.60 s (interruption), 0.74 s (talking to others),
+  0.22 s (background); response latency 1.57 to 1.89 s.
+
+### A failed first try: IPv6
+
+The first Pi run (`2026-11-06_21-13-33`, stopped after three trials, about 120 Cartesia characters) got no speech:
+every Cartesia connection from voice-speak ended with `TimeoutError: timed out during opening handshake`. The Pi had
+received an IPv6 address and default route from the Wi-Fi at 20:27 that evening. Cartesia publishes IPv6 addresses,
+and the Pi tried them first, but the IPv6 path did not get through: a keyless handshake took 0.39 s over IPv4 and timed
+out after 10 s over IPv6. `curl` worked because it falls back to IPv4 by itself, and the Mac has no IPv6 address on
+this network. The daily cap was not involved. Turning IPv6 off on the Pi's Wi-Fi until the next reboot fixed it:
+
+```bash
+sudo sysctl -w net.ipv6.conf.wlan0.disable_ipv6=1
+```
+
 ## How it compares with full-duplex and commercial systems
 
 The published numbers below are from the Full-Duplex-Bench papers and one model card, copied from the sources listed
@@ -290,12 +386,12 @@ below every system except Moshi.
   barge-in are built for this and stay off: on the A/B runs above, neither helped, because the trials keep her in
   addressing's ACTIVE state and ducking delays the stop.
 - **Not measured here:** tools. ME3 runs MCP tools behind its own policy at about $0.22 a round of this benchmark,
-  and it is built to run on a Raspberry Pi (the Pi class-benchmark run is still to do). GPT-4o Realtime and Gemini
+  and it runs on a Raspberry Pi: the Pi run above meets every class target in the course table. GPT-4o Realtime and Gemini
   Live also call functions; Full-Duplex-Bench v1 and v1.5 do not test tool use (v3 does).
 
 ## Not done yet
 
-- The Pi run, with the Pi as the remote assistant (the guide's steps 8 to 11).
+- More rounds on the Pi: one round gives two barge-in trials and one trial per Full-Duplex-Bench group.
 - The Flux eager end-of-turn A/B run (ADR-045).
 - Classmates should compare runs with the same rounds and judge.
 
