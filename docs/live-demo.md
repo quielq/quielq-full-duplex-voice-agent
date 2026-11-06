@@ -106,3 +106,48 @@ The default barge-in stops on any speech, so "mm-hmm" cuts the agent off. To sho
 ## On the Pi
 
 Use `--profile pi`, drop `--echo-cancel`, since `pi.yaml` already turns it on, and add `--spotify-player` so music plays in the face (ADR-031). Check that the VCM services are not holding the mic. The bash lines have not run under `bwrap` on a Pi, so try them before showing them.
+
+## Class demo on the Pi (2 to 3 minutes)
+
+The machine exercise asks for a real task, natural turns with no push-to-talk, a barge-in, a live MCP tool call, and recovery when an API is slow. This run shows all five on the Pi with the face on the 7-inch screen. It costs about 1,500 Cartesia characters and under $0.05 for the rest, so a rehearsal and the take fit easily.
+
+### Before you start (on the Pi)
+
+1. After any reboot, check IPv6 on the Wi-Fi. If `ip -6 addr show wlan0` prints a `2001:` address, turn it off, or Cartesia will time out (`docs/quickstart-pi.md`):
+   ```bash
+   sudo sysctl -w net.ipv6.conf.wlan0.disable_ipv6=1
+   ```
+2. Check the machine and that VCM is not holding the mic:
+   ```bash
+   cd ~/quielq-full-duplex-voice-agent && ~/.local/bin/uv run python -m bench.doctor --quick
+   ```
+3. Start Via through both voice servers, with the face:
+   ```bash
+   ~/.local/bin/uv run python -m harness.bot --profile pi --stages stt=voice_listen,llm=anthropic,tts=voice_speak --ui
+   ```
+4. Open the face full screen with `scripts/pi_kiosk.sh` (`WAYLAND_DISPLAY=wayland-0`). Wait until the chip shows "VIA: Generalist" and the status says Listening. Start recording.
+
+### The script
+
+Speak normally and wait for each reply unless the line says otherwise. The times are a guide.
+
+| Time | You say or do | What it shows |
+|---|---|---|
+| 0:00 | "Hi Via, what can you help me with?" | Natural turn: Flux ends the turn, no button, a short spoken answer |
+| 0:15 | "Turn on the kitchen light." | Live MCP tool call: `set_light` on the lights server, and the light turns on in the face |
+| 0:30 | "Set a timer for two minutes." | A second tool: `set_timer` on the clock server, and the timer appears in the face |
+| 0:45 | "Tell me a short story about a robot on a rice farm." Two sentences in, say "Wait, stop." | Barge-in: playback stops within about 0.7 s and the LLM stream is cancelled. The context keeps only the words that played |
+| 1:05 | "Actually, what's the weather in Baguio right now?" | A slow API: `get_weather` is a slow tool, so the waiting phrase ("One sec") plays at once from a stored clip, then the answer |
+| 1:30 | Tap the thermostat's Warmer button twice on the screen, then say "What's the thermostat set to now?" | Screen and voice share one policy: the taps go through `ToolPolicy`, and the model reads the new value with a tool, not from memory |
+| 1:50 | "Add a note: bring the Pi charger to class." Then "Delete that note." When it asks, say "cancel." | Guardrails: a delete is held with an undo window and released only by your words, so "cancel" keeps the note |
+| 2:20 | "Thanks Via, that's all for now." | Closing turn. Stop the recording, then stop the bot with Ctrl+C |
+
+If a reply is slow to start, keep going: the waiting phrase covers it. If a cough or room noise cuts a reply off, that is barge-in working; ask again.
+
+### Afterwards
+
+```bash
+~/.local/bin/uv run python -m bench.run_report --live
+```
+
+Note the run id for the deck's demo box. Keep the video out of the repo: it is a recording of a person (CLAUDE.md rule 3).
