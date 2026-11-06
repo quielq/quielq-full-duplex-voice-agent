@@ -43,13 +43,13 @@ def test_ab_switches(monkeypatch):
     monkeypatch.setenv("ME3_PROMPT_CACHE", "0")
     monkeypatch.setenv("ME3_ADDRESSING", "1")
     monkeypatch.setenv("ME3_BARGE_IN", "duck")
-    monkeypatch.setenv("ME3_FLUX", "eager_eot_threshold=0.5")
+    monkeypatch.setenv("ME3_FLUX", "eager_eot_threshold=off")
     cfg = fdb_adapter._config()
     assert cfg.providers["providers"]["anthropic"]["prompt_caching"] is False
     assert cfg.profile["addressing"]["enabled"] is True
     assert cfg.profile["addressing"]["gate"]["enabled"] is False
     assert cfg.profile["barge_in"]["mode"] == "duck"
-    assert cfg.providers["providers"]["deepgram"]["flux"]["eager_eot_threshold"] == 0.5
+    assert cfg.providers["providers"]["deepgram"]["flux"]["eager_eot_threshold"] is None
 
 
 def test_unset_switches_keep_the_profile(monkeypatch):

@@ -28,6 +28,13 @@ STAGE_PROVIDER = {
 
 
 FLUX_STAGES = {"deepgram_flux", "voice_listen"}
+
+
+def flux_value(name: str, value: str) -> int | float | None:
+    """One Flux setting from ``--flux`` or ``ME3_FLUX``. ``off`` unsets it, which turns eager off."""
+    if value == "off":
+        return None
+    return int(value) if name == "eot_timeout_ms" else float(value)
 CARTESIA_STAGES = {"cartesia", "voice_speak"}
 
 
