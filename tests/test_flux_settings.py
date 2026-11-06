@@ -31,16 +31,25 @@ def _flux(tmp_path, monkeypatch, **flux):
     return build_stt(providers, ledger)
 
 
-def test_flux_defaults_stay_untouched(tmp_path, monkeypatch):
+def test_flux_defaults(tmp_path, monkeypatch):
+    """Eager end of turn is on at 0.5 (ADR-046); the other two keep Deepgram's defaults."""
     stt = _flux(tmp_path, monkeypatch)
-    assert not stt.eager_end_of_turn_enabled
+    assert stt.eager_end_of_turn_enabled
+    assert stt._settings.eager_eot_threshold == 0.5
     assert stt._settings.eot_threshold is None
-    assert stt._settings.eager_eot_threshold is None
     assert stt._settings.eot_timeout_ms is None
 
 
+def test_flux_value_off_unsets():
+    from harness.providers import flux_value
+
+    assert flux_value("eager_eot_threshold", "off") is None
+    assert flux_value("eot_threshold", "0.6") == 0.6
+    assert flux_value("eot_timeout_ms", "2000") == 2000
+
+
 def test_flux_thresholds_reach_the_service(tmp_path, monkeypatch):
-    stt = _flux(tmp_path, monkeypatch, eot_threshold=0.6, eot_timeout_ms=2000)
+    stt = _flux(tmp_path, monkeypatch, eot_threshold=0.6, eot_timeout_ms=2000, eager_eot_threshold=None)
     assert stt._settings.eot_threshold == 0.6
     assert stt._settings.eot_timeout_ms == 2000
     assert not stt.eager_end_of_turn_enabled

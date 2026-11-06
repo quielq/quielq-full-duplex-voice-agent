@@ -28,7 +28,7 @@ providers:
     stt_model: flux-general-en
     flux:                        # null keeps Deepgram's default; override per run with --flux
       eot_threshold: null        # 0.5 to 1.0, default 0.7
-      eager_eot_threshold: null  # 0.3 to 0.9, unset leaves eager end of turn off
+      eager_eot_threshold: 0.5   # 0.3 to 0.9; on, so the reply starts on Flux's guess (ADR-046); off with --flux eager_eot_threshold=off
       eot_timeout_ms: null       # 500 to 60000, default 5000
     tts_voice: aura-2-thalia-en
     tts_sample_rate: 16000   # 24000 arrives slower than real time on this link (ADR-014)

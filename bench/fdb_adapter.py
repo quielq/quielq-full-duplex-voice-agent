@@ -20,7 +20,7 @@ Switches for A/B runs (ADR-045). Unset, each keeps the profile's setting (cachin
     ME3_PROMPT_CACHE=0|1    Anthropic prompt caching
     ME3_ADDRESSING=1        no-wake-word addressing (ADR-016), without the level gate
     ME3_BARGE_IN=duck       duck-then-decide barge-in (ADR-007)
-    ME3_FLUX=eager_eot_threshold=0.5   Flux settings, as in ``--flux``
+    ME3_FLUX=eager_eot_threshold=off   Flux settings, as in ``--flux`` (eager is on at 0.5, ADR-046)
 
 Every stage defaults to its fake, as everywhere else. Full-Duplex-Bench data is CC BY-NC 4.0:
 coursework use only.
@@ -38,6 +38,7 @@ SWITCHES = ("ME3_STAGES", "ME3_PROMPT_CACHE", "ME3_ADDRESSING", "ME3_BARGE_IN", 
 
 def _config():
     from harness.config import load_config
+    from harness.providers import flux_value
 
     cfg = load_config(os.environ.get("ME3_PROFILE", "mac"))
     for item in filter(None, os.environ.get("ME3_STAGES", "").split(",")):
@@ -61,7 +62,7 @@ def _config():
         name, _, value = item.partition("=")
         if name not in flux:
             raise SystemExit(f"ME3_FLUX: unknown Flux setting {name!r}")
-        flux[name] = int(value) if name == "eot_timeout_ms" else float(value)
+        flux[name] = flux_value(name, value)
     # The clips arrive as samples, not through a room: no echo path, so no AEC or self-echo filter.
     cfg.profile["audio"]["echo_cancel"] = False
     cfg.profile["ui"]["enabled"] = False

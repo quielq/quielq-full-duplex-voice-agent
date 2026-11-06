@@ -77,7 +77,7 @@ from harness.network import ClipPlayer, NetworkWatch, stage_hosts
 from harness.null_output import PacedNullOutputTransport
 from harness.phrase_cache import load_phrase
 from harness.flux_forced import ForcedEndTurn, ForcedEndTurnStopStrategy
-from harness.providers import FLUX_STAGES, build_llm, build_stt, build_tts
+from harness.providers import FLUX_STAGES, build_llm, build_stt, build_tts, flux_value
 from harness.system_stats import LoopLag, SystemStats
 from servers.tasks.music.backends import PLAYER_NAME, SpotifyBackend
 from harness.recovery import LLMErrorRecovery
@@ -644,7 +644,7 @@ def main() -> None:
     ap.add_argument("--stages", default="",
                     help="override providers.yaml stages for this run, e.g. stt=deepgram_flux,llm=groq")  # fmt: skip
     ap.add_argument("--flux", default="",
-                    help="override Flux settings for this run, e.g. eot_threshold=0.6,eot_timeout_ms=2000")  # fmt: skip
+                    help="override Flux settings for this run, e.g. eot_threshold=0.6,eager_eot_threshold=off")  # fmt: skip
     ap.add_argument("--turn-stop", choices=["auto", "smart_turn", "flux", "flux_forced", "speech_timeout"],
                     help="override the profile's turn.stop")  # fmt: skip
     ap.add_argument("--barge-in", choices=["immediate", "duck"], help="override barge_in.mode")
@@ -678,7 +678,7 @@ def main() -> None:
         name, _, value = item.partition("=")
         if name not in flux:
             ap.error(f"unknown Flux setting {name!r}")
-        flux[name] = int(value) if name == "eot_timeout_ms" else float(value)
+        flux[name] = flux_value(name, value)
     if args.turn_stop:
         cfg.profile["turn"]["stop"] = args.turn_stop
     if args.barge_in:
