@@ -6,7 +6,7 @@ cases:
     turns: ["in the background, tidy up my workspace notes"]
     expect:
       tools: [start_task]
-      args: {start_task: {goal: {re: "tidy up"}}}
+      args: {start_task: {goal: {re: "(?i)tidy up"}}}   # "Tidy up ..." is the same goal
 
   - id: delegate_start_is_acknowledged
     layer: next_reply
