@@ -46,6 +46,7 @@ providers:
     daily_cap_usd: 5.00   # approved Nov 1, 2026
     model: claude-haiku-5-5
     max_tokens: 8192   # Pipecat's 4096 can cut off a whole file inside a write_file call (ADR-028)
+    prompt_caching: true    # cache the system prompt and tool schemas, 5 min TTL (ADR-045)
   openrouter:
     env_key: OPENROUTER_API_KEY
     daily_cap_usd: 5.00   # approved Nov 1, 2026
@@ -96,6 +97,8 @@ prices:
   anthropic:
     input_per_token: 0.00000010        # Haiku 5.5, $0.10 per 1M
     output_per_token: 0.00000050       # $0.50 per 1M
+    cache_write_per_token: 0.000000125 # 5 min cache write, 1.25x input (ADR-045)
+    cache_read_per_token: 0.00000001   # cache hit, 0.1x input
   openrouter:                          # list price per token; the 5.5% credit purchase fee is not counted
     by_model:
       anthropic/claude-haiku-5.5:      {input_per_token: 0.00000010, output_per_token: 0.00000050}

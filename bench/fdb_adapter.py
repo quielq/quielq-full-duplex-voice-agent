@@ -15,6 +15,13 @@ Settings come from the environment, so a benchmark run never needs a project edi
     ME3_STAGES    stage overrides as in ``--stages``, e.g. stt=voice_listen,llm=anthropic,tts=voice_speak
     ME3_SERVERS   task servers, default all
 
+Switches for A/B runs (ADR-045). Unset, each keeps the profile's setting (caching on, the rest off):
+
+    ME3_PROMPT_CACHE=0|1    Anthropic prompt caching
+    ME3_ADDRESSING=1        no-wake-word addressing (ADR-016), without the level gate
+    ME3_BARGE_IN=duck       duck-then-decide barge-in (ADR-007)
+    ME3_FLUX=eager_eot_threshold=0.5   Flux settings, as in ``--flux``
+
 Every stage defaults to its fake, as everywhere else. Full-Duplex-Bench data is CC BY-NC 4.0:
 coursework use only.
 """
@@ -26,6 +33,7 @@ import tempfile
 from pathlib import Path
 
 PROJECT_MARKER = "harness/bot.py"
+SWITCHES = ("ME3_STAGES", "ME3_PROMPT_CACHE", "ME3_ADDRESSING", "ME3_BARGE_IN", "ME3_FLUX")
 
 
 def _config():
@@ -37,6 +45,23 @@ def _config():
         if stage not in cfg.providers["stages"]:
             raise SystemExit(f"ME3_STAGES: unknown stage {stage!r}")
         cfg.providers["stages"][stage] = choice
+    if (cache := os.environ.get("ME3_PROMPT_CACHE")) is not None:
+        if cache not in ("0", "1"):
+            raise SystemExit(f"ME3_PROMPT_CACHE: {cache!r} is not 0 or 1")
+        cfg.providers["providers"]["anthropic"]["prompt_caching"] = cache == "1"
+    if os.environ.get("ME3_ADDRESSING") == "1":
+        cfg.profile["addressing"]["enabled"] = True
+        cfg.profile["addressing"]["gate"]["enabled"] = False  # unverified with Flux (ADR-016)
+    if mode := os.environ.get("ME3_BARGE_IN"):
+        if mode not in ("immediate", "duck"):
+            raise SystemExit(f"ME3_BARGE_IN: {mode!r} is not immediate or duck")
+        cfg.profile["barge_in"]["mode"] = mode
+    flux = cfg.providers["providers"]["deepgram"]["flux"]
+    for item in filter(None, os.environ.get("ME3_FLUX", "").split(",")):
+        name, _, value = item.partition("=")
+        if name not in flux:
+            raise SystemExit(f"ME3_FLUX: unknown Flux setting {name!r}")
+        flux[name] = int(value) if name == "eot_timeout_ms" else float(value)
     # The clips arrive as samples, not through a room: no echo path, so no AEC or self-echo filter.
     cfg.profile["audio"]["echo_cancel"] = False
     cfg.profile["ui"]["enabled"] = False
@@ -76,7 +101,10 @@ async def build(transport, log_dir: Path):
         result = await run_bot(session_config(cfg, agent), agent=agent, input_mode="fdbench", transport=transport,
                                on_worker=workers.append, handle_sigint=False, servers=servers,
                                data_dir=str(tool_data))  # fmt: skip
-        (log_dir / "last_run.txt").write_text(f"{result.run_id} {result.events_path} ${result.session_usd:.4f}\n")
+        switches = {k: os.environ[k] for k in SWITCHES if os.environ.get(k)}
+        (log_dir / "last_run.txt").write_text(
+            f"{result.run_id} {result.events_path} ${result.session_usd:.4f} {switches}\n"
+        )
         print(f"ME3 run {result.run_id}, ${result.session_usd:.4f}, events {result.events_path}")
 
     async def cancel():

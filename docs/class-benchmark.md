@@ -16,19 +16,24 @@ ones here, because the class benchmark times from the clip's annotated turn end,
   from its GitHub release (`tools/fetch_datasets.py`).
 - Direct feed: the clips reach the agent over a local WebSocket, with no microphone or speaker. The launcher builds
   the transport and calls our entry, `bench/fdb_adapter.py`, through `FDBENCH_ENTRY` (ADR-044). The bot's
-  `fdbench` input mode runs the same VAD, Smart Turn, STT, LLM, TTS, tool policy and cost ledger as the mic.
+  `fdbench` input mode runs the same VAD, STT, end of turn, LLM, TTS, tool policy and cost ledger as the mic. With Flux as
+  the STT, the end of turn is Flux's own model (`turn.stop: auto`), not Smart Turn.
 - Two settings differ from a mic run: echo cancelling is off (the clips arrive as samples, so there is no echo), and
   each session's tools start from an empty data folder (so a timer from an earlier run cannot ring during a clip).
 - Stages: Flux and Cartesia through our voice servers, and Claude Haiku 5.5 (`claude-haiku-5-5`), with the Mac
   profile. Addressing (ADR-016) and duck mode are off, as they are by default, so barge-in is immediate.
-- No LLM judge: the interruption relevance score and the v1.5 Respond / Resume labels are not scored. ASR for word
-  counts is faster-whisper small. UTMOSv2 is not installed.
+- The LLM judge is GPT-4o through OpenRouter, the model the papers used, added after each run with
+  `bench/fdb_judge.py`, which records its spend in our cost ledger ($0.07 for both Nov 6 runs). It gives the
+  interruption relevance score and the v1.5 Respond / Resume labels. ASR for word counts is faster-whisper small.
+  UTMOSv2 is not installed.
 
 ```
 cd fd-benchmark
 FDBENCH_ENTRY=$PWD/../bench/fdb_adapter.py ME3_PROFILE=mac ME3_STAGES=stt=voice_listen,llm=anthropic,tts=voice_speak \
   .venv/bin/python -m fdbench run --student quielq --rounds 5 --connect direct --where local \
   --judge-provider none --yes --recordings k --no-live
+cd ..
+uv run python -m bench.fdb_judge fd-benchmark/runs/quielq/<run folder>
 ```
 
 `FDBENCH_ENTRY` must be an absolute path, or the launcher falls back to the course layout and stops.
@@ -65,7 +70,7 @@ These definitions follow fd-benchmark's `docs/METHOD.md`, which takes the rules 
   better.**
 - **Interruption latency**: from the end of the cut-in to the first audio of her reply to it. **Lower is better.**
 - **Judge score, interruption**: an LLM rates from 0 to 5 how well her reply addresses the cut-in, using the authors'
-  prompt. Not scored here, since we ran without a judge.
+  prompt (GPT-4o here, as in the paper).
 
 ### The course's two rates
 
@@ -92,7 +97,7 @@ played again without the overlap (the **clean twin**), as a reference.
   whether she paused first or talked straight through. Uncertain means she handled it unclearly, and Unknown means it
   cannot be told (for example, she never answered the first turn, so there was nothing to overlap). The labels are
   about content, not timing.
-- **Timing shares** (shown here instead, without a judge): **kept talking** (she spoke straight through the overlap),
+- **Timing shares** (shown beside the labels, from the audio alone): **kept talking** (she spoke straight through the overlap),
   **paused and came back** (she stopped and later spoke again, which can be Respond or Resume), and **stopped, silent**
   (she stopped and said nothing more).
 - **Stop latency (t_stop)**: from the start of the overlap to the end of the speech she was producing. **Lower means
@@ -132,7 +137,7 @@ check. It agreed with these results except that it cut into its one Candor pause
 | Latency, turn-taking | median 2.51 s, mean 2.35 s, p95 2.88 s (n=5) | lower, under 1 s |
 | TOR, interruption | 100% (5/5) [56 to 100] | higher |
 | Latency, interruption | median 1.92 s, mean 1.92 s, p95 2.21 s (n=5) | lower |
-| Judge score, interruption | not judged | higher |
+| Judge score, interruption (0 to 5) | 4.8 mean (n=5) | higher |
 
 Two pause trials that pass are marked provisional by the benchmark: she spoke for under a second at 0.1 s into the
 clip, before any pause, which looks like the end of the previous trial's reply rather than a cut-in.
@@ -150,20 +155,28 @@ In 4 of the 20 overlap trials she had already finished her reply when the overla
 All 20 clean twins (the same turns without the overlap) were answered, after 1.32 to 2.99 s.
 
 "Paused and came back" covers both of the paper's labels: Respond (she answered the new speech) and Resume (she went
-back to her reply). Telling them apart needs the transcript and the judge, so this table cannot say whether she did
-the right thing in the Resume scenarios. It does show that she stops for almost any overlap.
+back to her reply). The judge tells them apart from the transcripts (n=5 per scenario):
+
+| Scenario (expected) | Respond | Resume | Uncertain | Unknown |
+|---|---|---|---|---|
+| Interruption (Respond) | **0.80** | 0.00 | 0.20 | 0.00 |
+| Backchannel (Resume) | 0.00 | **0.40** | 0.40 | 0.20 |
+| Talking to others (Resume) | 0.80 | **0.00** | 0.20 | 0.00 |
+| Background speech (Resume) | 0.80 | **0.20** | 0.00 | 0.00 |
+
+She handles a real interruption well (Respond 0.80, judge score 4.8 of 5), but she also answers speech that is not
+meant for her: side talk and background speech get a reply 4 times in 5.
 
 Voice change after an interruption (n=4, paired t-test): words per minute -58.9 (p=0.03), pitch mean -17.8 (p=0.17),
 pitch SD -12.0 (p=0.17), intensity mean -0.7 (p=0.41), intensity SD +0.4 (p=0.45). She speaks slower after being
 interrupted, the opposite of the speed-up the paper expects from a natural speaker; the other changes are not
 significant at this size. Her voice comes from Cartesia, so this most likely reflects the TTS rather than any choice
-the agent makes (not checked). The judge was not run, so all interruption clips with voice data count, not
-only those labelled Respond.
+the agent makes (not checked). As in the paper, only the interruption clips the judge labelled Respond count (4 of 5).
 
 ### What the five rounds show
 
 - **She takes every turn meant for her and almost never cuts in.** 5/5 turn-taking, 5/5 interruptions, no missed
-  turns, and 1 cut-in over 10 pauses. Smart Turn and Flux wait out a mid-sentence pause.
+  turns, and 1 cut-in over 10 pauses. Flux's end-of-turn model waits out a mid-sentence pause.
 - **She answers almost anything that sounds like speech.** 8 of 10 not-addressed clips got a reply (all side talk,
   TV or radio, and background speech); only the two noise clips were ignored. With addressing off she replies to any
   transcript. This is the clearest weakness.
@@ -171,6 +184,26 @@ only those labelled Respond.
   her in 0.5 to 0.9 s, where the papers want her to carry on.
 - **She is slow to answer.** Around 2 s from the end of the user's turn to her first audio, against the papers' 1 s
   mark. This is Flux end of turn, Haiku, and the first Cartesia audio, over the network.
+
+## Mac, Nov 6, 2026: A/B runs
+
+Three changes were tried on the same 30 clips as rounds 1 to 3 above (seed 174374, 3 rounds each), switched on through
+the entry's environment (ADR-045). One trial out of 3 is within run-to-run noise.
+
+| Change | Spend | Verdicts changed | Reply latency p50 | Stop on interruption, mean |
+|---|---|---|---|---|
+| None (rounds 1 to 3 above) | | | 2.35 s | 0.67 s |
+| Prompt caching | $0.60 | +1 backchannel, -1 noise | 2.40 s | 0.64 s |
+| Addressing (ADR-016) | $0.64 | +1 backchannel, -1 Candor pause | 2.38 s | 0.67 s |
+| Duck-then-decide barge-in | $0.68 | -1 backchannel clean twin | 2.37 s | 0.86 s |
+
+- **No change improved the scores or the latency.** The time goes to Flux's end-of-turn wait (0.8 s), Haiku's first
+  token (1.0 s) and Cartesia's first audio (0.3 s), and none of these changes touches them.
+- **Prompt caching cut the LLM cost by about 87%** and is now on by default.
+- **Addressing could not act here**: she stays ACTIVE for 30 s after she speaks, and the trials come closer than that,
+  so false turn-taking stayed at 0 of 5 correct.
+- **Duck mode made stopping slower** by about 0.2 s, since the benchmark counts ducked speech as still talking.
+- Flux eager end of turn was not run, to keep Cartesia credits for the demo.
 
 ## How it compares with full-duplex and commercial systems
 
@@ -182,26 +215,29 @@ at the end. They are not our measurements, and they are not like for like:
   their own setups, at the time of writing (2025 and early 2026).
 - The papers report one latency per system; ours shows the median and the mean.
 - The course's false turn-taking rate is new: no published system has a number for it.
+- Our judge is GPT-4o through OpenRouter. fd-benchmark notes that the paper's interruption-scoring code used
+  gpt-4-turbo, so the judge scores compare closely but not exactly.
 - PersonaPlex's figures are NVIDIA's own, from its model card, and its interruption latency is the time for the
   agent to stop speaking, not to start the answer.
 
 ### Full-Duplex-Bench v1
 
-| System | Kind | Pause TOR synthetic (lower) | Pause TOR Candor (lower) | Turn-taking TOR (higher) | Turn-taking latency, s | Interruption TOR (higher) | Interruption latency, s |
-|---|---|---|---|---|---|---|---|
-| **ME3 (Mac, 5 rounds)** | cascaded, cloud | **0.00** | **0.20** | **1.00** | 2.35 mean (2.51 median) | **1.00** | 1.92 |
-| dGSLM | full-duplex, research | 0.934 | 0.935 | 0.975 | 0.352 | 0.917 | 2.531 |
-| Moshi (Kyutai) | full-duplex, open | 0.985 | 0.980 | 0.941 | 0.265 | 1.000 | 0.257 |
-| Freeze-Omni | speech LLM, open | 0.642 | 0.481 | 0.336 | 0.953 | 0.867 | 1.409 |
-| Gemini Live (Google) | commercial | 0.255 | 0.310 | 0.655 | 1.301 | 0.891 | 1.183 |
-| PersonaPlex 7B (NVIDIA, self-reported) | full-duplex, open | 0.358 | 0.431 | 0.908 | 0.170 | 0.950 | 0.240 (time to stop) |
+| System | Kind | Pause TOR synthetic (lower) | Pause TOR Candor (lower) | Turn-taking TOR (higher) | Turn-taking latency, s | Interruption TOR (higher) | Interruption judge score, 0 to 5 (higher) | Interruption latency, s |
+|---|---|---|---|---|---|---|---|---|
+| **ME3 (Mac, 5 rounds)** | cascaded, cloud | **0.00** | **0.20** | **1.00** | 2.35 mean (2.51 median) | **1.00** | **4.8** | 1.92 |
+| dGSLM | full-duplex, research | 0.934 | 0.935 | 0.975 | 0.352 | 0.917 | 0.201 | 2.531 |
+| Moshi (Kyutai) | full-duplex, open | 0.985 | 0.980 | 0.941 | 0.265 | 1.000 | 0.765 | 0.257 |
+| Freeze-Omni | speech LLM, open | 0.642 | 0.481 | 0.336 | 0.953 | 0.867 | 3.615 | 1.409 |
+| Gemini Live (Google) | commercial | 0.255 | 0.310 | 0.655 | 1.301 | 0.891 | 3.376 | 1.183 |
+| PersonaPlex 7B (NVIDIA, self-reported) | full-duplex, open | 0.358 | 0.431 | 0.908 | 0.170 | 0.950 | 4.290 | 0.240 (time to stop) |
 
 On these five clips per group, ME3 waits out pauses and takes turns at least as well as every listed system, since
-Smart Turn (a turn model on the audio) and Flux's end of turn decide when the user is done, not silence alone. Five
+Flux's end-of-turn model decides when the user is done from the speech itself, not from silence alone. Five
 clips cannot separate 1.00 from dGSLM's 0.975 on turn-taking, but the pause gap to the full-duplex models is large. Its weakness is speed: native full-duplex models (Moshi,
 PersonaPlex) answer in 0.17 to 0.27 s, about ten times faster, and Gemini Live in 1.3 s. On interruption latency ME3
-(1.92 s) is slower than Moshi, Gemini Live and Freeze-Omni, and faster than dGSLM. Interruption relevance (the GPT-4o
-judge score) was not scored.
+(1.92 s) is slower than Moshi, Gemini Live and Freeze-Omni, and faster than dGSLM. On what she says after the
+interruption, the GPT-4o judge gives ME3 4.8 of 5, the highest in the table, likely because a full text LLM answers
+the new request better than a speech model does (not tested).
 
 ### Full-Duplex-Bench v1.5: stop and response latency
 
@@ -229,7 +265,7 @@ three.
 
 | System | Interruption: Respond | Backchannel: Resume | Talking to others: Resume | Background speech: Resume |
 |---|---|---|---|---|
-| **ME3 (Mac, 5 rounds)** | not judged (stopped and came back 5/5) | not judged (kept talking 2/5) | not judged (stopped every time) | not judged (stopped every time) |
+| **ME3 (Mac, 5 rounds, n=5 each)** | 0.80 | 0.40 | 0.00 | 0.20 |
 | GPT-4o Realtime | 0.78 | 0.70 | 0.02 | 0.04 |
 | Freeze-Omni | 0.72 | 0.80 | 0.25 | 0.25 |
 | Moshi | 0.50 | 0.06 | 0.19 | 0.07 |
@@ -239,27 +275,28 @@ three.
 The papers show a trade-off that ME3 also has: the systems that respond best to a real interruption (GPT-4o
 Realtime, Freeze-Omni) also answer side talk and background speech, and the ones that ignore them respond less to a
 real interruption. Nova Sonic ignores all three overlaps; Gemini Live ignores side talk but answers background speech
-70% of the time. ME3 sits with GPT-4o Realtime: it stops for everything and
-then answers. Its timing-only shares cannot confirm the labels until the judge runs, but the false turn-taking rate
-(80%) and the fact that it stopped in every talking-to-others and background trial point the same way.
+70% of the time. ME3 sits with GPT-4o Realtime: it responds to a real interruption as often (0.80 against 0.78),
+and like it, it answers side talk and background speech instead of resuming. Its backchannel Resume (0.40) is
+below every system except Moshi.
 
 ### Where ME3 stands
 
-- **At least as good as the listed systems** on pause handling and taking the turn (v1), and quick to stop for a
-  real interruption (v1.5), second only to GPT-4o Realtime.
+- **At least as good as the listed systems** on pause handling and taking the turn (v1), on what it says after an
+  interruption (judge score 4.8, Respond 0.80), and quick to stop for a real interruption, second only to GPT-4o
+  Realtime.
 - **Slower than all of them** to start an answer: about 2 s, against 0.2 to 0.3 s for native full-duplex models and
   1.2 to 1.5 s for GPT-4o Realtime. The work for this is in `TODO.md` under Latency.
 - **Like GPT-4o Realtime** in answering speech that is not meant for it. Addressing (ADR-016) and duck-then-decide
-  barge-in are built for this, but are off and have only run on fakes. The class benchmark's false turn-taking clips
-  are a ready test for them.
+  barge-in are built for this and stay off: on the A/B runs above, neither helped, because the trials keep her in
+  addressing's ACTIVE state and ducking delays the stop.
 - **Not measured here:** tools. ME3 runs MCP tools behind its own policy at about $0.22 a round of this benchmark,
   and it is built to run on a Raspberry Pi (the Pi class-benchmark run is still to do). GPT-4o Realtime and Gemini
   Live also call functions; Full-Duplex-Bench v1 and v1.5 do not test tool use (v3 does).
 
 ## Not done yet
 
-- The judge, added to the same run folders with `fdbench score`, for the interruption score and the v1.5 labels.
 - The Pi run, with the Pi as the remote assistant (the guide's steps 8 to 11).
+- The Flux eager end-of-turn A/B run (ADR-045).
 - Classmates should compare runs with the same rounds and judge.
 
 Run folders stay on the Mac in `fd-benchmark/runs/`, which git ignores. Their recordings hold the Candor and

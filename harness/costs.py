@@ -123,6 +123,13 @@ class CostObserver(BaseObserver):
             self._last_prompt_tokens = u.prompt_tokens
             yield llm, "llm_input_tokens", u.prompt_tokens, u.prompt_tokens * rate["input_per_token"]
             yield llm, "llm_output_tokens", u.completion_tokens, u.completion_tokens * rate["output_per_token"]
+            if llm == "anthropic":  # Anthropic reports prompt_tokens net of the cache (ADR-045)
+                if u.cache_creation_input_tokens:
+                    n = u.cache_creation_input_tokens
+                    yield llm, "llm_cache_write_tokens", n, n * rate["cache_write_per_token"]
+                if u.cache_read_input_tokens:
+                    n = u.cache_read_input_tokens
+                    yield llm, "llm_cache_read_tokens", n, n * rate["cache_read_per_token"]
         elif isinstance(d, STTUsageMetricsData) and stt in FLUX_STAGES:
             minutes = float(d.value.audio_seconds) / 60.0
             yield "deepgram", "stt_minutes", minutes, minutes * p["deepgram_flux_per_min"]

@@ -304,7 +304,10 @@ async def run_bot(
 
     cost_obs = CostObserver(ledger, cfg.providers, log.run_id, on_cap_reached)
     log.emit("run_start", profile=cfg.name, input=input_mode, mcp=mcp_transport,
-             stages=cfg.providers["stages"])  # fmt: skip
+             stages=cfg.providers["stages"], barge_in=cfg.profile["barge_in"]["mode"],
+             addressing=cfg.profile["addressing"]["enabled"],
+             prompt_caching=bool(cfg.providers["providers"]["anthropic"].get("prompt_caching")),
+             flux={k: v for k, v in cfg.providers["providers"]["deepgram"]["flux"].items() if v is not None})  # fmt: skip
 
     policy = ToolPolicy(cfg.tool_policy, on_event=log.emit)
     policy.plays_audio = input_mode != "text"
