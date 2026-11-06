@@ -88,12 +88,17 @@ A 2 to 3 minute script, in `docs/live-demo.md` under "Class demo on the Pi": a g
 
 ### Challenges and references
 
-| Challenge | Fix | Measurement |
-|---|---|---|
-| Aura-2 audio arrived slower than real time, with gaps mid-reply, and has no word timestamps | Cartesia as the TTS (ADR-015) | Median output gap 354 ms to 45 ms; context keeps only heard words |
-| Waiting for the end of the turn | Flux eager end of turn at 0.5 (ADR-046) | 159 ms faster on chat turns, 355 ms on tool turns |
-| Cartesia timed out on the Pi | IPv6 off on Wi-Fi (the route did not work) | Handshake 0.39 s over IPv4 against a 10 s timeout; then 30 of 30 trials spoke |
-| Pi under-voltage | A proper 5 V supply | `throttled=0x0` through the run, peak 62.8 C |
-| Bot answering its own voice on speakers | WebRTC AEC and a self-echo filter (ADR-013, ADR-042) | 27 speaker turns with no self-interruption |
+On the slide this is a grid of one line per challenge (problem, cause, fix, proof). The fuller wording:
+
+| Problem | Cause | Fix | Proof |
+|---|---|---|---|
+| The reply latency read about 2.35 s on the Mac but 1.46 s on the Pi | Two different clocks. The Mac figure is Full-Duplex-Bench turn-taking latency: from the clip's annotated end of turn to her reply in the recording, on real Candor conversation. The Pi figure is the course stage test: from the Silero VAD end mark to reply audio handed to the output, on short clean phrases | Report each number with its own clock, and check the Pi run on the recording clock too. The real gain since the Mac rounds is Flux eager end of turn and short first sentences (ADR-046) | Same Pi run (`2026-11-06_21-22-21`, 20 turns): 1.46 s mean on the stage clock, 1.71 s mean (1.57 s median) on the recording clock. The VAD end mark came 0.11 s after the true end of speech. Full-Duplex-Bench turn-taking: 1.61 s on the Pi (1 trial) against 2.35 s mean on the Mac (5 trials, 1.44 to 2.90 s) |
+| Aura-2 audio arrived slower than real time, with gaps mid-reply, and has no word timestamps | Aura-2 streaming | Cartesia as the TTS (ADR-015) | Median output gap 354 ms to 45 ms; context keeps only heard words |
+| Waiting for the end of the turn | Flux waits for its final EndOfTurn | Flux eager end of turn at 0.5 (ADR-046) | 159 ms faster on chat turns, 355 ms on tool turns |
+| Cartesia timed out on the Pi | The Wi-Fi handed out an IPv6 route that did not reach Cartesia | IPv6 off on `wlan0` until reboot | Handshake 0.39 s over IPv4 against a 10 s timeout; then 30 of 30 trials spoke |
+| Pi under-voltage | Weak power supply | A proper 5 V supply | `throttled=0x0` through the run, peak 62.8 C |
+| Bot answering its own voice on speakers | Speakers with no AEC in Pipecat | WebRTC AEC and a self-echo filter (ADR-013, ADR-042) | 27 speaker turns with no self-interruption |
+
+The latency comparison is not fully closed: running the stage test on the Mac would separate the machine from the code changes, and needs Cartesia credits.
 
 References: modelcontextprotocol.io; docs.pipecat.ai; github.com/quielq/quielq-full-duplex-voice-agent; github.com/trueshotjames/ai231-me3-full-duplex-benchmarking; run logs in `logs/` (not in the repo).
