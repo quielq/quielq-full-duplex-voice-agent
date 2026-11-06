@@ -84,6 +84,8 @@ Afterwards, read the run:
 uv run python -m bench.run_report --live
 ```
 
+If Cartesia never speaks and the log shows `timed out during opening handshake`, check for an IPv6 address on the Wi-Fi (`ip -6 addr show wlan0`). On Nov 6 the Wi-Fi started handing one out, the IPv6 path did not reach Cartesia, and the WebSocket tried it first. Turn IPv6 off until the next reboot with `sudo sysctl -w net.ipv6.conf.wlan0.disable_ipv6=1` (`docs/class-benchmark.md`, Pi run).
+
 ## 6. Start at boot
 
 Turn on desktop autologin in `raspi-config`, then:

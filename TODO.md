@@ -94,6 +94,7 @@ Pi 5, USB mic and Dell soundbar, WebRTC AEC, `stt=voice_listen,llm=anthropic,tts
 
 ## Pi port, found on Nov 2 (ADR-029, ADR-030, ADR-031)
 
+- [ ] IPv6 on the Pi's Wi-Fi (Nov 6): the network started handing out IPv6, the path did not reach Cartesia, and voice-speak's WebSocket tried it first and timed out on every reply. Worked around with `sysctl net.ipv6.conf.wlan0.disable_ipv6=1`, which a reboot undoes. A lasting fix would make voice-speak connect over IPv4 only, or prefer IPv4 in `/etc/gai.conf`
 - [x] Cooling: resolved Nov 5. With the fan at level 2, an 11 minute live run with the face and Spotify stayed at 53 to 60 C, never throttled (`20261105-203514-1a2f7a`), against 84 C and throttling on Nov 2. Recheck if a run goes much longer. Nov 2: the Pi reached 84 C and has throttled since boot. A fan clashes with the display mounting, so find what fits, and check whether open page tabs drive the heat
 - [x] Power: resolved Nov 5. Nov 2 showed `throttled=0xf0000` with under-voltage; on Nov 5 the supply read 5.06 V and `throttled=0x0` before, during, and after the run (`20261105-203514-1a2f7a`)
 - [ ] Firmware stall, Nov 5, before the run: a firmware call timed out, the touch controller timed out 9 times, the USB mic dropped ("Not enough bandwidth", -62), and the Pi rebooted. Power read fine. Cause unknown; if it happens again, save `dmesg` before rebooting
@@ -272,7 +273,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 
 - [x] Repeat the Haiku task suite (Nov 3): 321 of 340 over 5 repeats, $0.52. Failures: side talk 0 of 10 (known), `notes_delete_runs_after_undo` 2 of 5 (lists notes, never deletes), `notes_conv_undo_keeps_note` 4 of 5, and the site case, void from the runner bug and 2 of 2 after the fix
 - [ ] 40 tool-calling turns plus 20 non-addressed utterances, 5 repeats each, against the decision rule, through `bench/task_runner.py`. Haiku is the baseline, other candidates after purchases are approved
-- [x] Full-Duplex-Bench adapter (v1/v1.5): the class benchmark, fd-benchmark, runs through `bench/fdb_adapter.py` (Nov 6, ADR-044, `docs/class-benchmark.md`). Five Mac rounds, $1.08. Left: the Pi run, the judge, and v3
+- [x] Full-Duplex-Bench adapter (v1/v1.5): the class benchmark, fd-benchmark, runs through `bench/fdb_adapter.py` (Nov 6, ADR-044, `docs/class-benchmark.md`). Five Mac rounds, $1.08. Judge done (ADR-045). Pi run Nov 6 (`2026-11-06_21-22-21`): stage test 10 x 2 plus one round, every course row under the class target, E2E mean 1.46 s, p95 1.96 s, barge-in 0.70 s (n=2), WER 5.5%. Left: more Pi rounds for barge-in, and v3
 - [ ] Our own task suite and team-recorded clips (including self-corrections)
 - [ ] Acoustic stop-latency measurement
 - [ ] Cost per successful task in every report
