@@ -30,7 +30,8 @@ cases:
     turns: ["what time is it"]
     expect:
       tools: [get_time]
-      spoken_re: "\\d"
+      # The prompt asks for numbers as words, so "four fifty-two" passes as well as "4:52" (ADR-046).
+      spoken_re: "\\d|\\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|noon|midnight)\\b"
 
   - id: next_day
     layer: next_reply

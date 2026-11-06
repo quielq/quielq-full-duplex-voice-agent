@@ -9,6 +9,8 @@ clip: use them to compare settings, not as headline latency.
         --grid eot_threshold=0.5,0.6,0.7,0.8 --repeat 3                       # about $0.09
     ME3_LIVE=1 uv run python -m bench.eot_sweep --stt deepgram_flux --llm groq \
         --grid eager_eot_threshold=off,0.4,0.5 --repeat 2
+    ME3_LIVE=1 uv run python -m bench.eot_sweep --stt deepgram_flux --llm anthropic \
+        --grid eager_eot_threshold=off,0.5 --repeat 3                       # about $0.06 (ADR-046)
     ME3_LIVE=1 uv run python -m bench.eot_sweep --stt deepgram_flux \
         --grid turn_stop=flux,flux_forced --repeat 3                          # about $0.04
 
@@ -112,7 +114,7 @@ async def run_clip(args, name: str, value, kind: str, text: str, wav: Path, work
     cfg = load_config("mac")  # real ledger path, so live spend counts against the caps
     cfg.providers["stages"] = {"stt": args.stt, "llm": args.llm, "tts": "fake"}
     if args.model:
-        cfg.providers["providers"]["groq"]["model"] = args.model
+        cfg.providers["providers"][args.llm]["model"] = args.model
     cfg.providers["providers"]["deepgram"]["flux"].update(args.fixed)
     if name == "reply_templates":
         cfg.tool_policy["reply_templates"]["enabled"] = value
@@ -189,9 +191,9 @@ def main() -> None:
     ap.add_argument("--grid", required=True, help="one Flux setting and its values, 'off' for unset")
     ap.add_argument("--set", default="", help="Flux settings held fixed, e.g. eot_threshold=0.6")
     ap.add_argument("--stt", choices=["fake", "deepgram_flux", "voice_listen"], default="fake")
-    ap.add_argument("--llm", choices=["fake", "groq"], default="fake")
+    ap.add_argument("--llm", choices=["fake", "groq", "anthropic"], default="fake")
     ap.add_argument("--repeat", type=int, default=1)
-    ap.add_argument("--model", help="override the Groq model for this run")
+    ap.add_argument("--model", help="override the chosen LLM provider's model for this run")
     ap.add_argument("--kinds", default="", help="only these clip kinds, e.g. command")
     args = ap.parse_args()
     if (args.stt != "fake" or args.llm != "fake") and os.environ.get("ME3_LIVE") != "1":
