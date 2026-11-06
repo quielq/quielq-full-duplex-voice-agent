@@ -49,6 +49,7 @@ class Anomaly:
 class Turn:
     turn: int
     heard: str = ""
+    said: str = ""
     tools: list[str] = field(default_factory=list)
     reply_ms: float | None = None
     interrupted: bool = False
@@ -112,6 +113,8 @@ def _turns(events: list[dict]) -> list[Turn]:
                 turns[tid - 1].cut_off = True
         if name in ("asr_final", "user_text"):
             t.heard = f"{t.heard} {e.get('text', '')}".strip()
+        elif name == "reply_text":
+            t.said = f"{t.said} {e.get('text', '')}".strip()
         elif name == "tool_call_start":
             t.tools.append(e.get("name", "?"))
         elif name == "end_of_turn":
@@ -287,6 +290,8 @@ def print_report(report: Report, events: list[dict], *, show_all: bool) -> None:
         tools = f" tools={t.tools}" if t.tools else ""
         cut = " interrupted" if t.interrupted else ""
         print(f"  {t.turn:>3}  reply {reply}  {t.heard[:60]!r}{tools}{cut}")
+        if t.said:
+            print(f"                     said {t.said[:80]!r}")
     print("\nTimeline")
     for line in timeline(events, show_all=show_all):
         print(f"  {line}")

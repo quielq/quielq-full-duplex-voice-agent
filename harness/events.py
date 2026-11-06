@@ -87,6 +87,7 @@ class TurnEventObserver(BaseObserver):
         self.llm_text: list[str] = []
         self._tool_call_ids: set[str] = set()
         self._response_has_text = False
+        self._reply_start = 0  # index into llm_text where the current response began
         # Set when an LLM response that carried text has ended (used by scripted runs).
         self.reply_done = asyncio.Event()
         # Set by the bot when the waiting phrase is on (harness/filler.py).
@@ -144,6 +145,7 @@ class TurnEventObserver(BaseObserver):
         elif isinstance(frame, LLMFullResponseStartFrame):
             self.replying = True
             self._response_has_text = False
+            self._reply_start = len(self.llm_text)
             log.emit("llm_request")
         elif isinstance(frame, LLMTextFrame):
             self._response_has_text = True
@@ -155,6 +157,8 @@ class TurnEventObserver(BaseObserver):
             self.replying = False
             log.emit("llm_end")
             if self._response_has_text:
+                # What the model wrote, so a run report can show what the agent said.
+                log.emit("reply_text", text="".join(self.llm_text[self._reply_start:]).strip())
                 self.reply_done.set()
                 if self.policy:
                     self.policy.reply_ended()

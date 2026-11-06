@@ -76,12 +76,21 @@ from servers import command_policy
 
 PERMISSIONS = ("auto", "confirm", "disabled")
 HINT_FIELDS = ("read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint")
+# Fixed text plus the tool name, never tool output (ADR-023, ADR-048).
 RESULT_NOTE = (
-    "(Automatic note, not from the user: the held action has finished and its tool result above "
-    "is current, even if earlier replies said otherwise. Any wait announced earlier really happened, "
-    "so do not correct or apologize for it. Tell the user the outcome in one short sentence, and "
-    "do not call a tool.)"
+    "(Automatic note, not from the user: {tool} has now run and succeeded. It is done, and nothing "
+    "is waiting for a yes, so if an earlier reply said it was still waiting, that is out of date. "
+    "Its tool result above is current. Any wait announced earlier really happened, so do not "
+    "apologize for it. Tell the user in one short sentence that it is done and what the result "
+    "says, and do not call a tool.)"
 )
+
+
+RESULT_NOTE_PREFIX = RESULT_NOTE.split("{tool}")[0]
+
+
+def result_note(tool: str) -> str:
+    return RESULT_NOTE.format(tool=tool)
 # command: a read runs at once, anything else asks (ADR-034). service: a background job always asks.
 GUARDS = {
     "command": lambda args: command_policy.check(str(args.get("command") or "")),
@@ -617,7 +626,7 @@ class ToolPolicy:
             await self.speak(self.phrases["failed"])
         elif not failed and action.rule.report_result and self.report:
             self._decide(action.rule.name, "result_reported")
-            await self.report(RESULT_NOTE)
+            await self.report(result_note(action.rule.name))
 
     async def _call(self, rule: ToolRule, inner, params: FunctionCallParams) -> Any:
         """Run the real tool with the policy timeout and return its result."""
@@ -717,9 +726,14 @@ class ToolPolicy:
             action.task.cancel()
         self._decide(action.rule.name, "confirmed", text=text)
         undo_s = action.rule.undo_s
-        # A longer yes also reaches the LLM, which must not still read "needs_confirmation".
-        when = f"runs in {undo_s:g} seconds unless they say cancel" if undo_s > 0 else "is running now"
-        action.outcome = {"status": "confirmed", "note": f"The user said yes. It {when}. Do not call this tool again."}
+        # A longer yes also reaches the LLM, which must not still read "needs_confirmation". The
+        # window opens when the next reply ends, so the note gives no clock time (ADR-048).
+        when = (f"runs by itself {undo_s:g} seconds after your next reply ends, unless the user says cancel. "
+                "It may already have run" if undo_s > 0 else "is running now")
+        action.outcome = {"status": "confirmed",
+                          "note": f"Approved: the user said yes, and nobody needs to confirm anything more. It "
+                          f"{when}. If asked, say it is about to happen or has happened, never that it waits "
+                          "for a yes. Do not call this tool again."}  # fmt: skip
         self._write_back(action)
         if undo_s > 0:
             action.state = "undo"

@@ -32,7 +32,7 @@ from pipecat.services.stt_service import SegmentedSTTService
 from pipecat.services.tts_service import TextAggregationMode, TTSService
 from pipecat.utils.time import time_now_iso8601
 
-from harness.tool_policy import RESULT_NOTE
+from harness.tool_policy import RESULT_NOTE_PREFIX
 
 
 def _unsupported(cls, **given):
@@ -181,7 +181,7 @@ class RuleBasedLLMService(LLMService):
 
         text = _text_of(last) if role == "user" else ""
         low = (text or "").lower()
-        if text == RESULT_NOTE:
+        if (text or "").startswith(RESULT_NOTE_PREFIX):
             await self._stream("That's finished.")
             return
         if await self._tool_rule(context, low):

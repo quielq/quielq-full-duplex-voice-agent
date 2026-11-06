@@ -41,6 +41,9 @@ async def test_text_request_sets_timer(cfg, tmp_path, transport):
     timers = _timers(data)
     assert len(timers) == 1 and timers[0]["kind"] == "timer"
     assert r.session_usd == 0.0
+    events = [json.loads(line) for line in r.events_path.read_text().splitlines()]
+    said = [e["text"] for e in events if e["event"] == "reply_text"]
+    assert said and said[-1].endswith("Timer set for one minute.")  # what the agent said is logged
 
 
 @pytest.fixture(scope="module")
