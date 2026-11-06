@@ -19,7 +19,7 @@ from harness.config import load_config
 from harness.file_input import Segment
 from harness.mcp_tools import clock_stdio_client
 from harness.tool_policy import (
-    RESULT_NOTE,
+    result_note,
     DuplicateToolName,
     ToolPolicy,
     ToolRule,
@@ -433,6 +433,7 @@ async def test_a_yes_replaces_needs_confirmation_in_the_context(policy, monkeypa
     message = json.loads(params.context.messages[0]["content"])
     assert message["status"] == "confirmed"
     assert "5 seconds" in message["note"]
+    assert "nobody needs to confirm" in message["note"]
     policy.on_transcript("cancel")
     assert json.loads(params.context.messages[0]["content"])["status"] == "not_done"
 
@@ -450,7 +451,8 @@ async def test_a_held_success_starts_one_report_with_fixed_text(policy, monkeypa
     await policy.handle(ToolRule("t", "confirm", 0.0, 1.0), inner, params)
     policy.on_transcript("yes")
     await policy.settled()
-    assert notes == [RESULT_NOTE]  # tool output stays in the tool message
+    assert notes == [result_note("t")]  # tool output stays in the tool message
+    assert "secret.txt" not in notes[0]
     assert "secret.txt" in params.context.messages[0]["content"]
     assert "result_reported" in decisions(policy)
 
