@@ -24,7 +24,7 @@ import contextlib
 import os
 import signal
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -265,9 +265,14 @@ async def run_bot(
     servers: dict[str, str] | None = None,
     agent: Agent | None = None,
     ui: UiServer | None = None,
+    transport=None,
+    on_worker: Callable[[PipelineWorker], None] | None = None,
 ) -> BotResult:
     """One session. ``ui`` is a face that outlives the session (the agent loop in main); without
-    it the session starts and stops its own face when the profile turns the face on."""
+    it the session starts and stops its own face when the profile turns the face on.
+
+    ``input_mode="fdbench"`` uses ``transport`` (the class benchmark's socket transport, ADR-044)
+    where mic mode opens the sound card; ``on_worker`` hands the worker out so the caller can stop it."""
     log = EventLog(cfg.path("logs_dir"))
     doc_scope = None
     if agent is not None:
@@ -414,6 +419,16 @@ async def run_bot(
             front = [transport.input(), InputVoiceTap(log.emit, adaptive=True), mic_gate, _vad(cfg), stt,
                      gate, *echo_procs, *address_procs, *duck_procs]  # fmt: skip
             back = [*filler_procs, clips, transport.output()]
+        elif input_mode == "fdbench":
+            if transport is None:
+                raise ValueError("fdbench mode needs a transport")
+            trace_writes(transport.output(), hops)
+            # No sound card: frames carry no capture stamps, and output has no device latency.
+            OutputVoiceTap(log.emit, device_latency_s=0.0).attach(transport.output())
+            stt = build_stt(cfg.providers, ledger, interrupt=stt_interrupts, forced=forced, voice=voice)
+            front = [transport.input(), InputVoiceTap(log.emit, adaptive=True), mic_gate, _vad(cfg), stt,
+                     gate, *echo_procs, *address_procs, *duck_procs]  # fmt: skip
+            back = [*filler_procs, clips, transport.output()]
         elif input_mode == "wav":
             source = ScriptedMicSource(segments or [Segment(wav)], on_event=log.emit)
             stt = build_stt(cfg.providers, ledger, script=stt_script or [say], interrupt=stt_interrupts,
@@ -448,6 +463,8 @@ async def run_bot(
             observers=[turn_obs, cost_obs, *([network] if network else [])],
             idle_timeout_secs=None,
         )
+        if on_worker is not None:
+            on_worker(worker)
 
         async def speak(text: str, *, append_to_context: bool = True) -> None:
             await worker.queue_frame(TTSSpeakFrame(text, append_to_context=append_to_context))
@@ -533,14 +550,14 @@ async def run_bot(
         runner = WorkerRunner(handle_sigint=handle_sigint)
         await runner.add_workers(worker)
         finisher = None
-        if input_mode != "mic":
+        if input_mode not in ("mic", "fdbench"):
             finisher = asyncio.create_task(finish_after_reply())
         clock_file = (Path(data_dir) if data_dir else cfg.path("data_dir")) / "clock.json"
         timers = asyncio.create_task(TimerWatch(clock_file, speak, log.emit).run())
         quiet = lambda: turn_obs.quiet and not policy.busy()  # noqa: E731
         delegated = asyncio.create_task(DelegateWatch(clock_file.with_name("delegate.json"), speak, quiet, log.emit).run())
-        stats = asyncio.create_task(SystemStats(log.emit).run()) if input_mode == "mic" else None
-        lag = asyncio.create_task(LoopLag(log.emit).run()) if input_mode == "mic" else None
+        stats = asyncio.create_task(SystemStats(log.emit).run()) if input_mode in ("mic", "fdbench") else None
+        lag = asyncio.create_task(LoopLag(log.emit).run()) if input_mode in ("mic", "fdbench") else None
         try:
             await runner.run()
         finally:

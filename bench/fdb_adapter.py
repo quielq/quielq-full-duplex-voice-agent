@@ -1,14 +1,86 @@
-"""Full-Duplex-Bench adapter (not built yet; the full benchmark harness is out of scope for the first spike).
+"""Entry for the class benchmark, fd-benchmark (ADR-044).
 
-Plan, per docs/architecture.md "Full-Duplex-Bench adapter":
-* stream the v1/v1.5 user-channel wav through the pipeline in real time
-  (harness.file_input.WavFileSource already does the pacing);
-* record every output audio frame with its wall-clock offset into a same-length wav;
-* run the Full-Duplex-Bench evaluation scripts on the pair.
+fd-benchmark (https://github.com/trueshotjames/ai231-me3-full-duplex-benchmarking) plays the
+Full-Duplex-Bench v1 and v1.5 clips into the agent over a WebSocket and scores what she says back.
+Its launcher builds that socket transport and calls ``build`` here; nothing else in the bot changes:
+the same VAD, Smart Turn, STT, LLM, TTS, tool policy and cost ledger run as on the mic.
 
-Full-Duplex-Bench is CC BY-NC 4.0: coursework use only, no commercial claims without permission.
+Point the launcher at this file, from the project folder with fd-benchmark cloned inside it:
+
+    FDBENCH_ENTRY=bench/fdb_adapter.py .venv/bin/python fd-benchmark/launch_assistant.py --check
+
+Settings come from the environment, so a benchmark run never needs a project edit:
+
+    ME3_PROFILE   mac or pi (default mac)
+    ME3_STAGES    stage overrides as in ``--stages``, e.g. stt=voice_listen,llm=anthropic,tts=voice_speak
+    ME3_SERVERS   task servers, default all
+
+Every stage defaults to its fake, as everywhere else. Full-Duplex-Bench data is CC BY-NC 4.0:
+coursework use only.
 """
 
+from __future__ import annotations
 
-def run(*_args, **_kwargs):
-    raise NotImplementedError("fdb_adapter is scheduled after Gate 1; see docs/architecture.md")
+import os
+import tempfile
+from pathlib import Path
+
+PROJECT_MARKER = "harness/bot.py"
+
+
+def _config():
+    from harness.config import load_config
+
+    cfg = load_config(os.environ.get("ME3_PROFILE", "mac"))
+    for item in filter(None, os.environ.get("ME3_STAGES", "").split(",")):
+        stage, _, choice = item.partition("=")
+        if stage not in cfg.providers["stages"]:
+            raise SystemExit(f"ME3_STAGES: unknown stage {stage!r}")
+        cfg.providers["stages"][stage] = choice
+    # The clips arrive as samples, not through a room: no echo path, so no AEC or self-echo filter.
+    cfg.profile["audio"]["echo_cancel"] = False
+    cfg.profile["ui"]["enabled"] = False
+    os.environ["ME3_MUSIC_BACKEND"] = cfg.providers["stages"].get("music", "fake")
+    return cfg
+
+
+def audio_rates() -> tuple[int, int]:
+    audio = _config().profile["audio"]
+    return audio["in_sample_rate"], audio["out_sample_rate"]
+
+
+async def build(transport, log_dir: Path):
+    """Return (coroutine that runs one session on ``transport``, async function that stops it)."""
+    from harness.agents import AgentStore, seed_documents, session_config
+    from harness.bot import run_bot
+    from harness.mcp_tools import TASK_SERVERS
+
+    cfg = _config()
+    data = cfg.path("data_dir")
+    seed_documents(data / "documents")
+    store = AgentStore(data, cfg.providers)
+    agent = store.builtins()[store.default_id]
+    names = list(filter(None, os.environ.get("ME3_SERVERS", "").split(",")))
+    if unknown := set(names) - set(TASK_SERVERS):
+        raise SystemExit(f"ME3_SERVERS: unknown servers {sorted(unknown)}")
+    servers = {n: TASK_SERVERS[n] for n in names} or None
+    log_dir.mkdir(parents=True, exist_ok=True)
+    # Fresh tool state per session, so a timer or note from an earlier trial or a normal run cannot ring
+    # during a clip. The cost ledger stays in the real data folder, so the daily caps still hold.
+    tool_data = Path(tempfile.mkdtemp(prefix="me3-fdbench-"))
+    seed_documents(tool_data / "documents")
+
+    workers: list = []
+
+    async def run():
+        result = await run_bot(session_config(cfg, agent), agent=agent, input_mode="fdbench", transport=transport,
+                               on_worker=workers.append, handle_sigint=False, servers=servers,
+                               data_dir=str(tool_data))  # fmt: skip
+        (log_dir / "last_run.txt").write_text(f"{result.run_id} {result.events_path} ${result.session_usd:.4f}\n")
+        print(f"ME3 run {result.run_id}, ${result.session_usd:.4f}, events {result.events_path}")
+
+    async def cancel():
+        if workers:
+            await workers[0].cancel()
+
+    return run(), cancel

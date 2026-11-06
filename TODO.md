@@ -268,7 +268,7 @@ Three long mic runs on Nov 1 and 2, 59 replies, end of turn to first audio by fr
 
 - [x] Repeat the Haiku task suite (Nov 3): 321 of 340 over 5 repeats, $0.52. Failures: side talk 0 of 10 (known), `notes_delete_runs_after_undo` 2 of 5 (lists notes, never deletes), `notes_conv_undo_keeps_note` 4 of 5, and the site case, void from the runner bug and 2 of 2 after the fix
 - [ ] 40 tool-calling turns plus 20 non-addressed utterances, 5 repeats each, against the decision rule, through `bench/task_runner.py`. Haiku is the baseline, other candidates after purchases are approved
-- [ ] Full-Duplex-Bench adapter (v1/v1.5, then v3)
+- [x] Full-Duplex-Bench adapter (v1/v1.5): the class benchmark, fd-benchmark, runs through `bench/fdb_adapter.py` (Nov 6, ADR-044, `docs/class-benchmark.md`). Five Mac rounds, $1.08. Left: the Pi run, the judge, and v3
 - [ ] Our own task suite and team-recorded clips (including self-corrections)
 - [ ] Acoustic stop-latency measurement
 - [ ] Cost per successful task in every report

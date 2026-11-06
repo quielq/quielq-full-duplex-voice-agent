@@ -44,9 +44,9 @@ Running the full agent on the Mac: `docs/quickstart-mac.md`. The Pi port order: 
 ```
 harness/        bot.py (entry point), agents.py, fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py, delegate_watch.py
 servers/        voice_listen/, voice_speak/ (Flux and Cartesia relays, ADR-032, plus the stubs), voice_relay.py, tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (built on fakes, ADR-035)
-bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py and latency_bench.py (ADR-036), interruption_test.py, voice_bridge_probe.py, voice_hop_probe.py, voice_fakes.py, task_runner.py, task_suite/cases/, fdb_adapter.py (stub)
+bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py and latency_bench.py (ADR-036), interruption_test.py, voice_bridge_probe.py, voice_hop_probe.py, voice_fakes.py, task_runner.py, task_suite/cases/, fdb_adapter.py (class-benchmark entry for fd-benchmark, ADR-044)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
-docs/           architecture.md, codebase.md (layout, diagram, key code), tools.md, research.md, privacy.md, live-demo.md, decisions/
+docs/           architecture.md, codebase.md (layout, diagram, key code), tools.md, research.md, privacy.md, live-demo.md, class-benchmark.md, decisions/
 assets/         fallback_wavs/, sample_documents/ (fictional, copied into data/documents when missing)
 ```
 
