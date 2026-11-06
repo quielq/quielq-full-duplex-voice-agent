@@ -20,3 +20,4 @@ data/
 !assets/fallback_wavs/*.wav
 
 .DS_Store
+fd-benchmark/
