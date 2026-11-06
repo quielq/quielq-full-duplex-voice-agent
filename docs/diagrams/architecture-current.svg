@@ -1,225 +1,136 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1330" width="1500" height="1330" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 600" font-family="Helvetica, Arial, sans-serif">
+  <title>Via system diagram: Raspberry Pi 5 and cloud APIs, Nov 6, 2026</title>
   <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#455A64"/>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5a75"/>
     </marker>
-    <marker id="arrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#9E9E9E"/>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e8792b"/>
     </marker>
     <style>
-      .t { font-size: 15px; font-weight: 700; fill: #212121; }
-      .s { font-size: 12.5px; fill: #424242; }
-      .k { font-size: 12px; fill: #616161; font-style: italic; }
-      .h { font-size: 16px; font-weight: 700; }
-      .n { font-size: 14px; fill: #212121; }
-      .nb { font-size: 14px; font-weight: 700; fill: #212121; }
-      .local { fill: #E8F5E9; stroke: #2E7D32; stroke-width: 1.8; }
-      .cloud { fill: #E3F2FD; stroke: #1565C0; stroke-width: 1.8; }
-      .ours { fill: #FFF3E0; stroke: #E65100; stroke-width: 1.8; }
-      .pc { fill: #F3E5F5; stroke: #6A1B9A; stroke-width: 1.8; }
-      .off { fill: #F5F5F5; stroke: #9E9E9E; stroke-width: 1.6; stroke-dasharray: 6 4; }
-      .ln { stroke: #455A64; stroke-width: 2; fill: none; }
-      .lg { stroke: #9E9E9E; stroke-width: 2; fill: none; stroke-dasharray: 6 4; }
+      .zone { stroke-width: 2; rx: 14; }
+      .box { fill: #ffffff; stroke: #9aa8bd; stroke-width: 1.5; rx: 8; }
+      .mcp { fill: #fff7ef; stroke: #e8792b; stroke-width: 2; rx: 8; }
+      .cloud { fill: #ffffff; stroke: #1f8a8a; stroke-width: 1.5; rx: 8; }
+      .t { font-size: 15px; font-weight: 700; fill: #1b2a44; }
+      .s { font-size: 12px; fill: #4a5a75; }
+      .zl { font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+      .el { font-size: 11px; fill: #4a5a75; }
+      .ol { font-size: 11.5px; font-weight: 700; fill: #c95f17; }
+      .ln { stroke: #4a5a75; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+      .bi { stroke: #e8792b; stroke-width: 2; stroke-dasharray: 6 4; fill: none; marker-end: url(#o); }
     </style>
   </defs>
-  <rect width="1500" height="1330" fill="#FFFFFF"/>
 
-  <text x="40" y="44" font-size="26" font-weight="700" fill="#212121">ME3 architecture today</text>
-  <text x="40" y="70" font-size="14" fill="#616161">Phase 1, MacBook Air with headphones. As of Oct 22, 2026 (Gate 1 closed, steps 4 to 6 done).</text>
+  <!-- Zones -->
+  <rect class="zone" x="10" y="10" width="890" height="540" fill="#eef2f7" stroke="#1b2a44"/>
+  <text class="zl" x="28" y="36" fill="#1b2a44">RASPBERRY PI 5 · ON DEVICE · ONE HARNESS PROCESS + OUR MCP SERVERS</text>
+  <rect class="zone" x="920" y="10" width="370" height="540" fill="#eaf5f5" stroke="#1f8a8a"/>
+  <text class="zl" x="938" y="36" fill="#1f8a8a">CLOUD APIs · EACH BEHIND A DAILY CAP</text>
 
-  <!-- Pipecat container -->
-  <rect x="40" y="100" width="1030" height="370" rx="14" fill="#FAF5FC" stroke="#6A1B9A" stroke-width="2"/>
-  <text x="60" y="126" class="h" fill="#6A1B9A">Pipecat 1.13 pipeline, assembled by harness/bot.py (one process)</text>
+  <!-- Row 1: audio in -->
+  <rect class="box" x="30" y="60" width="140" height="64"/>
+  <text class="t" x="44" y="86">USB mic</text>
+  <text class="s" x="44" y="106">16 kHz mono</text>
 
-  <!-- Row 1 -->
-  <rect x="70" y="150" width="170" height="100" rx="10" class="local"/>
-  <text x="85" y="175" class="t">Audio input</text>
-  <text x="85" y="196" class="s">mic: LocalAudioTransport</text>
-  <text x="85" y="214" class="s">wav: ScriptedMicSource</text>
-  <text x="85" y="232" class="s">text: no audio at all</text>
+  <rect class="box" x="200" y="60" width="150" height="64"/>
+  <text class="t" x="214" y="86">WebRTC AEC</text>
+  <text class="s" x="214" y="106">speaker as reference</text>
 
-  <rect x="270" y="150" width="170" height="100" rx="10" class="local"/>
-  <text x="285" y="175" class="t">Silero VAD</text>
-  <text x="285" y="196" class="s">runs on the laptop</text>
-  <text x="285" y="214" class="s">detects speech onset</text>
-  <text x="285" y="232" class="s">and silence</text>
+  <rect class="box" x="380" y="60" width="150" height="64"/>
+  <text class="t" x="394" y="86">Silero VAD</text>
+  <text class="s" x="394" y="106">local, speech start/stop</text>
 
-  <rect x="470" y="150" width="170" height="100" rx="10" class="pc"/>
-  <text x="485" y="175" class="t">STT</text>
-  <text x="485" y="196" class="s">default: ScriptedSTT</text>
-  <text x="485" y="214" class="s">live: Deepgram Flux</text>
-  <text x="485" y="232" class="k">speech to text</text>
+  <rect class="mcp" x="680" y="60" width="200" height="64"/>
+  <text class="t" x="694" y="86">voice-listen MCP</text>
+  <text class="s" x="694" y="106">ASR server, holds Flux key</text>
 
-  <rect x="670" y="150" width="170" height="100" rx="10" class="off"/>
-  <text x="685" y="175" class="t">DuckingProcessor</text>
-  <text x="685" y="196" class="s">duck-then-decide</text>
-  <text x="685" y="214" class="s">prototype (ADR-007)</text>
-  <text x="685" y="232" class="k">off unless --barge-in duck</text>
+  <path class="ln" d="M170 92 H198"/>
+  <path class="ln" d="M350 92 H378"/>
+  <path class="ln" d="M530 92 H678"/>
+  <text class="el" x="560" y="84">audio, Unix socket</text>
 
-  <rect x="870" y="150" width="180" height="100" rx="10" class="pc"/>
-  <text x="885" y="175" class="t">User aggregator</text>
-  <text x="885" y="196" class="s">decides turn end:</text>
-  <text x="885" y="214" class="s">Smart Turn v3 (local)</text>
-  <text x="885" y="232" class="s">or Flux end of turn</text>
+  <!-- Row 2: harness -->
+  <rect x="22" y="168" width="866" height="96" rx="10" fill="none" stroke="#1b2a44" stroke-width="1" stroke-dasharray="3 3"/>
+  <text class="el" x="30" y="282" font-weight="700" fill="#1b2a44">Pipecat 1.13 harness, the MCP client (dashed)</text>
+  <rect class="box" x="30" y="184" width="170" height="64"/>
+  <text class="t" x="44" y="210">Turn end + context</text>
+  <text class="s" x="44" y="230">Flux end of turn, eager 0.5</text>
 
-  <!-- Row 2 (right to left) -->
-  <rect x="870" y="330" width="180" height="100" rx="10" class="pc"/>
-  <text x="885" y="355" class="t">LLM</text>
-  <text x="885" y="376" class="s">default: RuleBasedLLM</text>
-  <text x="885" y="394" class="s">live: Groq gpt-oss-20b</text>
-  <text x="885" y="412" class="k">can call MCP tools</text>
+  <rect class="box" x="230" y="184" width="150" height="64"/>
+  <text class="t" x="244" y="210">ContextWindow</text>
+  <text class="s" x="244" y="230">last 20 user turns</text>
 
-  <rect x="670" y="330" width="170" height="100" rx="10" class="pc"/>
-  <text x="685" y="355" class="t">TTS</text>
-  <text x="685" y="376" class="s">default: tone fake</text>
-  <text x="685" y="394" class="s">live: Deepgram Aura-2</text>
-  <text x="685" y="412" class="k">SENTENCE aggregation</text>
+  <rect class="box" x="440" y="184" width="200" height="64"/>
+  <text class="t" x="454" y="210">LLM client</text>
+  <text class="s" x="454" y="230">streams tokens, Via prompt v1</text>
 
-  <rect x="470" y="330" width="170" height="100" rx="10" class="local"/>
-  <text x="485" y="355" class="t">Audio output</text>
-  <text x="485" y="376" class="s">headphones (mic mode)</text>
-  <text x="485" y="394" class="s">PacedNullOutput</text>
-  <text x="485" y="412" class="s">(wav and test runs)</text>
+  <path class="ln" d="M780 124 V150 H115 V182"/>
+  <text class="el" x="560" y="146">transcripts, end of turn</text>
+  <path class="ln" d="M200 216 H228"/>
+  <path class="ln" d="M380 216 H438"/>
 
-  <rect x="270" y="330" width="170" height="100" rx="10" class="pc"/>
-  <text x="285" y="355" class="t">Assistant</text>
-  <text x="285" y="373" class="t">aggregator</text>
-  <text x="285" y="394" class="s">saves what was said</text>
-  <text x="285" y="412" class="s">into the LLM context</text>
+  <!-- Row 3: tools and screen -->
+  <rect class="box" x="30" y="310" width="180" height="64"/>
+  <text class="t" x="44" y="336">Robot face</text>
+  <text class="s" x="44" y="356">7-inch touch, 127.0.0.1</text>
 
-  <!-- pipeline arrows -->
-  <path d="M240,200 L268,200" class="ln" marker-end="url(#arr)"/>
-  <path d="M440,200 L468,200" class="ln" marker-end="url(#arr)"/>
-  <path d="M640,200 L668,200" class="ln" marker-end="url(#arr)"/>
-  <path d="M840,200 L868,200" class="ln" marker-end="url(#arr)"/>
-  <path d="M960,250 L960,328" class="ln" marker-end="url(#arr)"/>
-  <text x="970" y="295" class="k">final transcript</text>
-  <path d="M870,380 L842,380" class="ln" marker-end="url(#arr)"/>
-  <path d="M670,380 L642,380" class="ln" marker-end="url(#arr)"/>
-  <path d="M470,380 L442,380" class="ln" marker-end="url(#arr)"/>
+  <rect class="box" x="440" y="310" width="150" height="64"/>
+  <text class="t" x="454" y="336">ToolPolicy</text>
+  <text class="s" x="454" y="356">undo, read-back, yes</text>
 
-  <!-- Right column: config + clock MCP -->
-  <rect x="1110" y="100" width="350" height="150" rx="12" class="ours"/>
-  <text x="1128" y="126" class="t">Config</text>
-  <text x="1128" y="148" class="s">configs/mac.yaml: audio devices, VAD,</text>
-  <text x="1128" y="166" class="s">turn mode, barge-in mode</text>
-  <text x="1128" y="190" class="s">configs/providers.yaml: every stage</text>
-  <text x="1128" y="208" class="s">defaults to "fake"; --stages switches</text>
-  <text x="1128" y="226" class="s">a run to real providers</text>
+  <rect class="mcp" x="680" y="310" width="200" height="64"/>
+  <text class="t" x="694" y="336">10 task MCP servers</text>
+  <text class="s" x="694" y="356">clock, notes, lights, web, files…</text>
 
-  <rect x="1110" y="300" width="350" height="150" rx="12" class="ours"/>
-  <text x="1128" y="326" class="t">clock MCP server (FastMCP)</text>
-  <text x="1128" y="348" class="s">servers/tasks/clock, own process</text>
-  <text x="1128" y="370" class="s">set_timer, set_alarm,</text>
-  <text x="1128" y="388" class="s">list_timers, cancel_timer</text>
-  <text x="1128" y="410" class="s">the only task server built so far</text>
-  <text x="1128" y="432" class="k">tools carry the four MCP hints</text>
+  <path class="ln" d="M515 250 V308" marker-start="url(#a)"/>
+  <text class="el" x="522" y="285">tool calls</text>
+  <path class="ln" d="M590 342 H678" marker-start="url(#a)"/>
+  <text class="el" x="597" y="330">stdio / HTTP</text>
+  <path class="ln" d="M210 342 H438"/>
+  <text class="el" x="250" y="334">taps checked by policy</text>
 
-  <path d="M1050,380 L1108,380" class="ln" marker-start="url(#arr)" marker-end="url(#arr)"/>
-  <text x="1128" y="286" class="k">LLM calls clock via MCPClient, stdio or HTTP</text>
+  <!-- Row 4: audio out -->
+  <rect class="box" x="230" y="440" width="150" height="64"/>
+  <text class="t" x="244" y="466">USB speaker</text>
+  <text class="s" x="244" y="486">24 kHz</text>
 
-  <!-- Cloud strip -->
-  <rect x="40" y="510" width="1420" height="180" rx="14" fill="#F4F9FE" stroke="#1565C0" stroke-width="2"/>
-  <text x="60" y="536" class="h" fill="#1565C0">Cloud APIs</text>
-  <text x="60" y="560" class="k">called only when</text>
-  <text x="60" y="576" class="k">a stage selects them,</text>
-  <text x="60" y="592" class="k">the key is in .env,</text>
-  <text x="60" y="608" class="k">and the daily cap</text>
-  <text x="60" y="624" class="k">is above $0</text>
+  <rect class="box" x="440" y="440" width="200" height="64"/>
+  <text class="t" x="454" y="466">Playback</text>
+  <text class="s" x="454" y="486">ducking, heard-words commit</text>
 
-  <rect x="360" y="560" width="200" height="100" rx="10" class="cloud"/>
-  <text x="375" y="585" class="t">Deepgram Flux</text>
-  <text x="375" y="606" class="s">streaming speech to text</text>
-  <text x="375" y="624" class="s">with its own end of turn</text>
-  <text x="375" y="644" class="s">cap $0.50 a day</text>
+  <rect class="mcp" x="680" y="440" width="200" height="64"/>
+  <text class="t" x="694" y="466">voice-speak MCP</text>
+  <text class="s" x="694" y="486">TTS server, holds Cartesia key</text>
 
-  <rect x="660" y="560" width="190" height="100" rx="10" class="cloud"/>
-  <text x="675" y="585" class="t">Deepgram Aura-2</text>
-  <text x="675" y="606" class="s">streaming text to speech</text>
-  <text x="675" y="624" class="s">no word timestamps</text>
-  <text x="675" y="644" class="s">cap $0.50 a day (shared)</text>
+  <path class="ln" d="M640 240 H664 V420 H780 V438"/>
+  <text class="el" x="672" y="414">reply text, sentence by sentence</text>
+  <path class="ln" d="M680 472 H642"/>
+  <path class="ln" d="M440 472 H382"/>
 
-  <rect x="870" y="560" width="190" height="100" rx="10" class="cloud"/>
-  <text x="885" y="585" class="t">Groq gpt-oss-20b</text>
-  <text x="885" y="606" class="s">the live LLM today</text>
-  <text x="885" y="624" class="s">reasoning effort: low</text>
-  <text x="885" y="644" class="s">cap $0.50 a day</text>
+  <!-- Barge-in -->
+  <path class="bi" d="M500 124 V182"/>
+  <path class="bi" d="M410 124 V400 H470 V438"/>
+  <text class="ol" x="30" y="530">Barge-in (orange): speech start → stop playback + cancel LLM stream → listen. Context keeps only the words heard.</text>
 
-  <rect x="1110" y="560" width="160" height="100" rx="10" class="off"/>
-  <text x="1125" y="585" class="t">Cartesia</text>
-  <text x="1125" y="606" class="s">TTS with word</text>
-  <text x="1125" y="624" class="s">timestamps</text>
-  <text x="1125" y="644" class="k">wired, cap $0</text>
+  <!-- Cloud -->
+  <rect class="cloud" x="940" y="60" width="330" height="64"/>
+  <text class="t" x="954" y="86">Deepgram Flux</text>
+  <text class="s" x="954" y="106">streaming ASR with its own end of turn</text>
 
-  <rect x="1285" y="560" width="160" height="100" rx="10" class="off"/>
-  <text x="1300" y="585" class="t">Claude Haiku 5.5</text>
-  <text x="1300" y="606" class="s">fallback LLM</text>
-  <text x="1300" y="624" class="s">(Anthropic)</text>
-  <text x="1300" y="644" class="k">wired, cap $0</text>
+  <rect class="cloud" x="940" y="184" width="330" height="64"/>
+  <text class="t" x="954" y="210">Claude Haiku 5.5 (Anthropic)</text>
+  <text class="s" x="954" y="230">LLM, tool calling, prompt caching</text>
 
-  <!-- cloud links -->
-  <path d="M555,250 L555,290 L455,290 L455,558" class="ln" marker-end="url(#arr)"/>
-  <path d="M755,430 L755,558" class="ln" marker-end="url(#arr)"/>
-  <path d="M960,430 L960,558" class="ln" marker-end="url(#arr)"/>
+  <rect class="cloud" x="940" y="440" width="330" height="64"/>
+  <text class="t" x="954" y="466">Cartesia Sonic 3.6</text>
+  <text class="s" x="954" y="486">streaming TTS with word timestamps</text>
 
-  <!-- Observers strip -->
-  <rect x="40" y="720" width="1420" height="110" rx="14" fill="#FFFBF5" stroke="#E65100" stroke-width="2"/>
-  <text x="60" y="746" class="h" fill="#E65100">Pipeline observers (watch every frame, change nothing)</text>
-  <rect x="70" y="760" width="660" height="56" rx="10" class="ours"/>
-  <text x="85" y="783" class="t">TurnEventObserver</text>
-  <text x="85" y="803" class="s">writes logs/events-&lt;id&gt;.jsonl with timestamps, read by bench/latency_probe</text>
-  <rect x="760" y="760" width="680" height="56" rx="10" class="ours"/>
-  <text x="775" y="783" class="t">CostObserver + bench/cost_ledger</text>
-  <text x="775" y="803" class="s">meters every paid call, hard daily cap per provider, stops the run at the cap</text>
+  <text class="el" x="944" y="330">Open-Meteo, web fetch and search are</text>
+  <text class="el" x="944" y="346">called by the task servers, not the LLM.</text>
 
-  <!-- Voice spike island -->
-  <rect x="40" y="860" width="1420" height="140" rx="14" fill="#FAFAFA" stroke="#9E9E9E" stroke-width="2" stroke-dasharray="8 5"/>
-  <text x="60" y="886" class="h" fill="#616161">Separate spike, not connected to the bot yet (step 6, ADR-008)</text>
-  <rect x="70" y="905" width="230" height="75" rx="10" class="ours"/>
-  <text x="85" y="930" class="t">voice_bridge_probe</text>
-  <text x="85" y="950" class="s">bench script: measures</text>
-  <text x="85" y="968" class="s">the MCP hop, stdio vs HTTP</text>
-  <rect x="350" y="905" width="330" height="75" rx="10" class="ours"/>
-  <text x="365" y="930" class="t">VoiceMCPBridge</text>
-  <text x="365" y="950" class="s">raw MCP ClientSession with a logging</text>
-  <text x="365" y="968" class="s">callback, since MCPClient has no event hook</text>
-  <rect x="900" y="905" width="250" height="75" rx="10" class="off"/>
-  <text x="915" y="930" class="t">voice-speak (stub)</text>
-  <text x="915" y="950" class="s">speak, stop, duck, unduck</text>
-  <text x="915" y="968" class="k">fake audio, real events</text>
-  <rect x="1180" y="905" width="250" height="75" rx="10" class="off"/>
-  <text x="1195" y="930" class="t">voice-listen (stub)</text>
-  <text x="1195" y="950" class="s">listen, stop_listening</text>
-  <text x="1195" y="968" class="k">fake audio, real events</text>
-  <path d="M300,942 L348,942" class="ln" marker-end="url(#arr)"/>
-  <path d="M680,930 L898,930" class="ln" marker-end="url(#arr)"/>
-  <text x="700" y="922" class="k">tool calls</text>
-  <path d="M898,958 L680,958" class="lg" marker-end="url(#arrg)"/>
-  <text x="700" y="976" class="k">events: played_up_to, speech_started</text>
-
-  <!-- Notes -->
-  <text x="40" y="1040" font-size="18" font-weight="700" fill="#212121">How to read it</text>
-  <text x="40" y="1070" class="nb">1. Pipecat is the framework, not the agent.</text>
-  <text x="340" y="1070" class="n">Our code in harness/bot.py builds one pipeline from Pipecat parts and adds the fakes, cost caps, logging and MCP tools.</text>
-  <text x="40" y="1096" class="nb">2. Only VAD and Smart Turn run locally.</text>
-  <text x="340" y="1096" class="n">Speech to text, the LLM and text to speech are cloud APIs. Each stage defaults to a free fake, so tests cost nothing.</text>
-  <text x="40" y="1122" class="nb">3. A normal turn.</text>
-  <text x="340" y="1122" class="n">Audio in, VAD hears speech, STT transcribes, the aggregator decides you finished, the LLM replies (maybe calling clock), TTS speaks.</text>
-  <text x="40" y="1148" class="nb">4. Interruptions.</text>
-  <text x="340" y="1148" class="n">By default your speech stops the bot at once. The duck-then-decide prototype lowers its volume first and only stops for real requests.</text>
-  <text x="40" y="1174" class="nb">5. Audio does not use MCP yet.</text>
-  <text x="340" y="1174" class="n">The bot talks to Deepgram directly through Pipecat. The voice servers and bridge (bottom box) are proven in a probe only.</text>
-  <text x="40" y="1200" class="nb">6. Spend is capped in code.</text>
-  <text x="340" y="1200" class="n">Deepgram and Groq have $0.50 a day each; Cartesia, Anthropic and OpenRouter are at $0, so every call to them is refused.</text>
-  <text x="40" y="1226" class="nb">7. Where it stands.</text>
-  <text x="340" y="1226" class="n">End-to-end reply time is about 2.8 s against a p50 target under 1.0 s. Nothing runs on the Pi yet.</text>
-
-  <!-- Legend -->
-  <g transform="translate(40,1260)">
-    <rect x="0" y="0" width="22" height="16" rx="4" class="local"/><text x="30" y="13" class="s">runs on the device</text>
-    <rect x="190" y="0" width="22" height="16" rx="4" class="pc"/><text x="220" y="13" class="s">Pipecat component</text>
-    <rect x="380" y="0" width="22" height="16" rx="4" class="ours"/><text x="410" y="13" class="s">our own code</text>
-    <rect x="530" y="0" width="22" height="16" rx="4" class="cloud"/><text x="560" y="13" class="s">cloud API in use</text>
-    <rect x="690" y="0" width="22" height="16" rx="4" class="off"/><text x="720" y="13" class="s">stub, off by default, or cap $0</text>
-  </g>
+  <path class="ln" d="M880 92 H938" marker-start="url(#a)"/>
+  <path class="ln" d="M640 216 H938" marker-start="url(#a)"/>
+  <path class="ln" d="M880 472 H938" marker-start="url(#a)"/>
+  <text class="el" x="700" y="208">WebSocket / HTTPS</text>
 </svg>

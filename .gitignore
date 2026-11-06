@@ -21,3 +21,9 @@ data/
 
 .DS_Store
 fd-benchmark/
+
+# Local Claude Code state (settings, launch configs with local paths, worktrees)
+.claude/
+
+# Course templates and local deck drafts stay out of the public repo
+machine_exercise_*.pdf

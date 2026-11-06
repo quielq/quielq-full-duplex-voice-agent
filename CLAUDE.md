@@ -33,7 +33,7 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 - Pipecat has no AEC. Phase 1 uses headphones. Phase 2 uses a separate USB mic and speaker with no hardware AEC, so `pi.yaml` turns on WebRTC AEC in the harness (ADR-013, ADR-029); PipeWire echo-cancel, then an RMS gate, are the fallbacks. `--echo-cancel` adds it on the Mac for speaker tests.
 - `write_file` and `edit_file` have no undo window, because a multi-step job needs each file at once. The server keeps replaced versions in `data/workspace/.versions` (ADR-028). Do not extend this to any tool that leaves the workspace.
 - The robot face (`--ui`, ADR-027, ADR-038) reads the event log and stays on 127.0.0.1. It draws the devices and the chat history. Its controls are the mic mute, the music buttons (`stop_music`, `resume_music`, `next_track`), a tap on a light (`set_light`, on or off only), and the thermostat steps (`set_thermostat`, half degrees from 16 to 30). Each goes through `ToolPolicy.run_from_screen`, which checks the arguments against `SCREEN_TOOLS` and refuses unless the policy would run the tool at once. Then the agent picker, with a model per session, and the builder. Nothing on screen may skip a question the voice path would ask. With `--spotify-player` the page also plays Spotify (ADR-031, off by default), but it only plays.
-- Agents (ADR-039): `configs/agents.yaml` has the generalist and five document agents. A document agent starts only the docs server, scoped by `ME3_DOC_SCOPE` to its folders, and sees only the four read tools. The scope is enforced in the server, never only in the prompt. Custom agents from the builder live in `data/agents` and are document agents only: the builder cannot grant tools, change the policy, or raise a cap. An agent's model applies only on a live run: a fake LLM stage stays fake for every agent.
+- Agents (ADR-039): `configs/agents.yaml` has the generalist (Via, shown as "VIA: Generalist"; bump `PROMPT_VERSION` in `harness/bot.py` when its prompt changes, ADR-047) and five document agents. A document agent starts only the docs server, scoped by `ME3_DOC_SCOPE` to its folders, and sees only the four read tools. The scope is enforced in the server, never only in the prompt. Custom agents from the builder live in `data/agents` and are document agents only: the builder cannot grant tools, change the policy, or raise a cap. An agent's model applies only on a live run: a fake LLM stage stays fake for every agent.
 - OpenRouter (ADR-040): `llm=openrouter` uses only models listed and priced in `providers.yaml`. A model without a price is refused, so the cap never counts it as free. The picker, or `--model` on a scripted run, can put one session of any agent on another listed model.
 - Every face change must stay cheap on the Pi: no filters or blur, animate only transform and opacity, redraw a section only when its data changes, no outside requests.
 
@@ -42,11 +42,11 @@ ME3 is a hands-free, full-duplex, English-only voice agent for AI222 (UP Diliman
 Running the full agent on the Mac: `docs/quickstart-mac.md`. The Pi port order: `docs/quickstart-pi.md`.
 
 ```
-harness/        bot.py (entry point), agents.py, fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py, delegate_watch.py
+harness/        bot.py (entry point), agents.py, fakes, providers, MCP clients, tool policy, addressing, recovery, waiting phrase, context_window.py (last 20 turns, ADR-047), event log, cost observer, audio I/O, ui.py and ui_page.html (robot face), timer_watch.py, delegate_watch.py
 servers/        voice_listen/, voice_speak/ (Flux and Cartesia relays, ADR-032, plus the stubs), voice_relay.py, tasks/clock, notes, thermostat, comms, lights, music (built, mocks except clock and notes; music has Spotify, ADR-022), knowledge, docs, workspace (built, ADR-021), delegate (built on fakes, ADR-035)
 bench/          doctor.py, run_report.py, cost_ledger.py, latency_probe.py and latency_bench.py (ADR-036), interruption_test.py, voice_bridge_probe.py, voice_hop_probe.py, voice_fakes.py, task_runner.py, task_suite/cases/, fdb_adapter.py (class-benchmark entry for fd-benchmark, ADR-044, A/B switches ADR-045), fdb_judge.py (its judge inside the ledger)
 configs/        mac.yaml, pi.yaml (profiles), providers.yaml (stage selection, caps, prices), tool_policy.yaml
-docs/           architecture.md, codebase.md (layout, diagram, key code), tools.md, research.md, privacy.md, live-demo.md, class-benchmark.md, decisions/
+docs/           architecture.md, codebase.md (layout, diagram, key code), switches.md (every on/off component), tools.md, research.md, privacy.md, live-demo.md, class-benchmark.md, decisions/
 assets/         fallback_wavs/, sample_documents/ (fictional, copied into data/documents when missing)
 ```
 
@@ -102,11 +102,13 @@ Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by de
 
 Reply templates skip the second LLM call on simple tools, off by default (`--reply-templates`, ADR-020). `flux_forced` is built and off (ADR-019).
 
-Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default), the full benchmark, the model comparison. `delegate` is built on fakes (ADR-035), and one live Haiku task ran from a script on Nov 4: a live worker needs `ME3_TOOL_STAGES=delegate=anthropic`.
+Not built yet (wait for approval): barge-in beyond the step 5 prototype (duck mode is off by default) and the model comparison. The class benchmark has run on the Mac and on the Pi (`docs/class-benchmark.md`); Pi runs are started by Quiel or in a Terminal tab Quiel can watch. `delegate` is built on fakes (ADR-035), and one live Haiku task ran from a script on Nov 4: a live worker needs `ME3_TOOL_STAGES=delegate=anthropic`.
 
 Voice servers (ADR-032): `stt=voice_listen,tts=voice_speak` routes Flux and Cartesia through our MCP servers, which hold the keys. The provider messages ride a Unix socket per stream, and playback, ducking, and AEC stay in the harness. Run live on the Mac on Nov 4 (an 18 turn mic run through both servers, and the interruption bench through `voice-speak`); recovery and the hop cost are measured on fakes only, and nothing has run on the Pi.
 
 Pi scripts are built and have not run on a Pi (ADR-030): the service stays on fakes until `~/.config/me3/bot.env` names live stages.
+
+If Cartesia times out on the Pi (`timed out during opening handshake`), the Wi-Fi is handing out IPv6 that does not reach it. Quiel turns IPv6 off on `wlan0` until the next reboot (`docs/quickstart-pi.md`). Do not change Pi system settings yourself.
 
 The waiting phrase is on (ADR-033): five clips rotate, after 1500 ms with no reply audio or when a slow tool starts, and the prompt tells the model not to say one itself. The clips are in `assets/fallback_wavs/` (Cartesia Skylar through voice-speak, Nov 4, $0.0029). Remake them with `ME3_LIVE=1 uv run python -m bench.make_phrases` if the voice changes.
 

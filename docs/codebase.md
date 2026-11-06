@@ -1,8 +1,8 @@
 # ME3 codebase guide
 
-How the code is laid out, how one spoken turn moves through it, and the pieces of code that matter most. Current as of Nov 5, 2026 (main after PR 1, plus ADR-041 and ADR-042).
+How the code is laid out, how one spoken turn moves through it, and the pieces of code that matter most. Current as of Nov 6, 2026 (main after PR 15: ADR-046 and ADR-047, and the Pi class-benchmark run).
 
-For design reasons read `docs/architecture.md` and the ADRs in `docs/decisions/`. For tools and guardrails read `docs/tools.md`. To run it, read `docs/quickstart-mac.md`.
+For design reasons read `docs/architecture.md` and the ADRs in `docs/decisions/`. For tools and guardrails read `docs/tools.md`. For what can be switched on and off, read `docs/switches.md`. To run it, read `docs/quickstart-mac.md`.
 
 ## The short version
 
@@ -27,7 +27,8 @@ flowchart LR
     STT --> PGATE["PolicyGate<br/>yes, no, cancel"]
     PGATE --> ECHO["SelfEchoFilter<br/>speakers only"]
     ECHO --> UAGG["User aggregator<br/>turn end: Flux or Smart Turn"]
-    UAGG --> LLM["LLM service<br/>Anthropic, OpenRouter, Groq"]
+    UAGG --> WIN["ContextWindow<br/>last 20 user turns"]
+    WIN --> LLM["LLM service<br/>Anthropic, OpenRouter, Groq"]
     LLM --> PRE["PreambleFilter"]
     PRE --> TTS["TTS service<br/>Cartesia, direct or relayed"]
     TTS --> SPOKEN["SpokenTap"]
@@ -94,6 +95,8 @@ harness/            the voice agent process
   addressing.py     MicGate, level gate, ACTIVE and IDLE, stay_silent (ADR-016, off)
   filler.py         rotating waiting phrase (ADR-033)
   preamble.py       drops a waiting phrase the model says before a tool call (ADR-041)
+  context_window.py keeps the LLM context to the last 20 user turns (ADR-047)
+  screen_notes.py   taps on the face reach the model at the next turn (ADR-043)
   self_echo.py      SpokenTap and SelfEchoFilter: ignore the bot's own words on speakers (ADR-042)
   phrase_cache.py   loads the stored clips in assets/fallback_wavs/
   recovery.py       spoken fallback when the LLM errors
@@ -133,7 +136,7 @@ data/, logs/        local state and event logs, never in git
 2. **Mute and VAD.** `MicGate` drops every frame while muted, before anything reaches the cloud. Silero marks speech start after about 80 ms (`vad.start_secs`).
 3. **Speech to text.** Flux streams transcripts and also decides end of turn. With a non-Flux STT, Smart Turn v3 decides instead (`turn.stop: auto`, ADR-005).
 4. **PolicyGate and SelfEchoFilter.** If an action is held, a short "yes" or "cancel" is answered here by the harness with no LLM call. On speakers, a transcript that cut the bot off and repeats three or more of its recent words in order is dropped as echo.
-5. **LLM.** The user aggregator adds the turn to the context and the LLM streams a reply. Tool calls go to `ToolPolicy`, which calls the MCP server or holds the call.
+5. **LLM.** The user aggregator adds the turn to the context, `ContextWindow` drops anything older than the last 20 user turns (never splitting a tool call), and the LLM streams a reply. Tool calls go to `ToolPolicy`, which calls the MCP server or holds the call.
 6. **PreambleFilter.** If the model starts with "let me check" and then calls a tool, that sentence is dropped, since the device already plays a waiting phrase.
 7. **Text to speech.** Cartesia speaks sentence by sentence (`TextAggregationMode.SENTENCE`) and returns word timestamps.
 8. **Waiting phrase and clips.** If no reply audio arrives within 1500 ms, or a slow tool starts, a stored clip plays. Network-loss and spending-cap clips also play from here.
@@ -160,7 +163,7 @@ if input_mode == "mic":
     back = [*filler_procs, clips, transport.output()]
 ...
 pipeline = Pipeline(
-    [*front, aggregators.user(), llm, PreambleFilter(log.emit), tts, *tap_procs, *back,
+    [*front, screen_notes, aggregators.user(), window, llm, PreambleFilter(log.emit), tts, *tap_procs, *back,
      aggregators.assistant()]
 )
 worker = PipelineWorker(
