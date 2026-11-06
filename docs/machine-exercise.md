@@ -1,6 +1,6 @@
 # Machine exercise: the filled 2-page deck
 
-The text of the course's 2-page template (`machine_exercise_2page.pdf`), filled for Via. The built slides are `docs/deck/machine-exercise.pptx` (editable) and `docs/deck/machine-exercise.pdf` (an image of each page). Every number comes from the Pi class-benchmark run on Nov 6, 2026 (`docs/class-benchmark.md`), unless a line names another run.
+The text of the course's 2-page template (`machine_exercise_2page.pdf`), filled for VIA. The built slides are `docs/deck/machine-exercise.pptx` (editable) and `docs/deck/machine-exercise.pdf` (an image of each page). Every number comes from the Pi class-benchmark run on Nov 6, 2026 (`docs/class-benchmark.md`), unless a line names another run.
 
 ## Page 1: Full-Duplex Voice Agent on a Raspberry Pi
 
@@ -17,11 +17,11 @@ Image: `docs/diagrams/architecture-current.png` (source `architecture-current.sv
 
 Flow strip: voice in, VAD, ASR, LLM (+tools), TTS, voice out. Barge-in: speech detected, stop TTS and LLM, listen.
 
-### 2. Prompt (Via v1, `harness/bot.py`, `PROMPT_VERSION`)
+### 2. Prompt (VIA v1, `harness/bot.py`, `PROMPT_VERSION`)
 
 Excerpt:
 
-> You are Via, short for voice input agent, a hands-free voice assistant, and every reply is spoken aloud. Start with a short sentence of a few words, and keep the whole reply under about 30 words: no lists, formatting or parentheses. Call a tool straight away, with no words before it. If a tool result says waiting_for_undo or needs_confirmation, it has not happened yet: say so briefly and do not call the tool again. Speech recognition may mishear: act on the likely meaning, but if a short fragment could mean different things, ask in a few words and do not act.
+> You are VIA, short for voice input agent, a hands-free voice assistant, and every reply is spoken aloud. Start with a short sentence of a few words, and keep the whole reply under about 30 words: no lists, formatting or parentheses. Call a tool straight away, with no words before it. If a tool result says waiting_for_undo or needs_confirmation, it has not happened yet: say so briefly and do not call the tool again. Speech recognition may mishear: act on the likely meaning, but if a short fragment could mean different things, ask in a few words and do not act.
 
 Notes: stopping on barge-in is done by the harness, not asked of the model. Confirmation of costly or irreversible actions is enforced by `ToolPolicy` (undo window, read-back, spoken yes), so the prompt only tells the model what those results mean. The version is logged in every run's `run_start` event.
 
@@ -29,7 +29,7 @@ Notes: stopping on barge-in is done by the harness, not asked of the model. Conf
 
 Goes in:
 
-- System prompt (Via v1) and the agent's persona from `configs/agents.yaml`
+- System prompt (VIA v1) and the agent's persona from `configs/agents.yaml`
 - Final transcripts from Flux (partials drive the face only)
 - Flux end-of-turn events, eager at 0.5
 - MCP tool results, and notes of what was done on the touch screen
@@ -84,7 +84,7 @@ A 2 to 3 minute script, in `docs/live-demo.md` under "Class demo on the Pi": a g
 - Latency chart: fdbench's `latency_chart.svg`, run `2026-11-06_21-22-21`
 - Raspberry Pi 5 Model B, 8 GB, active cooler with fan: peak 62.8 C, never throttled
 - Network: Wi-Fi to the cloud, IPv6 off on the Pi's Wi-Fi; date Nov 6, 2026
-- Models: Pipecat 1.13.0, Flux `flux-general-en`, Haiku 5.5, Cartesia `sonic-3.6`, Silero VAD, prompt Via v1
+- Models: Pipecat 1.13.0, Flux `flux-general-en`, Haiku 5.5, Cartesia `sonic-3.6`, Silero VAD, prompt VIA v1
 
 ### Challenges and references
 
@@ -93,10 +93,11 @@ On the slide this is a grid of one line per challenge (problem, cause, fix, proo
 | Problem | Cause | Fix | Proof |
 |---|---|---|---|
 | Replies were slow: about 2.35 s from the end of the user's turn to her first audio (Mac, five class-benchmark rounds) | About 0.85 s for Flux to commit the end of turn, about 1.0 s to Haiku's first token, and about 0.5 s for the first sentence and Cartesia's first audio (ADR-046, from the Mac A/B runs) | Flux eager end of turn at 0.5, so the LLM starts on Flux's early guess, and a prompt rule for a short first sentence and a reply under about 30 words, so the first TTS request goes out sooner (ADR-046) | On the Pi run (`2026-11-06_21-22-21`, 20 turns): E2E 1.46 s mean, made of ASR final 0.43 s, LLM first token 0.53 s, TTS first audio 0.14 s and 0.36 s of hand-offs and playout. Eager alone measured 159 ms faster on chat turns and 355 ms on tool turns, with the same clips and clock for both arms |
-| Gaps of silence mid-reply | Aura-2 streamed audio slower than real time, and it has no word timestamps to cut the context to what was heard | Cartesia as the TTS (ADR-015) | Median output gap 354 ms to 45 ms; context keeps only heard words |
-| No speech at all on the Pi | The Wi-Fi handed out an IPv6 route that did not reach Cartesia, so every connection timed out | IPv6 off on `wlan0` until reboot | Handshake 0.39 s over IPv4 against a 10 s timeout; then 30 of 30 trials spoke |
-| The Pi was at risk of throttling | Under-voltage from a weak power supply | A proper 5 V supply | `throttled=0x0` through the run, peak 62.8 C |
-| The bot cut itself off when playing through speakers | It heard its own voice, and Pipecat has no echo cancelling | WebRTC AEC and a self-echo filter (ADR-013, ADR-042) | 27 speaker turns with no self-interruption |
+| Choppy speech | Aura-2 audio arrived at 0.43x to 0.54x real time over the 279 ms round trip to Deepgram (ADR-014, ADR-015) | Cartesia as the TTS (ADR-015) | Median output gap 354 ms on Aura-2 (`20261031-163553-f4c9dd`) against 45 ms on Cartesia (`20261031-175305-d80a7c`) |
+| The bot cut itself off when playing through speakers | It heard its own voice, and Pipecat has no echo cancelling | WebRTC AEC and a self-echo filter (ADR-013, ADR-042) | Three Mac speaker runs on Nov 5, 27 turns: no cut-off from the bot's own words. The filter never had to fire, so AEC did the work there |
+| Turns stalled: 1.3 s and 7.1 s from speech end to end of turn, and the 7.1 s turn lost its reply | Smart Turn cannot end a Flux turn early, because Flux sends its final transcript only at its own end of turn | Flux owns the end of turn when it is the STT (`turn.stop: auto`, ADR-005) | Class benchmark, Mac, five rounds: 5 of 5 turns taken and 1 cut-in over 10 mid-sentence pauses |
+| The prompt grew every turn, on top of about 8.4K tokens of system prompt and tools | The whole history was sent on every call | Keep the last 20 user turns, cut only before a user message so a tool call stays with its result (ADR-047) | Pi run: 26 trims in a 41-turn session; prompt tokens median 6,766, max 8,467 |
+| Test runs lost to rate limits | Groq allows 8,000 tokens a minute, and an ME3 call is about 5,000 | Claude Haiku 5.5 as the live LLM (ADR-025) | Task suite: 61 of 64 passed (95.3%) with none lost, against 86 runs lost on Groq 20b |
 
 Caveat on the first row: the 2.35 s and the 1.46 s are on different clocks. The Mac figure runs from the clip's annotated end of turn to her reply in the recording, on real Candor conversation; the Pi figure runs from the VAD end mark to reply audio handed to the output, on short clean phrases. On the recording clock the same Pi run is 1.71 s mean (1.57 s median), so part of the drop is the clock. Running the stage test on the Mac would separate the two, and needs Cartesia credits.
 
