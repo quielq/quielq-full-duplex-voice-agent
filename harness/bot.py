@@ -51,6 +51,7 @@ from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
 from bench.cost_ledger import CostLedger
+from harness.context_window import ContextWindow
 from harness.agents import DOCUMENT_TOOLS, Agent, AgentStore, prompt_for, seed_documents, session_config
 from harness.addressing import (
     ADDRESSING_PROMPT,
@@ -86,8 +87,12 @@ from harness.timer_watch import TimerWatch
 from harness.tool_policy import PolicyGate, ToolPolicy
 from harness.ui import UiServer, UiState
 
+# Bump PROMPT_VERSION whenever SYSTEM_PROMPT or agents.DOCUMENT_PROMPT changes; run_start logs it.
+# v1 (Nov 6, 2026): the agent is named Via; text otherwise as in ADR-046.
+PROMPT_VERSION = "v1"
 SYSTEM_PROMPT = (
-    "You are a hands-free voice assistant, and every reply is spoken aloud. Start with a short "
+    "You are Via, short for voice input agent, a hands-free voice assistant, and every reply is "
+    "spoken aloud. Start with a short "
     "sentence of a few words, and keep the whole reply under about 30 words: no lists, formatting "
     "or parentheses. Say numbers and years as words, and file names rather than paths unless asked. "
     "This limit is for speech, not for what you write into files. "
@@ -300,6 +305,7 @@ async def run_bot(
     log.emit("run_start", profile=cfg.name, input=input_mode, mcp=mcp_transport,
              stages=cfg.providers["stages"], barge_in=cfg.profile["barge_in"]["mode"],
              addressing=cfg.profile["addressing"]["enabled"],
+             prompt_version=PROMPT_VERSION, keep_turns=cfg.profile.get("context", {}).get("keep_turns", 0),
              prompt_caching=bool(cfg.providers["providers"]["anthropic"].get("prompt_caching")),
              flux={k: v for k, v in cfg.providers["providers"]["deepgram"]["flux"].items() if v is not None})  # fmt: skip
 
@@ -446,8 +452,9 @@ async def run_bot(
             force_end.stt = stt
         # Taps on the face reach the model at the start of the next user turn (ADR-043).
         screen_notes = ScreenNotes()
+        window = ContextWindow(cfg.profile.get("context", {}).get("keep_turns", 0), on_event=log.emit)
         pipeline = Pipeline(
-            [*front, screen_notes, aggregators.user(), llm, PreambleFilter(log.emit), tts, *tap_procs, *back, aggregators.assistant()]
+            [*front, screen_notes, aggregators.user(), window, llm, PreambleFilter(log.emit), tts, *tap_procs, *back, aggregators.assistant()]
         )
         worker = PipelineWorker(
             pipeline,

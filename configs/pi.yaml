@@ -40,6 +40,11 @@ self_echo:
   min_words: 3
   window_s: 15
 
+context:
+  # The LLM context keeps the last keep_turns user turns; older ones are dropped at the start of
+  # a turn (harness/context_window.py, ADR-047). The system prompt and tools are always kept. 0 keeps all.
+  keep_turns: 20
+
 filler:
   # Waiting phrase (harness/filler.py, ADR-009, ADR-033). Never counts toward latency.
   enabled: true

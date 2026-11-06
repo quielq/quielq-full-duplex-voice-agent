@@ -47,6 +47,7 @@ flowchart LR
 | Complex task | Delegate to onit | Our own worker loop on Haiku 5.5 behind `delegate`, with the workspace tools. OnIt is dropped. Website jobs also run in the voice loop itself with `write_file` | ADR-028, ADR-035 |
 | Screen | Not in the review | Robot face in a browser, with chat, devices, mute, music, light and thermostat taps (through the same policy), and an agent picker and builder | ADR-027, ADR-038, ADR-039 |
 | Latency method | Audio timestamps | Sample-level marks at input and output. First live headline p50 3.0 s (no tool 2.8 s, tool 4.4 s), of which the end-of-turn wait is 1.3 s | ADR-036 |
+| Context | Not in the review | The agent is named Via and the prompt carries a version (`PROMPT_VERSION`, logged per run). The context keeps the last 20 user turns, never splitting a tool call; the system prompt and tools always stay. Prompt caching on | ADR-045, ADR-047 |
 
 Measured runs and open items are tracked in `TODO.md`. Still open: the Pi echo test, the voice servers and live `bash` on the Pi, the live latency benchmark of 30 or more turns, and the model comparison.
 

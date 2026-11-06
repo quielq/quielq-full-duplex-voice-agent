@@ -75,6 +75,26 @@ def audio_rates() -> tuple[int, int]:
     return audio["in_sample_rate"], audio["out_sample_rate"]
 
 
+def describe() -> dict:
+    """Model versions for fdbench's results card, from the same config the run uses."""
+    from harness.bot import PROMPT_VERSION
+
+    cfg = _config()
+    stages, prov = cfg.providers["stages"], cfg.providers["providers"]
+    stt = {"deepgram_flux": "Deepgram", "voice_listen": "Deepgram via voice-listen MCP"}.get(stages["stt"])
+    tts = {"cartesia": "Cartesia", "voice_speak": "Cartesia via voice-speak MCP"}.get(stages["tts"])
+    llm = stages["llm"]
+    out = {
+        "ASR": f"{stt} {prov['deepgram']['stt_model']}" if stt else stages["stt"],
+        "LLM": prov[llm]["model"] if llm in prov and "model" in prov[llm] else llm,
+        # Pipecat 1.13's CartesiaTTSService default model; the harness does not override it.
+        "TTS": f"{tts} sonic-3.6" if tts else stages["tts"],
+        "VAD": "Silero VAD (Pipecat 1.13)",
+        "Prompt": f"Via {PROMPT_VERSION}",
+    }
+    return out
+
+
 async def build(transport, log_dir: Path):
     """Return (coroutine that runs one session on ``transport``, async function that stops it)."""
     from harness.agents import AgentStore, seed_documents, session_config
