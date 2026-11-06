@@ -37,3 +37,39 @@ def test_fdbench_mode_needs_a_transport(tmp_path):
     cfg.profile["ui"]["enabled"] = False
     with pytest.raises(ValueError, match="needs a transport"):
         asyncio.run(run_bot(cfg, input_mode="fdbench", servers={}, data_dir=str(tmp_path), handle_sigint=False))
+
+
+def test_ab_switches(monkeypatch):
+    monkeypatch.setenv("ME3_PROMPT_CACHE", "0")
+    monkeypatch.setenv("ME3_ADDRESSING", "1")
+    monkeypatch.setenv("ME3_BARGE_IN", "duck")
+    monkeypatch.setenv("ME3_FLUX", "eager_eot_threshold=0.5")
+    cfg = fdb_adapter._config()
+    assert cfg.providers["providers"]["anthropic"]["prompt_caching"] is False
+    assert cfg.profile["addressing"]["enabled"] is True
+    assert cfg.profile["addressing"]["gate"]["enabled"] is False
+    assert cfg.profile["barge_in"]["mode"] == "duck"
+    assert cfg.providers["providers"]["deepgram"]["flux"]["eager_eot_threshold"] == 0.5
+
+
+def test_unset_switches_keep_the_profile(monkeypatch):
+    for k in ("ME3_PROMPT_CACHE", "ME3_ADDRESSING", "ME3_BARGE_IN", "ME3_FLUX"):
+        monkeypatch.delenv(k, raising=False)
+    cfg = fdb_adapter._config()
+    assert cfg.providers["providers"]["anthropic"]["prompt_caching"] is True  # on by default (ADR-045)
+    assert cfg.profile["addressing"]["enabled"] is False
+    assert cfg.profile["barge_in"]["mode"] == "immediate"
+
+
+def test_bad_switch_values_refuse(monkeypatch):
+    monkeypatch.setenv("ME3_PROMPT_CACHE", "yes")
+    with pytest.raises(SystemExit):
+        fdb_adapter._config()
+    monkeypatch.setenv("ME3_PROMPT_CACHE", "1")
+    monkeypatch.setenv("ME3_BARGE_IN", "sometimes")
+    with pytest.raises(SystemExit):
+        fdb_adapter._config()
+    monkeypatch.setenv("ME3_BARGE_IN", "duck")
+    monkeypatch.setenv("ME3_FLUX", "speed=11")
+    with pytest.raises(SystemExit):
+        fdb_adapter._config()
