@@ -67,10 +67,12 @@ Set `audio.echo_delay_ms` in `configs/pi.yaml` to the best delay it reports. If 
 ## 5. Run it live (paid)
 
 ```bash
-uv run python -m harness.bot --profile pi --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --ui --spotify-player
+ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic uv run python -m harness.bot --profile pi --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --ui --spotify-player
 ```
 
 `pi.yaml` already turns echo cancelling on, so no `--echo-cancel` is needed. `--spotify-player` plays music in the face page (needs Premium, ADR-031). Drop it if you do not need music.
+
+The two switches in front work as on the Mac (`docs/quickstart-mac.md`, step 5): `ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real, and `delegate=anthropic` runs background tasks on Haiku 5.5. Leave them out and those tools stay mocks, so a task reports done without making anything. `open_in_browser` opens on the Pi's own display.
 
 To test the voice servers on the Pi, use `--stages stt=voice_listen,llm=anthropic,tts=voice_speak`, then check the hop cost for free:
 
