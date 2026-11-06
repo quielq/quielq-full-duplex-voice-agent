@@ -70,6 +70,41 @@ def test_openrouter_is_priced_by_model(tmp_path):
     assert _llm_usd(tmp_path, "anthropic/claude-sonnet-5.5", "openrouter") == pytest.approx(12.0)
 
 
+def test_anthropic_cache_tokens_are_priced(tmp_path):
+    """ADR-045: Anthropic reports prompt_tokens net, cache writes and reads beside it."""
+    from pipecat.metrics.metrics import LLMTokenUsage, LLMUsageMetricsData
+
+    from harness.config import load_config
+    from harness.costs import CostObserver
+
+    providers = load_config("mac").providers
+    providers["stages"] = {"stt": "fake", "llm": "anthropic", "tts": "fake"}
+    obs = CostObserver(CostLedger(tmp_path / "l.jsonl", {}), providers, "r")
+    usage = LLMTokenUsage(prompt_tokens=1_000_000, completion_tokens=1_000_000, total_tokens=4_000_000,
+                          cache_creation_input_tokens=1_000_000, cache_read_input_tokens=1_000_000)  # fmt: skip
+    rows = {row[1]: row[3] for row in obs._price(LLMUsageMetricsData(processor="p", value=usage))}
+    assert rows == pytest.approx({"llm_input_tokens": 0.10, "llm_output_tokens": 0.50,
+                                  "llm_cache_write_tokens": 0.125, "llm_cache_read_tokens": 0.01})  # fmt: skip
+
+
+def test_prompt_caching_switch_reaches_the_service(monkeypatch):
+    from harness.config import load_config
+    from harness.providers import build_llm
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-key")
+    providers = load_config("mac").providers
+    providers["stages"]["llm"] = "anthropic"
+    for flag in (False, True):
+        providers["providers"]["anthropic"]["prompt_caching"] = flag
+        llm = build_llm(providers, _FreeLedger(), system_instruction="x")
+        assert llm._settings.enable_prompt_caching is flag
+
+
+class _FreeLedger:
+    def authorize(self, provider):
+        pass
+
+
 def test_every_listed_openrouter_model_has_a_price():
     from harness.config import load_config
 

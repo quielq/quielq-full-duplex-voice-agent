@@ -124,7 +124,8 @@ def build_llm(providers_cfg: dict, ledger: CostLedger, *, system_instruction: st
         return AnthropicLLMService(
             api_key=key,
             settings=AnthropicLLMService.Settings(
-                model=p["model"], max_tokens=p["max_tokens"], system_instruction=system_instruction
+                model=p["model"], max_tokens=p["max_tokens"], system_instruction=system_instruction,
+                enable_prompt_caching=bool(p.get("prompt_caching", False)),
             ),
         )
     if choice == "openrouter":
