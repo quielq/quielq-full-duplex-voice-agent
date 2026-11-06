@@ -43,7 +43,9 @@ a socket transport does not have.
   stops and waits for a key, so a fake round only proves the audio path and then stalls. Only live TTS gives verdicts.
 - `FDBENCH_ENTRY` must be an absolute path: the launcher runs from another folder and otherwise falls back to the course
   entry, which stops with "project not found".
-- First live round on the Mac, Nov 6 (`20261106-093545-e87fc7`, $0.23): results in `docs/class-benchmark.md`.
+- Live on the Mac, Nov 6: one round as a setup check (`20261106-093545-e87fc7`, $0.23), then five rounds
+  (`20261106-102804-7e95d7`, 75 trials, $1.08). Results and the comparison with published systems are in
+  `docs/class-benchmark.md`.
 - Not run on the Pi yet. There the Mac runs fdbench and the Pi runs the launcher (the guide's steps 8 to 11). The
   Pi's stats probe reads `/proc` without psutil, and `--stats-procs` needs our server modules
   (`servers.voice_listen`, `servers.voice_speak`, `servers.tasks`).
