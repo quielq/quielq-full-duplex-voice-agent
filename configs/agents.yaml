@@ -26,7 +26,7 @@ sample_documents: assets/sample_documents
 
 agents:
   generalist:
-    name: Generalist
+    name: "VIA: Generalist"
     kind: generalist
     model: direct
     color: "#7fd3ee"

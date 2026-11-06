@@ -151,7 +151,7 @@ class UiState:
         self.network_down = False   # set and cleared only by the network events (ADR-037)
         self._new_reply = True
         self._awaiting_answer = False
-        self.agent: dict = {"id": "generalist", "name": "Generalist", "color": "#7fd3ee", "kind": "generalist",
+        self.agent: dict = {"id": "generalist", "name": "VIA: Generalist", "color": "#7fd3ee", "kind": "generalist",
                             "model": "direct"}
         self.screen_tools: list[str] = []  # what a tap may run in this session; set by the bot
         self.switching = ""
