@@ -2,14 +2,17 @@
 
 Files are real and stay inside $ME3_DATA_DIR/workspace; reads may also use the documents folder.
 ``bash``, ``serve``, and ``open_in_browser`` are mocks unless ME3_WORKSPACE_LIVE=1, and
-``send_file`` is always a mock. ``open_in_browser`` is the one thing that leaves the sandbox
-(ADR-026): it runs no command text, only the system opener on one HTML file. Live commands pass servers/command_policy.py (ADR-034) and then run in servers/sandbox.py (ADR-024):
+``send_file`` is always a mock. ``open_in_browser`` leaves the sandbox (ADR-026): it runs no
+command text, only the system opener on one HTML file. ``publish_site`` is the other way out
+(ADR-049): the server itself, never a command, sends one folder's web files to one GitHub Pages
+repo, and it is a mock unless ME3_TOOL_STAGES=pages=github. Live commands pass servers/command_policy.py (ADR-034) and then run in servers/sandbox.py (ADR-024):
 with no sandbox on the machine, nothing runs.
 """
 
 from __future__ import annotations
 
 import atexit
+import base64
 import contextlib
 import fnmatch
 import json
@@ -24,10 +27,13 @@ import uuid
 from pathlib import Path, PurePath
 from typing import Annotated, Literal
 
+import httpx
 from fastmcp import FastMCP
 from pydantic import Field
 
-from servers.common import OutsideRoots, ToolCallLog, data_dir, documents_dir, inside, serve as serve_mcp, workspace_dir
+from bench.cost_ledger import SpendRefused
+from servers.common import (OutsideRoots, ToolCallLog, data_dir, documents_dir, inside, ledger, price,
+                            serve as serve_mcp, tool_stage, workspace_dir)  # fmt: skip
 from servers.documents import extract_text
 from servers.sandbox import SAFE_PATH, NoSandbox, wrap
 from servers.command_policy import REFUSE, check
@@ -43,6 +49,18 @@ ENV_ALLOWED = ("LANG", "LC_ALL", "TERM")
 BROWSER_FILES = (".html", ".htm")
 BROWSER_ENV = ("HOME", "USER", "LANG", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
 OPENER_TIMEOUT_S = 8   # under the policy timeout
+# publish_site (ADR-049): web files only, small sites only, one repo named in .env.
+PAGES_FILES = frozenset(".html .htm .css .js .mjs .json .txt .xml .svg .png .jpg .jpeg .gif .webp .ico "
+                        ".woff .woff2 .ttf .otf .webmanifest .map".split())  # fmt: skip
+PAGES_MAX_FILE_BYTES = 10_000_000
+PAGES_MAX_SITE_BYTES = 25_000_000
+PAGES_MAX_FILES = 200
+PAGES_SITE_NAME = r"^[a-z0-9][a-z0-9-]{0,39}$"
+PAGES_REPO_NAME = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
+PAGES_TIMEOUT_S = 12   # each request; the policy timeout covers the whole publish
+PAGES_PROVIDER = "github_pages"
+GITHUB_API = "https://api.github.com"
+GITHUB_API_VERSION = "2022-11-28"   # supported until March 10, 2028 (docs.github.com, API versions)
 
 
 def _live() -> bool:
@@ -432,6 +450,149 @@ def open_in_browser(
     except (OSError, subprocess.SubprocessError):
         return {"error": "the browser could not be opened"}
     return {"opened": target.name}
+
+
+class PagesError(RuntimeError):
+    """A publish that cannot go on, in words the model can speak. Never holds the token."""
+
+
+def _site_files(folder: Path) -> tuple[list[tuple[str, Path]], int]:
+    """The web files to publish, as (path inside the site, file), and how many were left out.
+    Hidden files and folders (.versions, .tmp, .git) and symlinks are never sent."""
+    files, skipped, total = [], 0, 0
+    for dirpath, dirnames, filenames in os.walk(folder, followlinks=False):
+        here = Path(dirpath)
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and not (here / d).is_symlink())
+        for name in sorted(filenames):
+            f = here / name
+            if name.startswith(".") or f.is_symlink() or f.suffix.lower() not in PAGES_FILES:
+                skipped += 1
+                continue
+            size = f.stat().st_size
+            if size > PAGES_MAX_FILE_BYTES:
+                raise PagesError(f"{f.relative_to(folder)} is over 10 MB")
+            total += size
+            files.append((f.relative_to(folder).as_posix(), f))
+    if not any(rel == "index.html" for rel, _ in files):
+        raise PagesError("the folder needs an index.html at its top level")
+    if len(files) > PAGES_MAX_FILES:
+        raise PagesError(f"the site has {len(files)} files, over the limit of {PAGES_MAX_FILES}")
+    if total > PAGES_MAX_SITE_BYTES:
+        raise PagesError("the site is over 25 MB")
+    return files, skipped
+
+
+def _pages_url(repo: str, site: str) -> str:
+    owner, name = repo.split("/")
+    base = f"https://{owner.lower()}.github.io"
+    return f"{base}/{site}/" if name.lower() == f"{owner.lower()}.github.io" else f"{base}/{name}/{site}/"
+
+
+def _pages_repo() -> str:
+    repo = os.environ.get("ME3_PAGES_REPO", "").strip()
+    if not PAGES_REPO_NAME.match(repo):
+        raise PagesError("publishing is not set up: ME3_PAGES_REPO is missing or not owner/name")
+    return repo
+
+
+class _GitHub:
+    """The few Git Data API calls a publish needs, on one repo. Errors never echo the token."""
+
+    def __init__(self, repo: str, token: str, transport: httpx.BaseTransport | None = None):
+        self.repo = repo
+        self._base = f"{GITHUB_API}/repos/{repo}"   # no base_url: it would add a slash to the repo URL
+        self._http = httpx.Client(
+            timeout=PAGES_TIMEOUT_S, trust_env=False, transport=transport,
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                     "X-GitHub-Api-Version": GITHUB_API_VERSION, "User-Agent": "me3-voice-agent"},
+        )  # fmt: skip
+
+    def close(self) -> None:
+        self._http.close()
+
+    def call(self, method: str, path: str, **kw) -> dict:
+        try:
+            r = self._http.request(method, self._base + path, **kw)
+        except httpx.HTTPError as e:
+            raise PagesError(f"GitHub did not answer: {e.__class__.__name__}") from None
+        if r.status_code in (401, 403):
+            raise PagesError(f"GitHub refused the token for {self.repo}. It needs Contents read and write")
+        if r.status_code == 404 and path == "":
+            raise PagesError(f"there is no repo {self.repo} that the token can reach")
+        if r.status_code == 409:
+            raise PagesError(f"the repo {self.repo} is empty. Add a README on GitHub first")
+        if r.status_code == 422 and path.startswith("/git/refs/"):
+            raise PagesError("the repo changed while publishing. Try again")
+        if r.status_code >= 400:
+            raise PagesError(f"GitHub answered {r.status_code}")
+        return r.json()
+
+
+def _publish(gh: _GitHub, site: str, files: list[tuple[str, Path]]) -> str:
+    """One commit that replaces the site's folder and nothing else. Returns the commit sha."""
+    branch = gh.call("GET", "")["default_branch"]
+    head = gh.call("GET", f"/git/ref/heads/{branch}")["object"]["sha"]
+    base_tree = gh.call("GET", f"/git/commits/{head}")["tree"]["sha"]
+    existing = gh.call("GET", f"/git/trees/{base_tree}", params={"recursive": "1"})
+    if existing.get("truncated"):
+        raise PagesError("the repo is too large to update safely")
+    paths = {e["path"] for e in existing["tree"] if e["type"] == "blob"}
+    entries, new = [], set()
+    for rel, f in files:
+        blob = gh.call("POST", "/git/blobs", json={"content": base64.b64encode(f.read_bytes()).decode(),
+                                                   "encoding": "base64"})  # fmt: skip
+        path = f"{site}/{rel}"
+        new.add(path)
+        entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+    entries += [{"path": p, "mode": "100644", "type": "blob", "sha": None}
+                for p in sorted(paths) if p.startswith(f"{site}/") and p not in new]  # fmt: skip
+    if ".nojekyll" not in paths:  # serve files as they are, underscores included
+        entries.append({"path": ".nojekyll", "mode": "100644", "type": "blob", "content": ""})
+    tree = gh.call("POST", "/git/trees", json={"base_tree": base_tree, "tree": entries})["sha"]
+    commit = gh.call("POST", "/git/commits", json={"message": f"Publish {site} from ME3", "tree": tree,
+                                                   "parents": [head]})["sha"]  # fmt: skip
+    gh.call("PATCH", f"/git/refs/heads/{branch}", json={"sha": commit, "force": False})
+    return commit
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True}
+)
+def publish_site(
+    folder: Annotated[str, Field(min_length=1, description="Site folder with an index.html, relative to the workspace")],
+    site: Annotated[str, Field(pattern=PAGES_SITE_NAME, description="Short web name: lower-case letters, digits, hyphens")],
+) -> dict:
+    """Publish a website folder from the workspace to the public web on GitHub Pages. It replaces
+    any earlier site with the same name. Anyone with the link can see it."""
+    if not re.match(PAGES_SITE_NAME, site):
+        return {"error": "the site name may use only lower-case letters, digits, and hyphens"}
+    try:
+        root = inside(folder, [workspace_dir()])
+        if not root.is_dir():
+            return {"error": f"no folder at {folder}"}
+        if root == workspace_dir().resolve():
+            return {"error": "publish one site's folder, not the whole workspace"}
+        files, skipped = _site_files(root)
+        if tool_stage("pages") != "github":
+            _mock("publish_site", folder=folder, site=site, files=len(files))
+            return {"mock": True, "published": False, "files": len(files), "skipped": skipped,
+                    "note": "Nothing left this machine. Publishing is a mock until it is switched on."}  # fmt: skip
+        repo = _pages_repo()
+        token = os.environ.get("ME3_PAGES_TOKEN", "")
+        if not token:
+            raise PagesError("publishing is not set up: ME3_PAGES_TOKEN is missing")
+        books = ledger()
+        books.authorize(PAGES_PROVIDER)
+        gh = _GitHub(repo, token)
+        try:
+            commit = _publish(gh, site, files)
+        finally:
+            gh.close()
+        books.record(PAGES_PROVIDER, "publish", 1, price("github_pages_per_publish"))
+    except (OutsideRoots, PagesError, SpendRefused) as e:
+        return {"error": str(e)}
+    return {"published": True, "url": _pages_url(repo, site), "files": len(files), "skipped": skipped,
+            "commit": commit[:7], "note": "GitHub Pages takes about a minute to show it."}  # fmt: skip
 
 
 if __name__ == "__main__":
