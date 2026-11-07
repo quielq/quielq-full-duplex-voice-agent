@@ -110,7 +110,7 @@ Use `--profile pi`, drop `--echo-cancel`, since `pi.yaml` already turns it on, a
 
 ## Class demo on the Pi (2 to 3 minutes)
 
-The machine exercise asks for a real task, natural turns with no push-to-talk, a barge-in, a live MCP tool call, and recovery when an API is slow. This run shows all five on the Pi with the face on the 7-inch screen. It costs about 1,500 Cartesia characters and under $0.05 for the rest, so a rehearsal and the take fit easily.
+The machine exercise asks for a real task, natural turns with no push-to-talk, a barge-in, a live MCP tool call, and recovery when an API is slow. This run shows all five on the Pi with the face on the 7-inch screen, and ends with a real iMessage sent through the Mac phone bridge. It costs about 1,500 Cartesia characters and under $0.05 for the rest, so a rehearsal and the take fit easily.
 
 ### Before you start (on the Pi)
 
@@ -122,11 +122,15 @@ The machine exercise asks for a real task, natural turns with no push-to-talk, a
    ```bash
    cd ~/quielq-full-duplex-voice-agent && ~/.local/bin/uv run python -m bench.doctor --quick
    ```
-3. Start VIA through both voice servers, with the face:
+3. On the Mac, on the same Wi-Fi, start the phone bridge for the real message at 2:20. Keep the Mac awake and Messages signed in. Get the Pi's address with `hostname -I` on the Pi, and check the link from the Pi as in `docs/quickstart-pi.md`, step 5:
    ```bash
-   ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic ~/.local/bin/uv run python -m harness.bot --profile pi --stages stt=voice_listen,llm=anthropic,tts=voice_speak --ui
+   uv run --env-file .env python scripts/mac_phone_bridge.py --host 0.0.0.0 --allow-from <pi ip>
    ```
-4. Open the face full screen with `scripts/pi_kiosk.sh` (`WAYLAND_DISPLAY=wayland-0`). Wait until the chip shows "VIA: Generalist" and the status says Listening. Start recording.
+4. Start VIA through both voice servers, with the face and real messages:
+   ```bash
+   ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic,comms=bridge ~/.local/bin/uv run python -m harness.bot --profile pi --stages stt=voice_listen,llm=anthropic,tts=voice_speak --ui
+   ```
+5. Open the face full screen with `scripts/pi_kiosk.sh` (`WAYLAND_DISPLAY=wayland-0`). Wait until the chip shows "VIA: Generalist" and the status says Listening. Start recording.
 
 ### The script
 
@@ -141,7 +145,10 @@ Speak normally and wait for each reply unless the line says otherwise. The times
 | 1:05 | "Actually, what's the weather in Baguio right now?" | A slow API: `get_weather` is a slow tool, so the waiting phrase ("One sec") plays at once from a stored clip, then the answer |
 | 1:30 | Tap the thermostat's Warmer button twice on the screen, then say "What's the thermostat set to now?" | Screen and voice share one policy: the taps go through `ToolPolicy`, and the model reads the new value with a tool, not from memory |
 | 1:50 | "Add a note: bring the Pi charger to class." Then "Delete that note." When it asks, say "cancel." | Guardrails: a delete is held with an undo window and released only by your words, so "cancel" keeps the note |
-| 2:20 | "Thanks VIA, that's all for now." | Closing turn. Stop the recording, then stop the bot with Ctrl+C |
+| 2:20 | "Text <contact> that the demo is running." When it reads the message back, say "Yes." Then wait 5 seconds | A real action leaves the Pi: the harness reads back the real arguments, holds the send for 5 seconds, then the Mac bridge sends an iMessage. Show it arriving on the phone |
+| 2:45 | "Thanks VIA, that's all for now." | Closing turn. Stop the recording, then stop the bot with Ctrl+C |
+
+Pick `<contact>` from `data/contacts.yaml` on the Pi and tell that person a test text is coming. A call ("Call <contact>.") also works, but someone must click Call on the Mac, so it is optional.
 
 If a reply is slow to start, keep going: the waiting phrase covers it. If a cough or room noise cuts a reply off, that is barge-in working; ask again.
 
