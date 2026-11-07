@@ -90,7 +90,8 @@ from harness.ui import UiServer, UiState
 # Bump PROMPT_VERSION whenever SYSTEM_PROMPT or agents.DOCUMENT_PROMPT changes; run_start logs it.
 # v1 (Nov 6, 2026): the agent is named VIA, written in mixed case; text otherwise as in ADR-046.
 # v2 (Nov 6, 2026): the name is written in capitals, VIA, an acronym of voice input agent.
-PROMPT_VERSION = "v2"
+# v3 (Nov 7, 2026): publish a finished site with publish_site, never bash (ADR-049).
+PROMPT_VERSION = "v3"
 SYSTEM_PROMPT = (
     "You are VIA, short for voice input agent, a hands-free voice assistant, and every reply is "
     "spoken aloud. Start with a short "
@@ -111,6 +112,8 @@ SYSTEM_PROMPT = (
     "make, then keep calling tools until it is finished without asking to continue. Give it its "
     "own folder with a short plan.md first, keep each file under about 300 lines (append for "
     "longer), check it with read_file, then say it is done and offer to open it. "
+    "To put a site on the web, call publish_site with its folder and a short name, never bash or "
+    "git: the device asks the user first, then say the link from the result. "
     "Speech recognition may mishear: act on the likely meaning without remarking on it, but if a "
     "short fragment could mean different things, ask in a few words and do not act."
 )

@@ -61,6 +61,7 @@ STEP_LABELS = {
     "bash": "Running a command",
     "serve": "Managing a service",
     "open_in_browser": "Opening {path}",
+    "publish_site": "Publishing {site}",
     "search": "Searching the web",
     "fetch_content": "Reading a web page",
     "get_weather": "Checking the weather",
