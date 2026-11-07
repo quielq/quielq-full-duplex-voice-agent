@@ -4,7 +4,7 @@ Six steps. Steps 1 to 4 make no cloud calls and spend nothing. Stop at the first
 
 You need a Raspberry Pi 5 with 64-bit Raspberry Pi OS (desktop), a USB mic, a USB speaker, the 7-inch display, and a network.
 
-**Where it stands (Nov 6):** setup, tests, and a live run with Flux, Haiku 5.5, Cartesia, the face, and Spotify all worked on the Pi (Bookworm). On Nov 5 a live run through both voice servers passed, with the short echo probe, barge-in, and live `bash` in `bwrap` (run `20261105-203514-1a2f7a`), and the voice server hop probes passed. On Nov 6 the class benchmark ran on the Pi with every course row under the class target (`docs/class-benchmark.md`). Not yet done on the Pi: the long echo drift test (skipped), `serve` in `bwrap`, and the boot service.
+**Where it stands (Nov 6):** setup, tests, and a live run with Flux, Haiku 5.5, Cartesia, the face, and Spotify all worked on the Pi (Bookworm). On Nov 5 a live run through both voice servers passed, with the short echo probe, barge-in, and live `bash` in `bwrap` (run `20261105-203514-1a2f7a`), and the voice server hop probes passed. On Nov 6 the class benchmark ran on the Pi with every course row under the class target (`docs/class-benchmark.md`). On Nov 6 the Mac phone bridge sent real iMessages from a Mac run. Not yet done on the Pi: the long echo drift test (skipped), `serve` in `bwrap`, the boot service, and a message sent from the Pi through the bridge.
 
 The repo is public (since Nov 5), so the Pi pulls straight from GitHub. To update an existing checkout, run `git checkout main && git pull --ff-only origin main`, then `uv sync`.
 
@@ -66,15 +66,55 @@ Set `audio.echo_delay_ms` in `configs/pi.yaml` to the best delay it reports. If 
 
 ## 5. Run it live (paid)
 
+### Once: real messages through the Mac (optional)
+
+The Pi cannot send iMessages itself: `scripts/mac_phone_bridge.py` drives the Messages app, so it runs on the Mac and the Pi reaches it over the LAN (`docs/tools.md`, "Messages and calls through the Mac bridge"). Skip this part and messages and calls stay mocks.
+
+1. On the Mac, with the bridge already working there, find its name with `scutil --get LocalHostName`.
+2. In the Pi's `.env`, set `ME3_PHONE_BRIDGE_URL=http://<mac-name>.local:8765` and the same `ME3_PHONE_BRIDGE_TOKEN` as the Mac. Edit it by hand. Never paste the token into a chat or a log.
+3. Copy the contacts from the Mac. Git ignores the file:
+
 ```bash
-ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic uv run python -m harness.bot --profile pi --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --ui --spotify-player
+scp data/contacts.yaml raspberrypi.local:quielq-full-duplex-voice-agent/data/
+```
+
+4. On the Pi, `hostname -I` gives its address. Start the bridge on the Mac with `--dry-run`, which sends nothing:
+
+```bash
+uv run --env-file .env python scripts/mac_phone_bridge.py --host 0.0.0.0 --allow-from <pi ip> --dry-run
+```
+
+5. Check the link from the Pi. It reads the URL and token from `.env` and prints `"status": "ok"` with `"dry_run": true`. A `403` names the problem: `address not allowed` (wrong `--allow-from`) or `bad token`. Then stop the dry-run bridge with Ctrl+C.
+
+```bash
+uv run --env-file .env python -c "import os, urllib.request as u; print(u.urlopen(u.Request(os.environ['ME3_PHONE_BRIDGE_URL'], headers={'X-Bridge-Token': os.environ['ME3_PHONE_BRIDGE_TOKEN']}), timeout=5).read().decode())"
+```
+
+### Each run
+
+If you set up messages, first start the bridge on the Mac for real and leave it running for the whole run. Start it from the same app each time (Terminal, say): macOS asks once per app whether it may control Messages.
+
+```bash
+uv run --env-file .env python scripts/mac_phone_bridge.py --host 0.0.0.0 --allow-from <pi ip>
+```
+
+Then, on the Pi:
+
+```bash
+ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic,comms=bridge uv run python -m harness.bot --profile pi --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --ui --spotify-player
 ```
 
 `pi.yaml` already turns echo cancelling on, so no `--echo-cancel` is needed. `--spotify-player` plays music in the face page (needs Premium, ADR-031). Drop it if you do not need music.
 
-The two switches in front work as on the Mac (`docs/quickstart-mac.md`, step 5): `ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real, and `delegate=anthropic` runs background tasks on Haiku 5.5. Leave them out and those tools stay mocks, so a task reports done without making anything. `open_in_browser` opens on the Pi's own display.
+The switches in front work as on the Mac (`docs/quickstart-mac.md`, step 5): `ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real, and `delegate=anthropic` runs background tasks on Haiku 5.5. Leave them out and those tools stay mocks, so a task reports done without making anything. `open_in_browser` opens on the Pi's own display.
 
-To test the voice servers on the Pi, use `--stages stt=voice_listen,llm=anthropic,tts=voice_speak`, then check the hop cost for free:
+`comms=bridge` sends real messages, each after a read-back and a spoken yes. Drop it if the bridge is not running, or each send fails. `ME3_TOOL_STAGES` on the command line replaces the one in `.env`, so name every live tool here.
+
+The Mac must stay awake, on the same network, with Messages signed in. `--allow-from` takes an address, so restart the bridge if the Pi's address changes. A call opens a Call button on the Mac, and someone there must click it.
+
+The class demo (`docs/live-demo.md`) runs the same tools through our own MCP voice servers and leaves out Spotify, with `--stages stt=voice_listen,llm=anthropic,tts=voice_speak`. It sounds the same, and the Deepgram and Cartesia keys stay inside the servers (ADR-032).
+
+To check the voice servers' hop cost for free:
 
 ```bash
 uv run python -m bench.voice_hop_probe
@@ -108,4 +148,4 @@ To watch it:
 journalctl --user -u me3-bot -f
 ```
 
-Messages and calls stay mocks on the Pi.
+The service reads the repo's `.env`. For real messages from it, add `comms=bridge` to `ME3_TOOL_STAGES` there, set up as in step 5, and keep the bridge running on the Mac. Without it, messages and calls are mocks.

@@ -88,7 +88,7 @@ To route speech through our own MCP voice servers instead, change the stages to 
 | Clock, notes, documents, weather, web pages, files | Real |
 | Web search, music | Real, with your keys |
 | `bash`, `serve`, `open_in_browser` | Real and sandboxed. Each asks for a spoken yes |
-| Messages and calls | Mocks (see below) |
+| Messages and calls | Mocks unless `comms=bridge` (below). Real iMessages went out through the bridge on Nov 6; calls not tried live yet |
 | Lights, thermostat | Simulated, shown on the face |
 | `send_file` | Always a mock |
 
@@ -102,7 +102,7 @@ uv run python -m bench.spotify_login
 
 **Your documents.** Put files in `data/documents`. The agent can read them but never change them. The document agents use the samples, which are copied in on the first run.
 
-**Real messages and calls.** Follow "Messages and calls through the Mac bridge" in `docs/tools.md`, then add `comms=bridge` to `ME3_TOOL_STAGES`.
+**Real messages and calls.** Follow "Messages and calls through the Mac bridge" in `docs/tools.md`, then add `comms=bridge` to `ME3_TOOL_STAGES`, for example `ME3_TOOL_STAGES=search=tavily,delegate=anthropic,comms=bridge`. Start the bridge in its own Terminal tab before the bot. Each message is read back and sent only after a spoken yes. To send from the Pi, see `docs/quickstart-pi.md`, step 5.
 
 ## If something goes wrong
 

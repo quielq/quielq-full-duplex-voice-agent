@@ -287,6 +287,8 @@ Then run the bot with `ME3_TOOL_STAGES=comms=bridge`. Remove `--dry-run` when yo
 uv run --env-file .env python scripts/mac_phone_bridge.py --host 0.0.0.0 --allow-from <pi ip>
 ```
 
+**Status:** real iMessages went out through the bridge from the Mac on Nov 6. No real call yet, and nothing from the Pi yet.
+
 **Limits**
 
 - Calls are not hands-free. macOS shows a Call button, and someone must click it. On the Pi, that means someone at the Mac.
@@ -307,4 +309,6 @@ Most of this needs no change, because tools are HTTP clients and Python.
 | | Spotify runs on the Mac app only for now (ADR-022) |
 | | `open_in_browser` covers the robot face in kiosk mode, and there is no way back by touch yet (ADR-027) |
 
-The sandbox and the bridge are chosen at run time, so one branch serves both machines. Nothing has run on a Pi yet.
+The sandbox and the bridge are chosen at run time, so one branch serves both machines. `bwrap` and live `bash` ran on the Pi on Nov 5. The bridge has sent real iMessages from a Mac run (Nov 6) but not yet from the Pi; the steps are in `docs/quickstart-pi.md`, step 5.
+
+The bridge cannot move to the Pi: it drives the macOS Messages app and Continuity calling through `osascript` and `open tel:`, which exist only on a Mac signed in to the iPhone's Apple ID.
