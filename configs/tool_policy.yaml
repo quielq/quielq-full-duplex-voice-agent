@@ -31,7 +31,7 @@ readback_max_chars: 240
 # tools refuse every call until the session ends (ADR-024).
 containment:
   after_critical: 3
-  tools: [bash, serve, write_file, edit_file, send_file, open_in_browser, send_message, call_contact, start_task]
+  tools: [bash, serve, write_file, edit_file, send_file, open_in_browser, publish_site, send_message, call_contact, start_task]
 
 # Fixed phrases: spoken by the harness with no LLM call.
 phrases:
@@ -98,6 +98,10 @@ tools:
     readback: "This will {command_words}. Should I go ahead?"
   open_in_browser:
     readback: "Open {path} in your browser. Should I do that?"
+  # Leaves the machine and anyone can see it, so the harness asks from the real arguments (ADR-049).
+  publish_site:
+    timeout_s: 45.0   # one request per file, then four more
+    readback: "Publish the folder {folder} on the public web as {site}. Anyone with the link can see it. Should I do that?"
   serve:
     timeout_s: 15.0
     guard: service

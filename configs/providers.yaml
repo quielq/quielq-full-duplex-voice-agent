@@ -20,6 +20,7 @@ tool_stages:
   fetch: http           # fake | http. Approved Nov 1, 2026, ADR-024
   comms: mock           # mock | bridge. A real send, so it stays per run, ADR-024
   delegate: fake        # fake | anthropic. Background tasks on Haiku 5.5 under the anthropic cap, ADR-035
+  pages: mock           # mock | github. publish_site to the repo in ME3_PAGES_REPO, per run, ADR-049
 
 providers:
   deepgram:
@@ -71,6 +72,10 @@ providers:
   phone_bridge:
     env_key: ME3_PHONE_BRIDGE_TOKEN
     daily_cap_usd: 0.01   # 20 sends a day at the notional price below; 0 switches it off
+  github_pages:
+    env_key: ME3_PAGES_TOKEN
+    extra_env_keys: [ME3_PAGES_REPO]
+    daily_cap_usd: 0.01   # 20 publishes a day at the notional price below; 0 switches it off (ADR-049)
   ddgs:
     env_key: null
     daily_cap_usd: 0.00
@@ -109,6 +114,7 @@ prices:
       google/gemini-3.1-flash-lite:    {input_per_token: 0.00000025, output_per_token: 0.00000150}
       anthropic/claude-sonnet-5.5:     {input_per_token: 0.00000200, output_per_token: 0.00001000}
   phone_bridge_per_action: 0.0005      # notional, so the cap above is a limit on sends; carrier SMS charges are not counted
+  github_pages_per_publish: 0.0005     # notional, so the cap above is a limit on publishes; GitHub Pages is free
   ddgs_per_search: 0.0                 # no API, no charge
   open_meteo_per_call: 0.0             # free for non-commercial use, open-meteo.com/en/terms
   tavily_per_search: 0.008             # 1 credit at pay-as-you-go; first 1,000 a month are free

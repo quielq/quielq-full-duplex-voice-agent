@@ -53,6 +53,8 @@ def _server_env(data_dir: str | None, module: str = "", extra: dict[str, str] | 
         env = {k: v for k, v in env.items() if not k.startswith("SPOTIFY_")}
     if module != TASK_SERVERS["comms"]:  # the bridge token reaches only comms (ADR-024)
         env.pop("ME3_PHONE_BRIDGE_TOKEN", None)
+    if module != TASK_SERVERS["workspace"]:  # the Pages token reaches only workspace (ADR-049)
+        env.pop("ME3_PAGES_TOKEN", None)
     if data_dir:
         env["ME3_DATA_DIR"] = data_dir
     env.pop("ME3_DOC_SCOPE", None)  # set only by an agent, below, never inherited
