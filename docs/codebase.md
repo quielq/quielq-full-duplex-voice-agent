@@ -477,7 +477,8 @@ Per-run overrides, without editing files:
 | --- | --- |
 | `--stages` | `--stages stt=voice_listen,llm=anthropic,tts=voice_speak` |
 | `ME3_TOOL_STAGES` | `ME3_TOOL_STAGES=search=tavily,comms=bridge` |
-| `ME3_WORKSPACE_LIVE=1` | Real `bash`, `serve`, and `open_in_browser`, sandboxed |
+| `ME3_WORKSPACE_LIVE=1` | Real `bash`, `serve`, `open_in_browser`, and `open_published_site`, sandboxed |
+| `ME3_TOOL_STAGES=pages=github` | Real `publish_site`, to the GitHub Pages repo in `ME3_PAGES_REPO` (ADR-049) |
 | `--profile pi` | Pi devices, echo cancelling on |
 | `--agent`, `--model` | One agent, one listed model, for a scripted run |
 | `--flux`, `--turn-stop`, `--barge-in` | Turn and interruption tuning |

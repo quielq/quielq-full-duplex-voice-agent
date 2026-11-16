@@ -96,6 +96,8 @@ General tools (ADR-021, ADR-024): weather and fetch are real by default, and `se
 
 Messages and calls are mocks unless `ME3_TOOL_STAGES=comms=bridge`, which needs `scripts/mac_phone_bridge.py` running on the Mac, the bridge settings in `.env`, and `data/contacts.yaml`. Calls need a click on the Mac. Real iMessages went out from the Mac on Nov 6. The bridge cannot run on the Pi (it drives the macOS Messages app); the Pi reaches it over the LAN (`docs/quickstart-pi.md`, step 5), which has not run yet.
 
+`publish_site` sends one workspace folder to the one GitHub Pages repo in `ME3_PAGES_REPO`, and is a mock unless `ME3_TOOL_STAGES=pages=github` (ADR-049). The server makes the API calls itself, so `git`, `gh` and `curl` stay refused in `bash`. `open_published_site` opens only a site this device published, by name, and is a mock unless `ME3_WORKSPACE_LIVE=1`. Do not let either take an address or a repo from the model.
+
 How tools work, how to add one, and which guardrails it needs: `docs/tools.md`. Read it before adding or changing a tool.
 
 Addressing (`stay_silent`, ACTIVE/IDLE, level gate, mute) is built but off by default and has only run on fakes (ADR-016). Mute: `kill -USR1 <pid>` in mic mode.

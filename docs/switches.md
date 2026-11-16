@@ -29,7 +29,7 @@ Set in `tool_stages` in `configs/providers.yaml`, or per run with `ME3_TOOL_STAG
 | `comms` | `mock`, `bridge` | `mock` | `bridge` sends real messages through `scripts/mac_phone_bridge.py` (ADR-024) |
 | `delegate` | `fake`, `anthropic` | `fake` | Background worker on Haiku 5.5 (ADR-035). One live task, Nov 4 |
 
-`ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real. They still pass the command policy and run in the OS sandbox, and refuse with no sandbox (ADR-026, ADR-034). Without it they are mocks.
+`ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real. They still pass the command policy and run in the OS sandbox, and refuse with no sandbox (ADR-026, ADR-034). Without it they are mocks. It also makes `open_published_site` real. `ME3_TOOL_STAGES=pages=github` makes `publish_site` real, to the one repo in `ME3_PAGES_REPO` (ADR-049).
 
 ## Voice pipeline
 
