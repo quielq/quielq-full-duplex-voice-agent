@@ -34,6 +34,16 @@ The class demo asked the agent to search for Quiel's profile online and build a 
 - Each hit carries `title` (the document's first heading, or its file name in plain words) and `section` (the heading over the matched text).
 - It stays keyword search. No embeddings, no model, no cost, and nothing new to install on the Pi.
 
+## What a live run showed
+
+One text run on Nov 16, 2026, on Haiku 5.5 and Tavily (run `20261116-102716-6dc45b`, about $0.03 with the search): "Search for Kiel Kiwa's profile online and build a one page website about me."
+
+- The model searched `"Quiel Quiwa" UP Diliman AI`, so the misheard name was corrected and the hints were used.
+- It wrote `plan.md` and a 3,500 character `index.html` with its own styles and a phone layout, read it back, said it was done, and offered to open it. The whole job took 21 seconds.
+- Every fact on the page came from the search results. The LinkedIn page itself returned no text to `fetch_content`.
+- It skipped `notes.md`, and it still said a short sentence before some tool calls, against the prompt. An earlier wording had it write files with a `bash` here-document, which the command policy refused, so the prompt now says to use `write_file`.
+- A scripted text run ends at the first reply that has words, so a build has to be run with a pause after the request (`turns=[text, seconds]`), or by voice.
+
 ## Alternatives
 
 - Put the mishearing list in the prompt only: free, but the recogniser still writes the wrong name into the chat, and the voice still says it wrong.
@@ -44,7 +54,7 @@ The class demo asked the agent to search for Quiel's profile online and build a 
 
 ## Consequences
 
-- The prompt is about 800 words, up from about 330. It is cached on Anthropic, so the cost is mostly a one time write per session, but first token time should be measured on a live run before and after.
+- The prompt is about 870 words, up from about 330. It is cached on Anthropic, so the cost is mostly a one time write per session, but first token time should be measured on a live run before and after.
 - Keyterms add about 20 percent to the speech recognition cost. Turn them off with `keyterms: false`.
 - The mishearings in `owner.yaml` are guesses until a mic run shows what Flux really writes.
 - The pronunciation applies to Cartesia only. Aura-2 says the name as written.
