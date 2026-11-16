@@ -562,3 +562,36 @@ def test_a_table_shows_its_shape_and_both_ends(data):
     assert table["first_row"] == "title: Light; start_time: Oct 29, 2026"
     assert table["last_row"].startswith("title: First")
     assert "rows" not in listed["notes.md"]
+
+
+def test_local_search_stems_words_and_names_the_title_and_section(data):
+    (data / "documents").mkdir(exist_ok=True)
+    body = "# Employee Handbook\n\nWelcome.\n\n## Leave\n\nAnnual leave is fifteen days.\n\n" + "filler line\n" * 200
+    body += "## Renewals\n\nEach contract renewal needs a signed form.\n"
+    (data / "documents" / "handbook_2026.md").write_text(body)
+    hit = docs.local_search("renewals forms")["results"][0]
+    assert hit["title"] == "Employee Handbook" and hit["section"] == "Renewals"
+    assert "renewal needs a signed form" in hit["text"]
+    leave = docs.local_search("leave days")["results"][0]
+    assert leave["section"] in ("Employee Handbook", "Leave") and "fifteen days" in leave["text"]
+
+
+def test_a_table_gets_its_title_from_the_file_name(data):
+    (data / "documents").mkdir(exist_ok=True)
+    (data / "documents" / "customer_list.csv").write_text("name,plan\nMayon Builders,Gold\n")
+    hit = docs.local_search("Mayon")["results"][0]
+    assert hit["title"] == "Customer list" and hit["section"] == ""
+
+
+def test_an_index_from_before_stemming_is_rebuilt(data):
+    import sqlite3
+
+    (data / "documents").mkdir(exist_ok=True)
+    (data / "documents" / "a.md").write_text("# A\n\nThe renewal date is in March.\n")
+    db = sqlite3.connect(data / "docs_index.db")
+    db.execute("CREATE TABLE files (path TEXT PRIMARY KEY, mtime REAL, size INTEGER)")
+    db.execute("CREATE VIRTUAL TABLE chunks USING fts5(path UNINDEXED, text)")
+    db.execute("INSERT INTO files VALUES ('gone.md', 1, 1)")
+    db.commit()
+    db.close()
+    assert docs.local_search("renewals")["results"][0]["title"] == "A"

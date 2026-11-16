@@ -2,6 +2,8 @@
 
 The index lives at $ME3_DATA_DIR/docs_index.db. Documents stay where they are, under the
 documents and workspace folders. No embeddings: only VAD, Smart Turn, and audio run locally.
+Words are stemmed, so "renewals" finds "renewal", and each hit carries its document's title
+and the heading it sits under, so the model can say where an answer came from (ADR-050).
 
 A document agent (ADR-039) starts this server with ME3_DOC_SCOPE, a comma-separated list of
 folders or files under the documents folder. Every tool then sees only those paths, so the
@@ -35,6 +37,8 @@ SNIPPET_CHARS = 500
 READ_CHARS = 12000  # one read_document page: the customer list fits in one
 ROW_PREVIEW_CHARS = 240
 TABLES_DESCRIBED = 20  # each table is read to describe it, so only the first few
+HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t#]*$", re.MULTILINE)
+SUFFIXES = ("ations", "ation", "ings", "ing", "ies", "ed", "es", "ly", "al", "s")
 _scope_indexed = False
 
 
@@ -70,14 +74,22 @@ def _in_scope_sql(roots: list[Path]) -> tuple[str, list]:
     return " OR ".join(parts), args
 
 
+def stem(word: str) -> str:
+    """A rough stem, only for picking snippet lines. The index itself uses SQLite's Porter stemmer."""
+    for suffix in SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+            return word[: -len(suffix)]
+    return word
+
+
 def snippet(text: str, words: set[str]) -> str:
     """The lines of a chunk that match the query, best first, up to SNIPPET_CHARS. A chunk of CSV
     rows is about 1,600 characters, so its first 500 often miss the row that matched."""
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     scored = []
     for i, line in enumerate(lines):
-        found = re.findall(r"\w+", line.lower())
-        if hits := sum(found.count(w) for w in words):
+        found = [stem(w) for w in re.findall(r"\w+", line.lower())]
+        if hits := sum(found.count(stem(w)) for w in words):
             scored.append((-hits, i, line))
     if not scored:
         return text[:SNIPPET_CHARS]
@@ -88,6 +100,14 @@ def snippet(text: str, words: set[str]) -> str:
         picked.append((i, line[:SNIPPET_CHARS]))
         size += len(line) + 1
     return "\n".join(line for _, line in sorted(picked))  # back in document order
+
+
+def section_at(chunk: str, found: str, before: str) -> str:
+    """The heading over the matched text: the last one inside the chunk above the match, or the
+    heading the chunk started under."""
+    at = chunk.find(found.splitlines()[0]) if found else -1
+    inside_chunk = [m.group(1) for m in HEADING.finditer(chunk) if m.start() <= at]
+    return inside_chunk[-1] if inside_chunk else before
 
 
 def _shown(path: Path) -> str:
@@ -101,7 +121,12 @@ def _shown(path: Path) -> str:
 def _db() -> Iterator[sqlite3.Connection]:
     db = sqlite3.connect(data_dir() / "docs_index.db")
     db.execute("CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, mtime REAL, size INTEGER)")
-    db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5(path UNINDEXED, text)")
+    made = db.execute("SELECT sql FROM sqlite_master WHERE name = 'chunks'").fetchone()
+    if made and "porter" not in made[0]:  # an index from before ADR-050: build it again
+        db.execute("DROP TABLE chunks")
+        db.execute("DELETE FROM files")
+    db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5("
+               "path UNINDEXED, title UNINDEXED, section UNINDEXED, text, tokenize = 'porter unicode61')")  # fmt: skip
     try:
         with db:
             yield db
@@ -130,10 +155,22 @@ def line_chunks(lines: list[str]) -> Iterator[str]:
         yield "\n".join(chunk)
 
 
-def index_chunks(path: Path, text: str) -> Iterator[str]:
+def doc_title(path: Path, text: str) -> str:
+    """The document's first heading, or its file name in plain words."""
+    first = HEADING.search(text[:CHUNK_CHARS]) if path.suffix.lower() != ".csv" else None
+    return first.group(1) if first else path.stem.replace("_", " ").replace("-", " ").capitalize()
+
+
+def index_chunks(path: Path, text: str) -> Iterator[tuple[str, str]]:
+    """Each chunk with the heading it sits under: the last one at or just before its start."""
     if path.suffix.lower() == ".csv":
-        return line_chunks(csv_rows(text))
-    return chunks(text)
+        yield from (("", c) for c in line_chunks(csv_rows(text)))
+        return
+    headings = [(m.start(), m.group(1)) for m in HEADING.finditer(text)]
+    step = CHUNK_CHARS - OVERLAP_CHARS
+    for i, chunk in enumerate(chunks(text)):
+        before = [name for at, name in headings if at <= i * step + OVERLAP_CHARS]
+        yield (before[-1] if before else ""), chunk
 
 
 def chunks(text: str) -> Iterator[str]:
@@ -170,7 +207,9 @@ def _ingest(roots: list[Path], rebuild: bool = False) -> dict:
                     failed.append(path.name)
                     continue
                 db.execute("DELETE FROM chunks WHERE path = ?", (key,))
-                db.executemany("INSERT INTO chunks VALUES (?, ?)", ((key, c) for c in index_chunks(path, text)))
+                title = doc_title(path, text)
+                db.executemany("INSERT INTO chunks VALUES (?, ?, ?, ?)",
+                               ((key, title, section, c) for section, c in index_chunks(path, text)))  # fmt: skip
                 db.execute("INSERT OR REPLACE INTO files VALUES (?, ?, ?)", (key, stat.st_mtime, stat.st_size))
                 indexed += 1
         for key in known:
@@ -217,7 +256,8 @@ def local_search(
     query: Annotated[str, Field(min_length=1, description="Words to look for")],
     top_k: Annotated[int, Field(ge=1, le=10)] = 5,
 ) -> dict:
-    """Search the user's indexed documents by keyword, best match first."""
+    """Search the user's indexed documents by keyword, best match first. Each result has the
+    document's title and the section heading the text sits under."""
     words = re.findall(r"\w+", query)
     if not words:
         return {"results": []}
@@ -227,13 +267,17 @@ def local_search(
     where, args = _in_scope_sql([r.resolve() for r in roots]) if scope() is not None else ("1", [])
     with _db() as db:
         rows = db.execute(
-            f"SELECT path, text, bm25(chunks) FROM chunks WHERE chunks MATCH ? AND ({where}) "
+            f"SELECT path, title, section, text, bm25(chunks) FROM chunks WHERE chunks MATCH ? AND ({where}) "
             "ORDER BY bm25(chunks) LIMIT ?",
             (match, *args, top_k),
         ).fetchall()
     lowered = {w.lower() for w in words}
-    return {"results": [{"path": _shown(Path(p)), "text": snippet(t, lowered), "score": round(-s, 3)}
-                        for p, t, s in rows]}  # fmt: skip
+    results = []
+    for p, title, section, t, s in rows:
+        text = snippet(t, lowered)
+        results.append({"path": _shown(Path(p)), "title": title, "section": section_at(t, text, section),
+                        "text": text, "score": round(-s, 3)})  # fmt: skip
+    return {"results": results}
 
 
 @mcp.tool(
