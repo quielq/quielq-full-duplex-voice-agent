@@ -1,0 +1,26 @@
+# Who VIA belongs to (ADR-050). This file is public, so it holds only what the README already
+# says. The prompt, the speech recogniser, and the voice all read it.
+
+name: Quiel Quiwa
+first_name: Quiel
+about: a Master of Engineering in AI student at UP Diliman
+
+# How the name sounds, written for the prompt.
+said_as: ki-yel ki-wa
+
+# What speech recognition may write when it hears the name. These are guesses until a mic run:
+# replace them with what the transcripts in the event log really show.
+misheard: [Kiel Kiwa, Kyle Kiwa, Kiyel Kiwa, Quill Quiwa]
+
+# Words to add to a web search when the results are about someone else.
+search_hints: [UP Diliman, AI]
+
+# Sent to Deepgram Flux as keyterms when providers.deepgram.keyterms is true. Proper nouns keep
+# their capitals. Keep the list short: Deepgram allows 500 tokens.
+keyterms: [Quiel Quiwa, Quiel, Quiwa, VIA]
+
+# How the voice says each word, in IPA. Cartesia only: other voices say the word as written.
+# The chat, the context, and files always keep the real spelling.
+pronounce:
+  Quiel: "kiˈjɛl"
+  Quiwa: "ˈkiwɑ"

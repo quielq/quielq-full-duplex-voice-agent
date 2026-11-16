@@ -27,6 +27,7 @@ Set in `tool_stages` in `configs/providers.yaml`, or per run with `ME3_TOOL_STAG
 | `weather` | `fake`, `open_meteo` | `open_meteo` | Real by default, free (ADR-024) |
 | `fetch` | `fake`, `http` | `http` | Real by default (ADR-024) |
 | `comms` | `mock`, `bridge` | `mock` | `bridge` sends real messages through `scripts/mac_phone_bridge.py` (ADR-024) |
+| `pages` | `mock`, `github` | `mock` | `github` publishes to the repo in `ME3_PAGES_REPO` (ADR-049). One live publish, Nov 16 |
 | `delegate` | `fake`, `anthropic` | `fake` | Background worker on Haiku 5.5 (ADR-035). One live task, Nov 4 |
 
 `ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real. They still pass the command policy and run in the OS sandbox, and refuse with no sandbox (ADR-026, ADR-034). Without it they are mocks. It also makes `open_published_site` real. `ME3_TOOL_STAGES=pages=github` makes `publish_site` real, to the one repo in `ME3_PAGES_REPO` (ADR-049).
@@ -36,6 +37,8 @@ Set in `tool_stages` in `configs/providers.yaml`, or per run with `ME3_TOOL_STAG
 | Component | Where | Default | Switch per run | Status |
 |---|---|---|---|---|
 | End of turn | `turn.stop` | `auto` (Flux's own end of turn with Flux, Smart Turn otherwise) | `--turn-stop` | `flux_forced` is built and failed its rule (ADR-019). Live |
+| Flux keyterms | `providers.deepgram.keyterms` | on | Edit the YAML | Sends the owner's name from `configs/owner.yaml` to Flux. A paid add-on, $0.0013 a minute (ADR-050). Fakes |
+| Name pronunciation | `pronounce` in `configs/owner.yaml` | on for Cartesia | Remove the entries | The voice says the name from IPA, and the chat keeps the spelling (ADR-050). Probe only, Nov 16 |
 | Flux eager end of turn | `providers.deepgram.flux.eager_eot_threshold` | on at 0.5 | `--flux eager_eot_threshold=off` | Saves 159 ms on chat, 355 ms on tool turns (ADR-046). Live |
 | Other Flux settings | `providers.deepgram.flux` | Deepgram's defaults | `--flux name=value` | ADR-018 |
 | Barge-in | `barge_in.mode` | `immediate` | `--barge-in duck` | Duck-then-decide is a prototype; it stopped 0.2 s later on the class benchmark (ADR-007, ADR-045) |
