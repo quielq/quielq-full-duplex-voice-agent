@@ -89,6 +89,25 @@ uv run python -m bench.cost_ledger
 
 In the timeline, a skipped turn has one `llm_request` and a normal tool turn has two. Add `--all` to the report to see the `tool_policy` event with `template_reply`. A cut-off turn shows as `interrupted` under Turns.
 
+## 5. Software development: build, publish, open
+
+This shows VIA as a builder: it researches, writes a site, puts it on GitHub Pages, and opens the link. It needs the Pages setup in `docs/tools.md` ("Publishing a site to GitHub Pages"), and `pages=github` in the command:
+
+```bash
+ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic,pages=github uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --echo-cancel --ui
+```
+
+| Say | Expect | Shows |
+| --- | --- | --- |
+| "Search for my profile online and build a one page website about me." | One sentence on what it will make, then a minute or two of tool calls: `search`, `fetch_content`, `write_file`, `read_file`. Then "It's done" | A multi-step job with no hand-holding |
+| "Open it in the browser." | "Open ... in your browser. Should I do that?" | Local preview, read-back |
+| "Yes." | The page opens after the undo window | `open_in_browser` |
+| "Publish it." | "Publish the folder ... on the public web as ... Anyone with the link can see it. Should I do that?" | The harness asks from the real arguments |
+| "Yes." | After the undo window it says the link | `publish_site`, one commit to the Pages repo |
+| "Open the published site." Then "Yes." | It waits for GitHub Pages, then the live link opens | `open_published_site` |
+
+GitHub Pages takes up to a minute to serve a new site. If VIA says it is still building, wait and ask again. Rehearse once with the same site name, so the take is a republish and shows up faster.
+
 ## Optional: backchannels
 
 The default barge-in stops on any speech, so "mm-hmm" cuts the agent off. To show it surviving, run the same command with `--barge-in duck`, ask for a story, and say "Mm-hmm." The agent dips in volume and keeps talking. "Stop" still works, but took about 0.9 s to silence when measured (ADR-007). This is a prototype and off by default.
@@ -99,6 +118,8 @@ The default barge-in stops on any speech, so "mm-hmm" cuts the agent off. To sho
 | --- | --- |
 | It says Ana is not a saved contact | `data/contacts.yaml` is missing. The first step covers it |
 | It says the shell is a mock, or the browser never opens | `ME3_WORKSPACE_LIVE=1` is missing from the command |
+| It says publishing is a mock | `pages=github` is missing from `ME3_TOOL_STAGES` |
+| It says GitHub refused the token | The token needs Contents read and write on the Pages repo, and nothing else |
 | A task says done but no file appears | `delegate=anthropic` is missing from `ME3_TOOL_STAGES` |
 | A cough or room noise cuts off a reply | Expected in the default barge-in mode. Ask again |
 | A hold answer is ignored | The yes came before the question ended. Ask for the action again |

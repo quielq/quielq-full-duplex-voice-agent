@@ -54,6 +54,8 @@ Each server is its own process, so a server gets only its own secrets, and a cra
 | `workspace` | `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, `serve_status` | Real, confined to `data/workspace` | |
 | `workspace` | `bash`, `serve` | Mock | `ME3_WORKSPACE_LIVE=1` and a working sandbox |
 | `workspace` | `open_in_browser` | Mock | `ME3_WORKSPACE_LIVE=1`. Runs outside the sandbox, HTML in the workspace only (ADR-026) |
+| `workspace` | `publish_site` | Mock | `ME3_TOOL_STAGES=pages=github`, with `ME3_PAGES_TOKEN` and `ME3_PAGES_REPO` in `.env`. One folder to one GitHub Pages repo (ADR-049) |
+| `workspace` | `open_published_site` | Mock | `ME3_WORKSPACE_LIVE=1`. Opens only a site this device published, by its name (ADR-049) |
 | `workspace` | `send_file` | Always a mock | Copies to `data/send_outbox` |
 | `knowledge` | `get_weather` | Real, Open-Meteo, no key | |
 | `knowledge` | `fetch_content` | Real, plain HTTP | |
@@ -210,14 +212,14 @@ Three things make that work (ADR-028):
 ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia --echo-cancel --ui
 ```
 
-A `bash` read such as `ls` or `grep` runs at once (ADR-034). A `bash` change or run, and every `serve` and `open_in_browser` call, asks for a spoken yes. That is deliberate: those are the tools that can do real harm.
+A `bash` read such as `ls` or `grep` runs at once (ADR-034). A `bash` change or run, and every `serve`, `open_in_browser`, `publish_site` and `open_published_site` call, asks for a spoken yes. That is deliberate: those are the tools that can do real harm.
 
 ## Background tasks
 
 `start_task` hands a job to a worker and returns an id at once, so the voice loop keeps listening (ADR-035). The worker is a short tool loop on Haiku 5.5, or a scripted fake by default.
 
 - **It can do only what runs at once in the foreground:** `read_file`, `list_files`, `write_file`, `edit_file`, `grep`, and `bash` commands that `servers/command_policy.py` returns as run. It calls the workspace server's own functions, so the same folder roots and `.versions` copies apply.
-- **Anything that needs a yes ends the task, unrun:** a `bash` change or run, `serve`, `open_in_browser`, messages, and calls. The result says "It needs your yes for: ..." in the policy's words, and the user asks for that step in the foreground. A critical refusal ends the task too.
+- **Anything that needs a yes ends the task, unrun:** a `bash` change or run, `serve`, `open_in_browser`, `publish_site`, `open_published_site`, messages, and calls. The result says "It needs your yes for: ..." in the policy's words, and the user asks for that step in the foreground. A critical refusal ends the task too.
 - **Limits:** 12 model calls and $0.05 per task, two tasks at once, and the `anthropic` daily cap in the ledger. A zero cap refuses before `start_task` returns.
 - **The announcement:** `harness/delegate_watch.py` says "Your background task is done" when nobody is talking, no reply is streaming, and no question is pending. A cancelled task stays quiet.
 - `cancel_task` has the usual 5 s undo window. It stops between steps, and files already written stay.
@@ -237,7 +239,7 @@ A `bash` read such as `ls` or `grep` runs at once (ADR-034). A `bash` change or 
 3. **Spoken read-back.** The harness says what the command does in plain words, built from the command itself: "This will delete build and everything inside, then run make_site.py with Python." The face shows the exact command text while it waits. The model does not write this question.
 4. **OS sandbox.** A command can write only in the workspace, read only that, the documents folder, and system files, and has no network. `python3` can reach anything the sandbox allows, and nothing more. That is why the sandbox is the real boundary, and the policy is the polite one.
 
-`serve` may also listen on this machine. Three critical refusals in one session lock `bash`, `serve`, `open_in_browser`, file writes, and messaging until the session ends.
+`serve` may also listen on this machine. Three critical refusals in one session lock `bash`, `serve`, `open_in_browser`, publishing, file writes, and messaging until the session ends.
 
 | | Mac | Pi |
 | --- | --- | --- |
@@ -254,6 +256,29 @@ To turn them on: `ME3_WORKSPACE_LIVE=1 uv run python -m harness.bot ...`.
 - Damage inside `data/workspace`. Keep nothing there you cannot lose.
 - On the Pi, `serve` has outbound network. Treat a started service as trusted.
 - A page shown by `open_in_browser` runs in your real browser, with network, outside the sandbox. The read-back names the file, not what it contains (ADR-026).
+
+## Publishing a site to GitHub Pages
+
+`publish_site` puts one workspace folder on the public web, and `open_published_site` shows it (ADR-049). Together they let a spoken request end in a link anyone can open.
+
+1. **Set up once.** Make a public repo with a README and turn on GitHub Pages for its main branch. Make a fine-grained token that reaches only that repo, with Contents read and write and nothing else. Put both in `.env`:
+   ```
+   ME3_PAGES_TOKEN=...
+   ME3_PAGES_REPO=<owner>/<repo>
+   ```
+2. **Switch it on for a run.** Add `pages=github` to `ME3_TOOL_STAGES`, and `ME3_WORKSPACE_LIVE=1` so the browser opens.
+3. **Say it.** "Publish the portfolio site." The harness asks from the real arguments: "Publish the folder portfolio on the public web as portfolio. Anyone with the link can see it. Should I do that?" After a yes and the undo window, the result has the link, `https://<owner>.github.io/<repo>/<site>/`.
+4. **Open it.** "Open the published site." The harness asks again, then the server waits up to about 20 seconds for GitHub Pages to serve the page and opens it. If the page is not up yet, it says so and opens nothing.
+
+What keeps it safe:
+
+- The server sends the files itself through the GitHub API. `git`, `gh` and `curl` stay refused in `bash`, and the token never reaches a command or another server.
+- Only web files go out (HTML, CSS, scripts, images, fonts). Hidden files, symlinks, `plan.md` and `notes.md` stay on the device. A site is at most 200 files and 25 MB.
+- A publish replaces the folder of that site name and nothing else in the repo.
+- `open_published_site` takes a site name, never an address. It opens only an address this device published, kept in `data/published_sites.json`.
+- The `github_pages` cap in `configs/providers.yaml` limits publishes to 20 a day. A cap of zero switches publishing off.
+
+What it does not cover: the page is public the moment it is published, and the read-back names the folder, not what the pages say. To take a site down, delete its folder in the repo on GitHub.
 
 ## Messages and calls through the Mac bridge
 
