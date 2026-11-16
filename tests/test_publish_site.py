@@ -205,3 +205,78 @@ def test_the_harness_reads_back_the_real_arguments():
     assert text == ("Publish the folder portfolio on the public web as my-site. "
                     "Anyone with the link can see it. Should I do that?")  # fmt: skip
     assert "publish_site" in POLICY["containment"]["tools"]
+
+
+# open_published_site: the published link opens by name, and only for a site this device published.
+
+
+@pytest.fixture
+def browser(monkeypatch):
+    """A live workspace with a fake opener and a page that is already up."""
+    monkeypatch.setenv("ME3_WORKSPACE_LIVE", "1")
+    monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "hidden")
+    seen = {"up": []}
+    monkeypatch.setattr(workspace.subprocess, "run", lambda argv, env, **kw: seen.update(argv=argv, env=env, kw=kw))
+    monkeypatch.setattr(workspace, "_site_is_up", lambda url: seen["up"].append(url) or True)
+    return seen
+
+
+def test_it_opens_the_link_the_publish_returned(live, browser):
+    _site()
+    url = workspace.publish_site("site", "demo")["url"]
+    assert workspace.open_published_site("demo") == {"opened": True, "url": url}
+    assert browser["argv"][1:] == [url] and browser["up"] == [url]
+    assert browser["kw"].get("shell", False) is False
+    assert TOKEN not in browser["env"].values() and "hidden" not in browser["env"].values()
+
+
+def test_it_refuses_a_site_this_device_never_published(live, browser):
+    for site in ("demo", "https://evil.example", "../x", "Demo"):
+        assert "error" in workspace.open_published_site(site)
+    assert "argv" not in browser and browser["up"] == []
+
+
+def test_a_mock_publish_leaves_nothing_to_open(browser):
+    _site()
+    workspace.publish_site("site", "demo")
+    assert "Publish it first" in workspace.open_published_site("demo")["error"]
+    assert "argv" not in browser
+
+
+def test_opening_is_a_mock_until_the_workspace_is_live(live, monkeypatch):
+    _site()
+    workspace.publish_site("site", "demo")
+    monkeypatch.setattr(workspace.subprocess, "run", lambda *a, **k: pytest.fail("the opener ran"))
+    monkeypatch.setattr(workspace, "_site_is_up", lambda url: pytest.fail("the network was used"))
+    assert workspace.open_published_site("demo")["ran"] is False
+
+
+def test_it_waits_for_pages_and_does_not_open_a_missing_page(live, browser, monkeypatch):
+    _site()
+    workspace.publish_site("site", "demo")
+    monkeypatch.setattr(workspace, "_site_is_up", lambda url: False)
+    result = workspace.open_published_site("demo")
+    assert result["opened"] is False and "still building" in result["note"]
+    assert "argv" not in browser
+
+
+def test_the_wait_asks_again_until_the_page_answers(monkeypatch):
+    codes = iter([404, 404, 200])
+    asked = []
+
+    def handler(request):
+        asked.append(str(request.url))
+        return httpx.Response(next(codes))
+
+    real = httpx.Client
+    monkeypatch.setattr(workspace.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setattr(workspace.time, "sleep", lambda s: None)
+    assert workspace._site_is_up("https://quielq.github.io/me3-sites/demo/") is True
+    assert len(asked) == 3
+
+
+def test_the_harness_reads_back_the_site_before_opening():
+    rule = POLICY["tools"]["open_published_site"]
+    text = readback_text(rule["readback"], {"site": "my-site"}, POLICY["readback_max_chars"])
+    assert text == "Open the published site my-site in your browser. Should I do that?"
+    assert "open_published_site" in POLICY["containment"]["tools"]

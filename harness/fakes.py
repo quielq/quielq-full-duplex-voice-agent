@@ -311,6 +311,9 @@ class RuleBasedLLMService(LLMService):
         if "open_in_browser" in tools and "in the browser" in low:
             await self._call(context, "open_in_browser", {"path": "page.html"})
             return True
+        if "open_published_site" in tools and "open the published site" in low:
+            await self._call(context, "open_published_site", {"site": "demo"})
+            return True
         if "publish_site" in tools and re.search(r"\bpublish\b", low):
             await self._call(context, "publish_site", {"folder": "site", "site": "demo"})
             return True

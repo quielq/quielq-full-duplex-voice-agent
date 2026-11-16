@@ -62,6 +62,7 @@ STEP_LABELS = {
     "serve": "Managing a service",
     "open_in_browser": "Opening {path}",
     "publish_site": "Publishing {site}",
+    "open_published_site": "Opening {site}",
     "search": "Searching the web",
     "fetch_content": "Reading a web page",
     "get_weather": "Checking the weather",

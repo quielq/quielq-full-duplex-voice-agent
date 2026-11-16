@@ -5,7 +5,8 @@ Files are real and stay inside $ME3_DATA_DIR/workspace; reads may also use the d
 ``send_file`` is always a mock. ``open_in_browser`` leaves the sandbox (ADR-026): it runs no
 command text, only the system opener on one HTML file. ``publish_site`` is the other way out
 (ADR-049): the server itself, never a command, sends one folder's web files to one GitHub Pages
-repo, and it is a mock unless ME3_TOOL_STAGES=pages=github. Live commands pass servers/command_policy.py (ADR-034) and then run in servers/sandbox.py (ADR-024):
+repo, and it is a mock unless ME3_TOOL_STAGES=pages=github. ``open_published_site`` opens a site
+this server published, by its name: it never takes an address. Live commands pass servers/command_policy.py (ADR-034) and then run in servers/sandbox.py (ADR-024):
 with no sandbox on the machine, nothing runs.
 """
 
@@ -61,6 +62,10 @@ PAGES_TIMEOUT_S = 12   # each request; the policy timeout covers the whole publi
 PAGES_PROVIDER = "github_pages"
 GITHUB_API = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"   # supported until March 10, 2028 (docs.github.com, API versions)
+# open_published_site (ADR-049): GitHub Pages builds for about a minute, so wait a little for the page.
+SITE_UP_TRIES = 6
+SITE_UP_WAIT_S = 3.0
+SITE_UP_TIMEOUT_S = 3.0
 
 
 def _live() -> bool:
@@ -441,15 +446,21 @@ def open_in_browser(
         return {"error": f"no file at {path}"}
     if not _live():
         return _mock("open_in_browser", path=path)
+    return _open(str(target)) or {"opened": target.name}
+
+
+def _open(target: str) -> dict | None:
+    """Hand one file or one address to the system opener, as an argument list with no shell.
+    Returns an error to speak, or None when the browser took it."""
     opener = shutil.which("open" if sys.platform == "darwin" else "xdg-open", path=SAFE_PATH)
     if not opener:
         return {"error": "this machine has no way to open a browser"}
     env = {k: os.environ[k] for k in BROWSER_ENV if k in os.environ} | {"PATH": SAFE_PATH}
     try:
-        subprocess.run([opener, str(target)], env=env, check=True, capture_output=True, timeout=OPENER_TIMEOUT_S)
+        subprocess.run([opener, target], env=env, check=True, capture_output=True, timeout=OPENER_TIMEOUT_S)
     except (OSError, subprocess.SubprocessError):
         return {"error": "the browser could not be opened"}
-    return {"opened": target.name}
+    return None
 
 
 class PagesError(RuntimeError):
@@ -591,8 +602,57 @@ def publish_site(
         books.record(PAGES_PROVIDER, "publish", 1, price("github_pages_per_publish"))
     except (OutsideRoots, PagesError, SpendRefused) as e:
         return {"error": str(e)}
-    return {"published": True, "url": _pages_url(repo, site), "files": len(files), "skipped": skipped,
+    url = _pages_url(repo, site)
+    _remember_site(site, url)
+    return {"published": True, "url": url, "files": len(files), "skipped": skipped,
             "commit": commit[:7], "note": "GitHub Pages takes about a minute to show it."}  # fmt: skip
+
+
+def _published_sites() -> dict[str, str]:
+    """The sites this server has published, name to address. Kept in the data folder, never in git."""
+    try:
+        sites = json.loads((data_dir() / "published_sites.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    return sites if isinstance(sites, dict) else {}
+
+
+def _remember_site(site: str, url: str) -> None:
+    (data_dir() / "published_sites.json").write_text(json.dumps(_published_sites() | {site: url}, indent=2))
+
+
+def _site_is_up(url: str) -> bool:
+    """True once GitHub Pages serves the page. Asks a few times, since a new site takes a while."""
+    with httpx.Client(timeout=SITE_UP_TIMEOUT_S, trust_env=False, headers={"User-Agent": "me3-voice-agent"}) as http:
+        for attempt in range(SITE_UP_TRIES):
+            try:
+                if http.get(url).status_code == 200:
+                    return True
+            except httpx.HTTPError:
+                pass
+            if attempt + 1 < SITE_UP_TRIES:
+                time.sleep(SITE_UP_WAIT_S)
+    return False
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
+)
+def open_published_site(
+    site: Annotated[str, Field(pattern=PAGES_SITE_NAME, description="The short web name the site was published under")],
+) -> dict:
+    """Open a site that publish_site put on the web, in the user's web browser. It takes the
+    site's name, never an address."""
+    if not re.match(PAGES_SITE_NAME, site):
+        return {"error": "the site name may use only lower-case letters, digits, and hyphens"}
+    url = _published_sites().get(site)
+    if not url:
+        return {"error": f"no site named {site} has been published from this device. Publish it first"}
+    if not _live():
+        return _mock("open_published_site", site=site, url=url)
+    if not _site_is_up(url):
+        return {"opened": False, "url": url, "note": "GitHub Pages is still building it. Try again in a minute."}
+    return _open(url) or {"opened": True, "url": url}
 
 
 if __name__ == "__main__":

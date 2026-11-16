@@ -31,7 +31,7 @@ readback_max_chars: 240
 # tools refuse every call until the session ends (ADR-024).
 containment:
   after_critical: 3
-  tools: [bash, serve, write_file, edit_file, send_file, open_in_browser, publish_site, send_message, call_contact, start_task]
+  tools: [bash, serve, write_file, edit_file, send_file, open_in_browser, publish_site, open_published_site, send_message, call_contact, start_task]
 
 # Fixed phrases: spoken by the harness with no LLM call.
 phrases:
@@ -102,6 +102,10 @@ tools:
   publish_site:
     timeout_s: 45.0   # one request per file, then four more
     readback: "Publish the folder {folder} on the public web as {site}. Anyone with the link can see it. Should I do that?"
+  # Opens only an address this device published, looked up by name, never one from the model (ADR-049).
+  open_published_site:
+    timeout_s: 30.0   # waits up to about 20 s for GitHub Pages to serve a new site
+    readback: "Open the published site {site} in your browser. Should I do that?"
   serve:
     timeout_s: 15.0
     guard: service
