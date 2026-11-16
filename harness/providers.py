@@ -95,6 +95,10 @@ def build_stt(
             service = ForcedEndFluxSTT
             flux = {**flux, "eot_threshold": 1.0}
             flux.pop("eager_eot_threshold", None)
+        if p.get("keyterms"):  # the owner's name and the agent's, so Flux writes them right (ADR-050)
+            from harness.owner import load_owner
+
+            flux = {**flux, "keyterm": list(load_owner().keyterms)}
         if relay_args:
             from harness.voice_relay import RelayedConnection
 
@@ -197,6 +201,12 @@ def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None, hops=No
             _, p, key = _authorize(choice, providers_cfg, ledger)
         if not p.get("voice_id"):
             raise ValueError("cartesia: set providers.cartesia.voice_id in configs/providers.yaml")
+        from harness.owner import load_owner
+        from harness.pronounce import SpelledBack, pronunciations
+
+        # The owner's name is said their way, and written the real way everywhere else (ADR-050).
+        transforms, spellings = pronunciations(service, load_owner().pronounce)
+        service = type(f"SpelledBack{service.__name__}", (SpelledBack, service), {"spellings": spellings})
         return service(
             **relay_args,
             hops=hops,
@@ -204,6 +214,7 @@ def build_tts(providers_cfg: dict, ledger: CostLedger, *, on_event=None, hops=No
             sample_rate=p["tts_sample_rate"],
             settings=service.Settings(voice=p["voice_id"]),
             text_aggregation_mode=agg,
+            text_transforms=transforms,
         )
     raise ValueError(f"unknown tts stage {choice!r}")
 
