@@ -1,0 +1,151 @@
+# Hand-checked ME4 questions on real public documents (bench/me4_eval.py loads them with the
+# generated set). The files are not in git: they sit in data/me4_eval/documents/me4/public/, and
+# bench/me4_cases/README.md says where each comes from. Every answer was read off the page named
+# here; pages are the PDF's own page index, counted from 1, not the number printed on the page.
+#
+# Fields as in the generated set: number for a single number, numbers when all of several must
+# appear, tolerance as a fraction of the number.
+
+questions:
+  # World Bank, Philippines Economic Update, June 2025 (CC BY 3.0 IGO)
+  - id: wb_q1_growth
+    kind: public_pdf
+    question: According to the World Bank's June 2025 Philippines Economic Update, how fast did the economy grow in the first quarter of 2025?
+    answer: 5.4 percent
+    number: 5.4
+    refs: [{file: public/wb_philippines_economic_update_june_2025.pdf, page: 7}]
+  - id: wb_2025_forecast
+    kind: public_pdf
+    question: What growth does the World Bank's June 2025 update expect for the Philippines in 2025?
+    answer: 5.3 percent
+    number: 5.3
+    refs: [{file: public/wb_philippines_economic_update_june_2025.pdf, page: 8}]
+  - id: wb_policy_rate
+    kind: public_pdf
+    question: In the World Bank's June 2025 update, what was the central bank's key policy rate after its April cut?
+    answer: 5.5 percent, after a 25 basis point cut
+    number: 5.5
+    refs: [{file: public/wb_philippines_economic_update_june_2025.pdf, page: 7}]
+  - id: wb_fiscal_deficit
+    kind: public_pdf
+    question: What was the fiscal deficit as a share of GDP in the first quarter of 2025, per the World Bank's June 2025 update?
+    answer: 7.3 percent of GDP, up from 4.5 percent in Q1 2024
+    number: 7.3
+    refs: [{file: public/wb_philippines_economic_update_june_2025.pdf, page: 8}]
+  - id: wb_grey_list
+    kind: public_pdf
+    question: When was the Philippines removed from the Financial Action Task Force grey list?
+    answer: February 2025
+    refs: [{file: public/wb_philippines_economic_update_june_2025.pdf, page: 7}]
+  - id: wb_npl_ratio
+    kind: public_pdf
+    question: What was the banks' non-performing loan ratio in April 2025, according to the World Bank update?
+    answer: 3.4 percent
+    number: 3.4
+    refs: [{file: public/wb_philippines_economic_update_june_2025.pdf, page: 7}]
+
+  # ADB, Asian Development Outlook, December 2025 (CC BY 3.0 IGO, notice on page 18)
+  - id: adb_ph_2025
+    kind: public_pdf
+    question: What is the Asian Development Bank's December 2025 growth forecast for the Philippines for 2025?
+    answer: 5.0 percent, down from 5.6 percent
+    number: 5.0
+    refs: [{file: public/adb_asian_development_outlook_december_2025.pdf, page: 12}]
+  - id: adb_ph_2026
+    kind: public_pdf
+    question: What growth does the December 2025 Asian Development Outlook forecast for the Philippines in 2026?
+    answer: 5.3 percent, down from 5.7 percent
+    number: 5.3
+    refs: [{file: public/adb_asian_development_outlook_december_2025.pdf, page: 12}]
+  - id: adb_ph_q3
+    kind: public_pdf
+    question: According to the Asian Development Bank, how fast did the Philippine economy grow in the third quarter of 2025?
+    answer: 4.0 percent, the lowest since Q1 2021
+    number: 4.0
+    refs: [{file: public/adb_asian_development_outlook_december_2025.pdf, page: 12}]
+  - id: adb_ph_inflation_2026
+    kind: public_pdf
+    question: What inflation rate does the ADB forecast for the Philippines in 2026?
+    answer: 3.0 percent
+    number: 3.0
+    refs: [{file: public/adb_asian_development_outlook_december_2025.pdf, page: 12}]
+  - id: adb_region_2025
+    kind: public_pdf
+    question: What is the ADB's December 2025 growth forecast for developing Asia and the Pacific in 2025?
+    answer: 5.1 percent, raised by 0.3 points from September
+    number: 5.1
+    refs: [{file: public/adb_asian_development_outlook_december_2025.pdf, page: 1}]
+
+  # JICA, Data Collection Survey on Improving Road-based Public Transport System in Metro Manila,
+  # Final Report, April 2022 (JICA copyright, kept local only)
+  - id: jica_population
+    kind: public_pdf
+    question: According to JICA's survey on road-based public transport in Metro Manila, what was Metro Manila's population in 2020?
+    answer: around 13 million
+    number: 13000000
+    tolerance: 0.05
+    refs: [{file: public/jica_study_report_12369815.pdf, page: 13}]
+  - id: jica_bus_accidents
+    kind: public_pdf
+    question: How many buses were involved in traffic accidents in Metro Manila in 2019, per the JICA transport survey?
+    answer: 10,841, up from 7,633 in 2010
+    number: 10841
+    refs: [{file: public/jica_study_report_12369815.pdf, page: 13}]
+  - id: jica_grdp_share
+    kind: public_pdf
+    question: What share of the Philippines' GDP comes from Metro Manila, according to the JICA transport survey?
+    answer: about 36 percent
+    number: 36
+    refs: [{file: public/jica_study_report_12369815.pdf, page: 13}]
+  - id: jica_discount
+    kind: public_pdf
+    question: What fare discount do the surveyed bus operators give the elderly, disabled, and students?
+    answer: 20 percent off regular fares, with no transfer discounts between modes
+    number: 20
+    refs: [{file: public/jica_study_report_12369815.pdf, page: 16}]
+  - id: jica_cashless
+    kind: public_pdf
+    question: In the JICA survey, how many bus operators accept fares by IC card or QR code?
+    answer: seven
+    number: 7
+    refs: [{file: public/jica_study_report_12369815.pdf, page: 16}]
+  - id: jica_date
+    kind: public_pdf
+    question: When was JICA's final report on Metro Manila road-based public transport published?
+    answer: April 2022
+    refs: [{file: public/jica_study_report_12369815.pdf, page: 1}]
+
+  # Sixth Annual Report of the Philippine Commission, 1905, Part 1 (Internet Archive scan, not in
+  # copyright). Every page is an image with no text layer, so only OCR or a vision pass reads it.
+  - id: scan_which_report
+    kind: public_scan
+    question: Which annual report of the Philippine Commission is the scanned commission report, and for what year?
+    answer: the sixth annual report, for 1905
+    refs: [{file: public/philippine_commission_report_1905_scan.pdf, page: 9}]
+  - id: scan_printed
+    kind: public_scan
+    question: Where and in what year was the scanned 1905 Philippine Commission report printed?
+    answer: Washington, Government Printing Office, 1906
+    refs: [{file: public/philippine_commission_report_1905_scan.pdf, page: 9}]
+  - id: scan_cebu_page
+    kind: public_scan
+    question: In the 1905 Philippine Commission report, on which page does the annual report of the governor of Cebu start?
+    answer: page 225
+    number: 225
+    refs: [{file: public/philippine_commission_report_1905_scan.pdf, page: 13}]
+  - id: scan_locust_page
+    kind: public_scan
+    question: According to the contents of the 1905 Philippine Commission report, on which page is the locust plague covered?
+    answer: page 94
+    number: 94
+    refs: [{file: public/philippine_commission_report_1905_scan.pdf, page: 13}]
+
+  # Across two reports
+  - id: compare_forecasts
+    kind: public_compare
+    question: How does the World Bank's June 2025 growth forecast for the Philippines in 2025 compare with the ADB's December 2025 forecast?
+    answer: the World Bank expected 5.3 percent, the ADB later 5.0 percent, so the ADB is 0.3 points lower
+    numbers: [5.3, 5.0]
+    refs:
+      - {file: public/wb_philippines_economic_update_june_2025.pdf, page: 8}
+      - {file: public/adb_asian_development_outlook_december_2025.pdf, page: 12}
