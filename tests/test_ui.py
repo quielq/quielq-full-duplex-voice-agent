@@ -271,3 +271,70 @@ def test_the_player_script_is_only_loaded_on_request():
     assert f'name: "{PLAYER_NAME}"' in script
     for control in ("player.pause", "player.resume", "player.nextTrack", "player.togglePlay", "player.seek"):
         assert control not in script
+
+
+# The question card and the project card (ADR-051)
+
+
+def test_the_question_card_shows_the_read_back_then_the_countdown(ui):
+    send(ui, "tool_policy", tool="publish_site", decision="hold_confirm", undo_s=5.0)
+    send(ui, "tool_policy", tool="publish_site", decision="read_back", text="Publish the folder me on the public web as me?")
+    assert ui.snapshot()["ask"] == {"tool": "publish_site", "kind": "confirm",
+                                     "text": "Publish the folder me on the public web as me?", "until": 0}
+    send(ui, "tool_policy", tool="publish_site", decision="confirmed", text="yes")
+    assert ui.snapshot()["ask"] is None
+    send(ui, "tool_policy", tool="publish_site", decision="undo_window_open", undo_s=5.0)
+    ask = ui.snapshot()["ask"]
+    assert ask["kind"] == "undo" and ask["text"] == "Publish the folder me on the public web as me?" and ask["until"] > 0
+    send(ui, "tool_policy", tool="publish_site", decision="committed", result="{}")
+    assert ui.snapshot()["ask"] is None
+
+
+@pytest.mark.parametrize("decision", ["undone", "denied_user", "denied_timeout", "denied_no_answer", "commit_failed"])
+def test_the_question_card_closes_however_the_hold_ends(ui, decision):
+    send(ui, "tool_policy", tool="send_message", decision="hold_confirm")
+    send(ui, "tool_policy", tool="send_message", decision=decision)
+    assert ui.ask is None
+
+
+def test_another_tools_decision_leaves_the_question_alone(ui):
+    send(ui, "tool_policy", tool="send_message", decision="hold_confirm")
+    send(ui, "tool_policy", tool="cancel_timer", decision="committed", result="{}")
+    assert ui.ask["tool"] == "send_message"
+
+
+def test_the_project_card_follows_files_and_the_published_link(ui):
+    for path in ("me/plan.md", "me/index.html", "me/index.html", "loose.txt"):
+        send(ui, "tool_call_start", name="write_file", args={"path": path})
+    assert ui.work == {"folder": "me", "files": ["plan.md", "index.html"], "url": "", "state": "building"}
+    send(ui, "tool_call_start", name="publish_site", args={"folder": "me", "site": "quiel"})
+    send(ui, "tool_policy", tool="publish_site", decision="committed",
+         result='{"published": true, "url": "https://quielq.github.io/me3-sites/quiel/", "files": 1}')
+    assert ui.snapshot()["work"]["url"] == "https://quielq.github.io/me3-sites/quiel/"
+    assert ui.work["state"] == "published"
+
+
+def test_only_a_pages_link_from_a_real_publish_is_shown(ui):
+    send(ui, "tool_call_start", name="write_file", args={"path": "me/index.html"})
+    send(ui, "tool_policy", tool="publish_site", decision="committed", result='{"url": "https://evil.example/x"}')
+    send(ui, "tool_policy", tool="open_in_browser", decision="committed", result="https://a.github.io/b/")
+    assert ui.work["url"] == "" and ui.work["state"] == "building"
+
+
+def test_a_new_folder_starts_a_new_project(ui):
+    send(ui, "tool_call_start", name="write_file", args={"path": "one/index.html"})
+    send(ui, "tool_call_start", name="edit_file", args={"path": "two/sub/style.css"})
+    assert ui.work["folder"] == "two" and ui.work["files"] == ["style.css"]
+
+
+def test_the_page_has_the_new_cards_and_stays_self_contained():
+    page = PAGE.read_text()
+    for needed in ('id="ask"', 'id="work-card"', 'id="hint"', "textContent = w.url"):
+        assert needed in page
+    assert "innerHTML" not in page
+    assert "filter:" not in page and "blur(" not in page
+
+
+def test_an_undo_with_no_question_names_the_tool(ui):
+    send(ui, "tool_policy", tool="cancel_timer", decision="undo_window_open", undo_s=5.0)
+    assert ui.ask["text"] == "Cancel timer"

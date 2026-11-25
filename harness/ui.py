@@ -12,6 +12,10 @@ thermostat's step buttons, and the agent picker and builder (ADR-038, ADR-039). 
 tool through ``ToolPolicy.run_from_screen``, which refuses anything the voice path would hold
 or ask about, so the screen never skips a question.
 
+Two cards follow the work itself. The question card shows what the agent is waiting for, in the
+words of the read-back, with what to say and the undo countdown. The project card shows the
+folder being built, the files written, and the published link (ADR-051).
+
 The page gets two kinds of server-sent event: the state, whenever it changes, and the chat
 history, only when a turn is added. Streaming reply text so never resends the history.
 
@@ -24,6 +28,7 @@ import argparse
 import asyncio
 import contextlib
 import json
+import re
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -64,6 +69,10 @@ STEP_LABELS = {
     "publish_site": "Publishing {site}",
     "open_published_site": "Opening {site}",
     "search": "Searching the web",
+    "local_search": "Searching your documents",
+    "search_document": "Searching {path}",
+    "read_document": "Reading {path}",
+    "list_documents": "Looking through your documents",
     "fetch_content": "Reading a web page",
     "get_weather": "Checking the weather",
     "send_message": "Sending a message",
@@ -71,6 +80,14 @@ STEP_LABELS = {
     "set_light": "Changing the lights",
     "set_thermostat": "Changing the thermostat",
 }
+
+# The question card and the project card (ADR-051).
+BUILD_TOOLS = {"write_file", "edit_file"}
+FILES_SHOWN = 6
+HOLD_ENDED = {"committed", "commit_failed", "undone", "denied_user", "denied_timeout", "denied_no_answer",
+              "dropped_unannounced", "superseded", "timeout", "tool_error"}  # fmt: skip
+# Only a link a real publish returned is shown, and only on GitHub Pages.
+PAGES_URL = re.compile(r"https://[a-z0-9-]+\.github\.io/[A-Za-z0-9._/-]*")
 
 
 def step_label(tool: str, args: dict | None) -> str:
@@ -160,6 +177,9 @@ class UiState:
         self.history: deque[dict] = deque(maxlen=HISTORY_TURNS)
         self.history_version = 0
         self._reply_open = False
+        self.ask: dict | None = None    # the held action waiting on the user, for the question card
+        self.work: dict | None = None   # the project being built, for the project card
+        self._asked: tuple[str, str] | None = None  # the confirmed question, shown again in the undo window
 
     def set_agent(self, agent: Agent, *, announce: bool = False) -> None:
         self.agent = {"id": agent.id, "name": agent.name, "color": agent.color, "kind": agent.kind,
@@ -212,6 +232,48 @@ class UiState:
         elif name == "stop_music" and not failed:
             self.music["playing"] = False
 
+    def _build(self, name: str, args: dict) -> None:
+        """A file written or a site published: what the project card shows."""
+        if name in BUILD_TOOLS:
+            path = str(args.get("path") or "")
+            folder, _, file = path.rpartition("/")
+            folder = folder.split("/")[0]
+            if not folder:
+                return  # a loose file in the workspace is not a project
+            if not self.work or self.work["folder"] != folder:
+                self.work = {"folder": folder, "files": [], "url": "", "state": "building"}
+            files = [f for f in self.work["files"] if f != file] + [file]
+            self.work["files"] = files[-FILES_SHOWN:]
+            self.work["state"] = "building"
+        elif name == "publish_site":
+            folder = str(args.get("folder") or "").strip("/").split("/")[0]
+            if not self.work or self.work["folder"] != folder:
+                self.work = {"folder": folder, "files": [], "url": "", "state": "building"}
+            self.work["site"] = str(args.get("site") or "")
+
+    def _hold(self, rec: dict) -> None:
+        """The question card follows the tool policy's own events, never the model's words."""
+        decision, tool = rec.get("decision", ""), rec.get("tool", "")
+        if decision == "hold_confirm":
+            self.ask = {"tool": tool, "kind": "confirm", "text": "", "until": 0}
+        elif decision == "read_back" and self.ask and self.ask["tool"] == tool:
+            self.ask["text"] = str(rec.get("text", ""))[:HISTORY_CHARS]
+        elif decision == "undo_window_open":
+            asked = self._asked if self._asked and self._asked[0] == tool else (tool, step_label(tool, {}))
+            self.ask = {"tool": tool, "kind": "undo", "text": asked[1], "until": time.time() + float(rec.get("undo_s") or 0)}
+        elif decision == "confirmed" and self.ask and self.ask["tool"] == tool:
+            self._asked = (tool, self.ask["text"].removesuffix(" Should I do that?").removesuffix(" Should I send it?"))
+            self.ask = None  # the undo window opens once the reply has played
+        elif decision in HOLD_ENDED and self.ask and self.ask["tool"] == tool:
+            self.ask = None
+        if decision in HOLD_ENDED and self._asked and self._asked[0] == tool:
+            self._asked = None
+        if decision == "committed" and tool == "publish_site" and self.work:
+            if url := PAGES_URL.search(str(rec.get("result", ""))):
+                self.work.update(url=url.group(0), state="published")
+        elif decision == "commit_failed" and tool == "publish_site" and self.work:
+            self.work["state"] = "failed"
+
     def on_event(self, rec: dict) -> None:
         event = rec["event"]
         if event in ("vad_onset", "user_turn_start", "interruption"):
@@ -230,11 +292,13 @@ class UiState:
             self.activity = "working"
             self.step = step_label(rec.get("name", ""), rec.get("args"))
             self._new_reply = True
+            self._build(rec.get("name", ""), rec.get("args") or {})
         elif event == "tool_call_end":
             self._tool_end(rec.get("name", ""), rec.get("result"))
             self.activity = "thinking"
         elif event == "tool_policy":
             decision = rec.get("decision", "")
+            self._hold(rec)
             if decision in ANGRY_DECISIONS:
                 self._set_mood("angry")
             elif decision in ASKING_DECISIONS or decision == "hold_confirm":
@@ -298,6 +362,8 @@ class UiState:
             "switching": self.switching,
             "screen_tools": self.screen_tools,
             "history_version": self.history_version,
+            "ask": self.ask,
+            "work": self.work,
             **read_devices(self._data_dir, time.time()),
         }
 
@@ -545,8 +611,23 @@ class UiServer:
 DEMO_SCRIPT: list[tuple[float, str, dict]] = [
     (2.5, "vad_onset", {}),
     (2.0, "asr_final", {"text": "Build me a website about my robot."}),
-    (2.0, "tool_call_start", {"name": "write_file", "args": {"path": "robot/index.html"}}),
+    (1.5, "tool_call_start", {"name": "write_file", "args": {"path": "robot/plan.md"}}),
+    (1.0, "tool_call_end", {"name": "write_file", "result": {"path": "robot/plan.md", "bytes": 300}}),
+    (0.5, "tool_call_start", {"name": "write_file", "args": {"path": "robot/index.html"}}),
     (2.5, "tool_call_end", {"name": "write_file", "result": {"path": "robot/index.html", "bytes": 2048}}),
+    (0.2, "first_audio_out", {}),
+    (4.0, "audio_silent", {}),
+    (2.0, "asr_final", {"text": "Publish it."}),
+    (1.0, "tool_call_start", {"name": "publish_site", "args": {"folder": "robot", "site": "robot"}}),
+    (0.1, "tool_policy", {"tool": "publish_site", "decision": "hold_confirm", "undo_s": 5.0}),
+    (0.1, "tool_policy", {"tool": "publish_site", "decision": "read_back", "text": "Publish the folder robot on the public web as robot. Anyone with the link can see it. Should I do that?"}),
+    (0.1, "tool_call_end", {"name": "publish_site", "result": {"status": "needs_confirmation"}}),
+    (0.1, "first_audio_out", {}),
+    (4.0, "audio_silent", {}),
+    (3.0, "asr_final", {"text": "Yes."}),
+    (0.1, "tool_policy", {"tool": "publish_site", "decision": "confirmed", "text": "Yes."}),
+    (1.5, "tool_policy", {"tool": "publish_site", "decision": "undo_window_open", "undo_s": 5.0}),
+    (5.0, "tool_policy", {"tool": "publish_site", "decision": "committed", "result": '{"published": true, "url": "https://example.github.io/sites/robot/"}'}),
     (0.2, "first_audio_out", {}),
     (4.0, "audio_silent", {}),
     (4.0, "tool_call_start", {"name": "bash", "args": {"command": "rm -rf /"}}),
@@ -561,6 +642,11 @@ DEMO_SCRIPT: list[tuple[float, str, dict]] = [
     (5.0, "first_audio_out", {}),
     (2.0, "audio_silent", {}),
 ]
+DEMO_LINES = {
+    "Build me a website about my robot.": "All done. I wrote your robot a home page.",
+    "Publish it.": "Publish the folder robot on the public web as robot. Should I do that?",
+    "Yes.": "It's live at example dot github dot io.",
+}
 
 
 async def _demo(state: UiState, server: UiServer) -> None:
@@ -591,7 +677,7 @@ async def _demo(state: UiState, server: UiServer) -> None:
             await asyncio.sleep(wait)
             state.on_event({"event": event, **fields})
             if event == "first_audio_out":
-                state.on_text("All done. I wrote your robot a home page.")
+                state.on_text(DEMO_LINES.get(state.heard, "All done."))
 
 
 async def _serve_demo(host: str, port: int, data_dir: Path) -> None:
