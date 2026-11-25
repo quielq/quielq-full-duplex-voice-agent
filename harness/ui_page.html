@@ -233,6 +233,41 @@
   .danger { color: var(--warn); }
   #form-error { color: var(--warn); min-height: 1.3em; margin: 0; font-size: 14px; }
 
+  /* Question card: what the agent is waiting for, from the tool policy's own read-back (ADR-051) */
+  .ask { margin: 6px 0 4px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--lamp) 12%, var(--card));
+         border: 1px solid color-mix(in srgb, var(--lamp) 55%, var(--line)); }
+  .ask p { margin: 0 0 8px; font-size: 17px; line-height: 1.35; }
+  .ask .say { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+  .ask .say b { padding: 3px 10px; border-radius: 999px; background: var(--card-2); color: var(--text); font-size: 15px; }
+  .ask .say b.go { background: var(--lamp); color: #1d1405; }
+  .ask .left { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+  .ask .bar { height: 4px; margin-top: 8px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .ask .bar i { display: block; height: 100%; background: var(--lamp); transform-origin: left center; }
+
+  /* Project card: the folder being built, its files, and the published link (ADR-051) */
+  #work-card h2 { display: flex; justify-content: space-between; gap: 8px; }
+  #work-state { font-weight: 600; color: var(--glow); }
+  #work-card[data-state="published"] #work-state { color: #7ee0a1; }
+  #work-card[data-state="failed"] #work-state { color: var(--warn); }
+  #work-folder { font-size: 17px; font-weight: 600; margin-bottom: 6px; overflow-wrap: anywhere; }
+  #work-files { display: flex; flex-wrap: wrap; gap: 4px; }
+  #work-files span { padding: 2px 8px; border-radius: 6px; background: var(--card-2); color: var(--muted); font-size: 13px;
+                     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #work-files span:last-child { color: var(--text); }
+  #work-url { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, #7ee0a1 14%, var(--card-2));
+              font: 600 15px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+  #work-url small { display: block; margin-bottom: 2px; color: var(--muted); font: 500 12px system-ui, sans-serif; }
+
+  /* Idle hint in the caption, so a new user knows what to say */
+  #hint { color: var(--muted); font-size: 15px; transition: opacity 400ms linear; }
+  #hint.out { opacity: 0; }
+  #hint q { color: var(--text); quotes: "\201C" "\201D"; }
+
+  /* Status dot follows what the agent is doing */
+  body[data-activity="listening"] .dot { background: #7ee0a1; }
+  body[data-activity="asking"] .dot { background: var(--lamp); }
+  body[data-activity="working"] .dot, body[data-activity="thinking"] .dot { animation: pulse 1.2s ease-in-out infinite; }
+
   @media (max-width: 720px), (max-aspect-ratio: 1/1) {
     body { overflow: auto; }
     main { display: block; height: auto; padding: 12px 16px 16px; }
@@ -244,7 +279,8 @@
     .tab { overflow: visible; }
   }
   @media (prefers-reduced-motion: reduce) {
-    #robot, .scan, .pulse, .ring { animation: none !important; }
+    #robot, .scan, .pulse, .ring, .dot { animation: none !important; }
+    .ask .bar i, #hint { transition: none !important; }
   }
 </style>
 </head>
@@ -346,7 +382,13 @@
         <ellipse id="talk" class="glow" cx="372" cy="462" rx="74" ry="12"/>
       </svg>
     </div>
+    <div class="ask" id="ask" role="alert" hidden>
+      <p id="ask-text"></p>
+      <div class="say" id="ask-say"></div>
+      <div class="bar" id="ask-bar" hidden><i></i></div>
+    </div>
     <div class="caption" aria-live="polite">
+      <p id="hint"></p>
       <p id="heard"></p>
       <p id="said"></p>
     </div>
@@ -358,6 +400,12 @@
       <button role="tab" id="tab-chat" aria-selected="false" aria-controls="chat-box">Chat</button>
     </div>
     <div class="tab" id="home" role="tabpanel" aria-labelledby="tab-home">
+      <div class="card" id="work-card" hidden>
+        <h2><span>Project</span><span id="work-state"></span></h2>
+        <div id="work-folder"></div>
+        <div id="work-files"></div>
+        <div id="work-url" hidden><small>Live at</small><span></span></div>
+      </div>
       <div class="card"><h2>Lights</h2><div id="lights"></div></div>
       <div class="card" id="thermo-card"><h2>Thermostat</h2><div class="thermo" id="thermo">
         <svg viewBox="0 0 120 74" aria-hidden="true">
@@ -426,6 +474,18 @@
   let catalog = null;     // the agent list from /api/agents, while the sheet is open
   let editing = null;
   let pendingTarget = null;   // the setpoint asked for by taps not yet back in the state
+  let ask = null;              // the question card's hold, for its countdown
+  let hintAt = 0;
+  // What a new user can say. Shown only while nothing has been said this session.
+  const HINTS = [
+    "Search for me online and build a one page website about me",
+    "Publish it, then open the published site",
+    "What does the employee handbook say about leave?",
+    "Turn on the kitchen light",
+    "Set a timer for ten minutes",
+    "What's the weather in Quezon City?",
+  ];
+  const WORK_STATES = { building: "Building", published: "Published", failed: "Publish failed" };
 
   const allowed = (tool) => !!state && state.screen_tools.includes(tool);
 
@@ -563,6 +623,68 @@
     if (pinned || !$("chat-box").hidden) box.parentElement.scrollTop = box.parentElement.scrollHeight;
   }
 
+  function drawAsk(a) {
+    ask = a;
+    $("ask").hidden = !a;
+    if (!a) return;
+    $("ask-text").textContent = a.text || (a.kind === "undo" ? "About to go ahead." : "Waiting for your answer.");
+    const say = $("ask-say");
+    say.textContent = "";
+    say.append("Say");
+    if (a.kind === "undo") {
+      say.append(el("b", "", "cancel"), "to stop it", el("span", "left"));
+    } else {
+      say.append(el("b", "go", "yes"), "or", el("b", "", "no"));
+    }
+    const bar = $("ask-bar"), fill = bar.firstElementChild;
+    bar.hidden = a.kind !== "undo";
+    if (a.kind === "undo") {   // one transform transition per hold: no redraw each frame
+      const left = Math.max(0, a.until * 1000 - Date.now());
+      fill.style.transition = "none";
+      fill.style.transform = `scaleX(${Math.min(1, left / 5000)})`;
+      void fill.offsetWidth;
+      fill.style.transition = `transform ${left}ms linear`;
+      fill.style.transform = "scaleX(0)";
+      tickAsk();
+    }
+  }
+
+  function tickAsk() {
+    const left = ask && ask.kind === "undo" && $("ask-say").querySelector(".left");
+    if (left) left.textContent = `${Math.max(0, Math.ceil(ask.until - Date.now() / 1000))} s`;
+  }
+
+  function drawWork(w, a, activity) {
+    const card = $("work-card");
+    card.hidden = !w;
+    if (!w) return;
+    const waiting = a && a.tool === "publish_site";
+    card.dataset.state = waiting ? "asking" : w.state;
+    const busy = activity === "working" || activity === "thinking";
+    $("work-state").textContent = waiting ? (a.kind === "undo" ? "Publishing soon" : "Waiting for your yes")
+      : w.state === "building" && !busy ? "Built" : WORK_STATES[w.state] || "";
+    $("work-folder").textContent = w.folder;
+    const files = $("work-files");
+    files.textContent = "";
+    for (const f of w.files) files.append(el("span", "", f));
+    $("work-url").hidden = !w.url;
+    $("work-url").querySelector("span").textContent = w.url;
+  }
+
+  function drawHint(s) {
+    const show = !s.heard && !s.said && s.activity === "idle" && !s.muted && document.body.dataset.link === "on";
+    const hint = $("hint");
+    hint.hidden = !show;
+    if (!show || Date.now() - hintAt < 8000) return;
+    hintAt = Date.now();
+    hint.classList.add("out");
+    setTimeout(() => {
+      hint.textContent = "Try saying ";
+      hint.append(el("q", "", HINTS[Math.floor(hintAt / 8000) % HINTS.length]));
+      hint.classList.remove("out");
+    }, hint.textContent ? 400 : 0);
+  }
+
   function setAgent(a) {
     document.documentElement.style.setProperty("--glow", a.color);
     $("agent-name").textContent = a.name;
@@ -579,6 +701,7 @@
   function draw(s) {
     state = s;
     robot.dataset.face = s.face;
+    document.body.dataset.activity = s.activity;
     talking(s.talking);
     if (s.activity !== "idle" || s.talking) idleSince = Date.now();
     $("state").textContent = s.switching ? `Switching to ${s.switching}`
@@ -592,6 +715,10 @@
     if (changed("thermostat", [s.thermostat, tools.includes("set_thermostat")])) drawThermostat(s.thermostat, tools.includes("set_thermostat"));
     if (changed("music", [s.music, tools.includes("stop_music")])) drawMusic(s.music, tools.includes("stop_music"));
     if (changed("timers", s.timers)) { timers = s.timers; drawTimers(); }
+    if (changed("ask", s.ask)) drawAsk(s.ask);
+    const busy = s.activity === "working" || s.activity === "thinking";
+    if (changed("work", [s.work, s.ask && s.ask.tool, s.ask && s.ask.kind, busy])) drawWork(s.work, s.ask, s.activity);
+    drawHint(s);
     if (s.spotify_player && !playerLoaded) {   // off by default, so the page stays self-contained
       playerLoaded = true;
       const script = document.createElement("script");
@@ -799,6 +926,8 @@
   // One tick a second: timer text and rings, and resting the idle motion after a minute.
   setInterval(() => {
     if (timers.length) drawTimers();
+    tickAsk();
+    if (state) drawHint(state);
     document.body.classList.toggle("rest", Date.now() - idleSince > REST_AFTER_MS);
   }, 1000);
   connect();
