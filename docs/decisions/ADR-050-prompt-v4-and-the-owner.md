@@ -59,4 +59,4 @@ One text run on Nov 16, 2026, on Haiku 5.5 and Tavily (run `20261116-102716-6dc4
 - The mishearings in `owner.yaml` are guesses until a mic run shows what Flux really writes.
 - The pronunciation applies to Cartesia only. Aura-2 says the name as written.
 - Only single word IPA entries are used, so the word count never changes.
-- Whether the IPA sounds right has to be judged by ear: `data/name_probe/` holds three clips from the Nov 16 probe (as written, IPA, respelled).
+- Quiel listened to the three clips from the Nov 16 probe on Nov 25, 2026: the IPA clip and the respelled one ("Kiyel Kiwa") both say the name correctly, and the spelling as written does not. The IPA stays. Respelling is the fallback for a voice with no IPA markup, such as Aura-2.
