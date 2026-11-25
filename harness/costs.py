@@ -133,3 +133,5 @@ class CostObserver(BaseObserver):
         elif isinstance(d, STTUsageMetricsData) and stt in FLUX_STAGES:
             minutes = float(d.value.audio_seconds) / 60.0
             yield "deepgram", "stt_minutes", minutes, minutes * p["deepgram_flux_per_min"]
+            if self._models["deepgram"].get("keyterms"):  # a streaming add-on, billed on top (ADR-050)
+                yield "deepgram", "stt_keyterm_minutes", minutes, minutes * p["deepgram_keyterm_per_min"]
