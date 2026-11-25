@@ -56,14 +56,14 @@ Open [http://127.0.0.1:8770](http://127.0.0.1:8770) to see the face.
 This is a paid run. An 18 turn run on Nov 4 cost $0.21, and each provider stops at $5 a day.
 
 ```bash
-ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui
+ME3_WORKSPACE_LIVE=1 ME3_TOOL_STAGES=search=tavily,delegate=anthropic,pages=github uv run python -m harness.bot --stages stt=deepgram_flux,llm=anthropic,tts=cartesia,music=spotify --echo-cancel --ui
 ```
 
 Open [http://127.0.0.1:8770](http://127.0.0.1:8770) and start talking. Press Ctrl-C to stop.
 
 - Headphones work best. On the laptop speakers, keep `--echo-cancel`.
 - Pick an agent on the face. Choosing another one starts a new session with it.
-- Leave out `music=spotify` if you have not set up Spotify (below).
+- Leave out `music=spotify` if you have not set up Spotify, and `pages=github` if you have not set up publishing (both below).
 - `ME3_WORKSPACE_LIVE=1` makes `bash`, `serve` and `open_in_browser` real (sandboxed, each change asks first). `delegate=anthropic` runs background tasks such as "make a deck" on Haiku 5.5 under the `anthropic` cap. Without them these tools are mocks: a task reports done but makes nothing, and the browser never opens.
 
 To route speech through our own MCP voice servers instead, change the stages to `stt=voice_listen,tts=voice_speak`. It sounds the same, and the keys stay in the servers.
@@ -77,7 +77,10 @@ To route speech through our own MCP voice servers instead, change the stages to 
 | "Turn on the kitchen light" | The simulated light changes. You can also tap it |
 | "What's the weather in Quezon City?" | Real weather |
 | "Search for the latest news on Mars" | Real web search |
-| "Build a small website about red pandas" | Writes files to `data/workspace`, then offers to open it |
+| "Build a small website about red pandas" | Writes files to `data/workspace`, then offers to open it. The face shows the project and its files |
+| "Publish it", then "Open the published site" | Asks first, puts it on GitHub Pages, says the link and shows it on the face, then opens it |
+| "Search for me online and build a website about me" | Searches for the owner in `configs/owner.yaml`, then builds from what it found |
+| "What does the handbook say about leave?" | Searches `data/documents` and names the document it used |
 | "Delete the timer" | Waits 5 seconds. Say "cancel" to stop it |
 | "Stop" while it talks | It goes quiet at once |
 
@@ -87,7 +90,8 @@ To route speech through our own MCP voice servers instead, change the stages to 
 | --- | --- |
 | Clock, notes, documents, weather, web pages, files | Real |
 | Web search, music | Real, with your keys |
-| `bash`, `serve`, `open_in_browser` | Real and sandboxed. Each asks for a spoken yes |
+| `bash`, `serve`, `open_in_browser`, `open_published_site` | Real and sandboxed. Each asks for a spoken yes |
+| `publish_site` | Mock unless `pages=github` (below). Asks for a spoken yes |
 | Messages and calls | Mocks unless `comms=bridge` (below). Real iMessages went out through the bridge on Nov 6; calls not tried live yet |
 | Lights, thermostat | Simulated, shown on the face |
 | `send_file` | Always a mock |
@@ -99,6 +103,10 @@ To route speech through our own MCP voice servers instead, change the stages to 
 ```bash
 uv run python -m bench.spotify_login
 ```
+
+**Publishing to GitHub Pages.** Follow "Publishing a site to GitHub Pages" in `docs/tools.md` once: a public repo with Pages on, and a token that reaches only that repo, in `.env`.
+
+**Who VIA belongs to.** Edit `configs/owner.yaml`: the name, how it is said, and words for the speech recogniser. It is public, so put nothing private in it.
 
 **Your documents.** Put files in `data/documents`. The agent can read them but never change them. The document agents use the samples, which are copied in on the first run.
 
@@ -122,7 +130,8 @@ uv run python -m bench.run_report --live
 | It answers its own voice | Use headphones, or turn the volume down |
 | The face says "Agent not running" | Start the step 5 command with `--ui` |
 | Port 8770 is busy | Stop the other run or demo |
-| A tool says it is a mock, or a task says done but no file appears | Check `ME3_WORKSPACE_LIVE=1` and `ME3_TOOL_STAGES=search=tavily,delegate=anthropic` are in the command |
+| A tool says it is a mock, or a task says done but no file appears | Check `ME3_WORKSPACE_LIVE=1` and `ME3_TOOL_STAGES=search=tavily,delegate=anthropic,pages=github` are in the command |
+| "GitHub Pages is still building it" | A new site takes about a minute. Ask to open it again |
 | Wrong mic or speaker | List devices with `uv run python -m harness.audio_io`, then set `audio.input_device` and `audio.output_device` in `configs/mac.yaml` |
 | It says it hit a limit | A daily cap was reached. Check with `uv run python -m bench.cost_ledger` |
 | "Now playing" but no sound | Open the Spotify app first |

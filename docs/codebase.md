@@ -1,6 +1,6 @@
 # ME3 codebase guide
 
-How the code is laid out, how one spoken turn moves through it, and the pieces of code that matter most. Current as of Nov 6, 2026 (main after PR 15: ADR-046 and ADR-047, and the Pi class-benchmark run).
+How the code is laid out, how one spoken turn moves through it, and the pieces of code that matter most. Current as of Nov 25, 2026 (main after PR 23: publishing, prompt v4, and the face cards, ADR-049 to ADR-051).
 
 For design reasons read `docs/architecture.md` and the ADRs in `docs/decisions/`. For tools and guardrails read `docs/tools.md`. For what can be switched on and off, read `docs/switches.md`. To run it, read `docs/quickstart-mac.md`.
 
@@ -106,6 +106,8 @@ harness/            the voice agent process
   audio_hops.py     audio hop timing for the voice servers
   costs.py          CostObserver: usage frames into the cost ledger
   agents.py         agents from configs/agents.yaml and data/agents (ADR-039)
+  owner.py          who VIA belongs to, from configs/owner.yaml; the prompt is built from it (ADR-050)
+  pronounce.py      says the owner's name from IPA, and puts the spelling back in the words (ADR-050)
   ui.py             robot face web server; ui_page.html and ui_spotify.js are the page
   timer_watch.py    says a due timer or alarm aloud
   delegate_watch.py reports a finished background task
@@ -123,7 +125,7 @@ servers/            MCP servers, one process each
   tasks/<name>/     clock, notes, docs, workspace, knowledge, music, comms,
                     lights, thermostat, delegate
 bench/              tools to check, measure, and debug; all free unless noted
-configs/            mac.yaml, pi.yaml, providers.yaml, tool_policy.yaml, agents.yaml
+configs/            mac.yaml, pi.yaml, providers.yaml, tool_policy.yaml, agents.yaml, owner.yaml
 scripts/            pi_setup.sh, pi_kiosk.sh, systemd/, mac_phone_bridge.py, pipewire_aec.conf
 assets/             fallback_wavs/ (stored clips), sample_documents/ (fictional)
 tests/              pytest, all on fakes; tests/test_live.py needs ME3_LIVE=1

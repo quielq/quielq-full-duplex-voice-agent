@@ -1,12 +1,12 @@
 # ME3 Architecture Review: Full-Duplex Voice Agent on Raspberry Pi 5
 
-Revision 2, Oct 21, 2026 · Quiel Quiwa. As-built section added Nov 5, 2026.
+Revision 2, Oct 21, 2026 · Quiel Quiwa. As-built section added Nov 5, 2026, updated Nov 25, 2026.
 
 This revision folds in the verification research on Pipecat, providers, licences, and benchmarks. The list of what changed from revision 1 is at the end of the Decisions section. Items marked unverified come from third-party pages or were not checked.
 
 The sections after "As built" are the Oct 21 review, kept as the design record, with dated notes where the build has moved on. Where they disagree with "As built" or an ADR, the newer one wins. For the code itself, see `docs/codebase.md`.
 
-## As built (Nov 5, 2026)
+## As built (Nov 25, 2026)
 
 ```mermaid
 flowchart LR
@@ -45,11 +45,12 @@ flowchart LR
 | Waiting phrase | One clip after about 600 ms | Five rotating clips after 1500 ms, or when a slow tool starts. A waiting phrase the model says itself is dropped | ADR-033, ADR-041 |
 | Reliability | Fallback phrases, reconnects | TCP probe on a provider error, stored `network_lost` and `cap_reached` clips, voice server reconnects | ADR-037 |
 | Complex task | Delegate to onit | Our own worker loop on Haiku 5.5 behind `delegate`, with the workspace tools. OnIt is dropped. Website jobs also run in the voice loop itself with `write_file` | ADR-028, ADR-035 |
-| Screen | Not in the review | Robot face in a browser, with chat, devices, mute, music, light and thermostat taps (through the same policy), and an agent picker and builder | ADR-027, ADR-038, ADR-039 |
+| Software building | Not in the review | Research, a build procedure in the prompt, and a finished site published to GitHub Pages and opened by name, each after a spoken yes. One live publish, Nov 16 | ADR-049, ADR-050 |
+| Screen | Not in the review | Robot face in a browser, with chat, devices, mute, music, light and thermostat taps (through the same policy), an agent picker and builder, a question card with the undo countdown, and a project card with the published link | ADR-027, ADR-038, ADR-039, ADR-051 |
 | Latency method | Audio timestamps | Sample-level marks at input and output. First live headline p50 3.0 s (no tool 2.8 s, tool 4.4 s), of which the end-of-turn wait is 1.3 s; on the Pi, Nov 5, p50 2.59 s over 35 turns. The class benchmark on the Pi (Nov 6, after ADR-046) gives E2E mean 1.46 s, p95 1.96 s, and every course row under the class target (`docs/class-benchmark.md`) | ADR-036, ADR-044 |
-| Context | Not in the review | The agent is named VIA ("VIA: Generalist" on the face) and the prompt carries a version (`PROMPT_VERSION`, logged per run). The context keeps the last 20 user turns, never splitting a tool call; the system prompt and tools always stay. Prompt caching on | ADR-045, ADR-047 |
+| Context | Not in the review | The agent is named VIA ("VIA: Generalist" on the face) and the prompt carries a version (`PROMPT_VERSION`, logged per run, v4 since Nov 16). It knows its owner from `configs/owner.yaml`, which also gives Flux keyterms and Cartesia a pronunciation for the name. The context keeps the last 20 user turns, never splitting a tool call; the system prompt and tools always stay. Prompt caching on | ADR-045, ADR-047 |
 
-Measured runs and open items are tracked in `TODO.md`. Still open (Nov 6): the long echo drift test and `serve` in `bwrap` on the Pi, the boot service, more class-benchmark rounds on the Pi for barge-in, and the model comparison. Every component that is built but off is listed in `docs/switches.md`.
+Open items are tracked in `TODO.md`. Every component that is built but off is listed in `docs/switches.md`.
 
 ## Decisions
 
@@ -71,7 +72,7 @@ You asked for better tools than onit because it is slow on the shared DGX. Three
 
 - The slowness is most likely the model endpoint it is pointed at, not onit itself, but nobody has measured that, and its docs give no latency figure. Its setup takes an endpoint URL, key, and model name, so it can be pointed at a fast commercial endpoint (for example Groq) instead of the DGX. The plan times it against a stub LLM to separate its own overhead from the endpoint.
 - Pipecat takes over the job onit would have done on the voice path (the loop that decides which tool to call). Onit stays useful for the one long task such as building a website, where its shell, file editing, and web search tools matter and a few extra seconds do not. It is a small project (about 10 stars) with no documented programmatic API, so it sits behind our `delegate` MCP server and runs as a subprocess in a per-task sandbox directory. Hermes Agent (MCP both ways, 70+ tools) is an alternative worker, but a review reports 15,000 to 20,000 input tokens of fixed overhead per call, which makes it a poor fit for anything latency-bound.
-- **Nov 3, 2026: OnIt is dropped as the worker.** If `delegate` is built, its worker is our own tool loop on a model chosen then (Haiku 5.5, a model through OpenRouter, or one served by Ollama), using the workspace tools behind the tool policy. Only OnIt's command policy table stays, vendored in `servers/vendor/` for the shell guard (ADR-024).
+- **Nov 3, 2026: OnIt is dropped as the worker.** If `delegate` is built, its worker is our own tool loop on a model chosen then (Haiku 5.5, a model through OpenRouter, or one served by Ollama), using the workspace tools behind the tool policy. Only OnIt's command policy table stayed, vendored for the shell guard (ADR-024), until our own `servers/command_policy.py` replaced it on Nov 4 (ADR-034).
 - CrewAI is a multi-agent orchestration framework with MCP integration announced in its community forum. It has no audio layer and adds LLM calls, so it does not belong on the voice path. It could be a worker, but onit's built-in shell and file tools fit the website task better.
 
 Pipecat's MCP support is now verified from its own documentation: `MCPClient` supports stdio, SSE, and streamable HTTP, and `register_tools(llm)` converts MCP tool schemas into LLM function calls. Two caveats remain. `MCPClient` has no documented way to surface server notifications (such as `speech_started` or `played_up_to`) as pipeline events, so we need our own bridge (see the MCP section). And the pull request that widens MCP SDK compatibility says only the streamable HTTP path is integration-tested. Gate 1 therefore tests a real spoken tool call over both stdio and HTTP.
