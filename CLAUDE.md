@@ -73,6 +73,8 @@ uv run python -m bench.voice_hop_probe [--frames 250]     # audio hop through th
 uv run python -m bench.task_runner --repeat 5             # task suite on fakes, no spend
 uv run python -m bench.eot_sweep --grid eot_threshold=0.7  # end-of-turn sweep on fakes, no spend (ADR-018)
 ME3_LIVE=1 uv run pytest -q tests/test_live.py            # live Gate 1, spends about $0.0014
+uv run python -m bench.me4_corpus [--rows N --filler-mb M]   # ME4 practice corpus (fictional) and gold questions in data/me4_eval
+uv run python -m bench.me4_eval [--kind csv_agg --limit N]   # ask and score them plus bench/me4_cases (real reports): answer, citation, time; fake LLM unless ME3_LIVE=1
 ```
 
 Live runs use this command (Haiku 5.5, ADR-025; Groq's rate limits stop long runs). Defaults stay fake.
